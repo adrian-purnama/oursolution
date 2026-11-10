@@ -92,17 +92,17 @@ export class UserProductController {
     }
   };
 
-  deleteScheduled = async (req: Request, res: Response) => {
+  deletePeriod = async (req: Request, res: Response) => {
     try {
       const userId = parseRouteId(req.params.id);
       const periodId = parseParam(req.params.periodId, {
         label: "period id",
         objectId: true,
       });
-      const data = await userProductService.deleteScheduled(userId, periodId);
-      return ok(res, "Scheduled period deleted", data);
+      const data = await userProductService.deletePeriod(userId, periodId);
+      return ok(res, "Period deleted", data);
     } catch (error) {
-      return fail(res, error, "Failed to delete the scheduled period");
+      return fail(res, error, "Failed to delete the period");
     }
   };
 }

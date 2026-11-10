@@ -8,11 +8,12 @@ import { useBranding } from '#/context/brandingContext'
 import { cn } from '#/lib/utils'
 
 type NavLink = {
-  to: '/' | '/dashboard' | '/admin'
+  to: '/' | '/pricing' | '/dashboard' | '/admin'
   label: string
 }
 
 const HOME_LINK: NavLink = { to: '/', label: 'Home' }
+const PRICING_LINK: NavLink = { to: '/pricing', label: 'Pricing' }
 const DASHBOARD_LINK: NavLink = { to: '/dashboard', label: 'Dashboard' }
 const ADMIN_LINK: NavLink = { to: '/admin', label: 'Admin' }
 
@@ -29,7 +30,6 @@ export default function Header() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
-  const isHome = pathname === '/'
 
   useEffect(() => {
     setMounted(true)
@@ -86,13 +86,10 @@ export default function Header() {
     void navigate({ to: '/login' })
   }
 
-  const navLinkClass = isHome
-    ? 'text-sm font-medium text-white/60 no-underline transition hover:text-[var(--paper)]'
-    : 'text-sm font-medium text-[var(--muted)] no-underline transition hover:text-[var(--ink)]'
+  const navLinkClass =
+    'text-sm font-medium text-[var(--muted)] no-underline transition hover:text-[var(--ink)]'
 
-  const activeNavClass = isHome
-    ? cn(navLinkClass, 'text-[var(--paper)] underline underline-offset-4')
-    : cn(navLinkClass, 'text-[var(--ink)] underline underline-offset-4')
+  const activeNavClass = cn(navLinkClass, 'text-[var(--ink)]')
 
   const drawerLinkClass =
     'block px-6 py-3 text-base font-medium text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]'
@@ -101,40 +98,29 @@ export default function Header() {
     'bg-[var(--surface)] font-semibold',
   )
 
-  const ctaOutlineClass = cn(
-    'rounded-[var(--radius-sm)] px-4 py-2 text-sm font-semibold no-underline transition',
-    isHome
-      ? 'border border-white/20 text-[var(--paper)] hover:border-white/40'
-      : 'border border-[var(--line)] text-[var(--ink)] hover:border-[var(--ink)]',
-  )
+  const ctaOutlineClass =
+    'rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm font-medium text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]'
 
-  const ctaPrimaryClass = cn(
-    'rounded-[var(--radius-sm)] px-4 py-2 text-sm font-semibold no-underline transition',
-    isHome
-      ? 'bg-[var(--paper)] text-[var(--ink)] hover:bg-[var(--accent-paper)]'
-      : 'bg-[var(--ink)] text-white hover:opacity-90',
-  )
+  const ctaPrimaryClass =
+    'rounded-[var(--radius-sm)] bg-[var(--ink)] px-3.5 py-1.5 text-sm font-medium text-white no-underline transition hover:opacity-90'
 
-  // Guests get Home; signed-in users get Dashboard, and admins also get Admin.
+  // Everyone sees Pricing; signed-in users get Dashboard, admins also Admin.
   const visibleLinks: NavLink[] = !isAuthenticated
-    ? [HOME_LINK]
+    ? [HOME_LINK, PRICING_LINK]
     : isAdmin
-      ? [DASHBOARD_LINK, ADMIN_LINK]
-      : [DASHBOARD_LINK]
+      ? [DASHBOARD_LINK, PRICING_LINK, ADMIN_LINK]
+      : [DASHBOARD_LINK, PRICING_LINK]
 
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 border-b backdrop-blur-sm',
-        isHome
-          ? 'border-white/10 bg-[var(--ink)]/95 text-[var(--paper)]'
-          : 'border-[var(--line)] bg-white/95 text-[var(--ink)]',
+        'sticky top-0 z-50 border-b border-[var(--line)] bg-white/80 text-[var(--ink)] backdrop-blur-md',
       )}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
         <Link
           to="/"
-          className="font-display inline-flex items-center gap-2 justify-self-start text-xl tracking-tight no-underline"
+          className="font-display inline-flex items-center gap-2 justify-self-start text-lg no-underline"
         >
           {appLogo ? (
             <img
@@ -170,20 +156,14 @@ export default function Header() {
                   aria-label={`Profile (${user.email})`}
                   className="rounded-full no-underline transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
-                  <UserAvatar
-                    email={user.email}
-                    className={
-                      isHome ? 'bg-[var(--paper)] text-[var(--ink)]' : undefined
-                    }
-                  />
+                  <UserAvatar email={user.email} />
                 </Link>
               ) : null}
               <button
                 type="button"
                 onClick={handleLogout}
                 className={cn(
-                  'inline-flex cursor-pointer items-center justify-center bg-transparent px-2 transition hover:opacity-70',
-                  isHome ? 'text-[var(--paper)]' : 'text-[var(--ink)]',
+                  'inline-flex cursor-pointer items-center justify-center bg-transparent px-2 text-[var(--ink)] transition hover:opacity-70',
                 )}
                 aria-label="Log out"
               >
@@ -196,12 +176,7 @@ export default function Header() {
                 to="/login"
                 className={ctaOutlineClass}
                 activeProps={{
-                  className: cn(
-                    ctaOutlineClass,
-                    isHome
-                      ? 'border-white/40 text-[var(--paper)]'
-                      : 'border-[var(--ink)]',
-                  ),
+                  className: cn(ctaOutlineClass, 'bg-[var(--surface)]'),
                 }}
               >
                 Login
@@ -210,10 +185,7 @@ export default function Header() {
                 to="/register"
                 className={ctaPrimaryClass}
                 activeProps={{
-                  className: cn(
-                    ctaPrimaryClass,
-                    isHome ? 'bg-[var(--accent-paper)]' : 'opacity-90',
-                  ),
+                  className: cn(ctaPrimaryClass, 'opacity-90'),
                 }}
               >
                 Register
@@ -225,8 +197,7 @@ export default function Header() {
         <button
           type="button"
           className={cn(
-            'inline-flex size-10 items-center justify-center sm:hidden',
-            isHome ? 'text-[var(--paper)]' : 'text-[var(--ink)]',
+            'inline-flex size-10 items-center justify-center text-[var(--ink)] sm:hidden',
           )}
           aria-expanded={menuOpen}
           aria-controls="mobile-nav"

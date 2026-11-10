@@ -108,6 +108,7 @@ export class PurchaseService {
   async requireOneTime(productId: string): Promise<void> {
     const product = await ProductModel.findById(productId).exec();
     if (!product) throw new Error("Product not found");
+    if (product.deletedAt) throw new Error("This product has been deleted");
     if (product.kind !== "oneTime") {
       throw new Error(
         "That product is a subscription; set it on the user's plan instead",

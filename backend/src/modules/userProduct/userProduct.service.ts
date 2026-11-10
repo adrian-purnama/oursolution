@@ -7,6 +7,7 @@ import type {
   UserProductRowOutDto,
 } from "../../dto/userProduct.dto";
 import { ProductModel } from "../../models/product/product.model";
+import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
 import type {
   ProductPeriodSource,
@@ -74,6 +75,20 @@ export class UserProductService {
     return products.map(toProductSummary);
   }
 
+  /** True when the user has this subscription running or scheduled. */
+  async hasLivePeriod(
+    userId: string,
+    productId: string,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    const found = await UserProductPeriodModel.exists({
+      userId,
+      productId,
+      ...liveFilter(now),
+    });
+    return Boolean(found);
+  }
+
   /** True while a subscription runs, or once a one-time product is owned. */
   async hasActiveProduct(
     userId: string,
@@ -99,12 +114,13 @@ export class UserProductService {
   ): Promise<UserPlanOutDto> {
     await this.requireUser(userId);
 
-    const [liveDocs, pastDocs] = await Promise.all([
+    const [liveDocs, pastDocs, purchases] = await Promise.all([
       UserProductPeriodModel.find({ userId, ...liveFilter(now) }).exec(),
       UserProductPeriodModel.find({ userId, endsAt: { $ne: null, $lte: now } })
         .sort({ endsAt: -1 })
         .limit(HISTORY_LIMIT)
         .exec(),
+      PurchaseModel.find({ userId }).exec(),
     ]);
     const docs = [...pastDocs, ...liveDocs];
 
@@ -114,14 +130,31 @@ export class UserProductService {
       byProduct.set(key, [...(byProduct.get(key) ?? []), doc]);
     }
 
+    // A one-time product is owned for good: one period from the purchase, no end.
+    const owned = new Map<string, ProductPeriodOutDto>(
+      purchases.map((purchase) => [
+        purchase.productId.toString(),
+        {
+          periodId: purchase.id as string,
+          startsAt: (purchase.createdAt ?? now).toISOString(),
+          endsAt: null,
+          isCurrent: true,
+          source: purchase.source,
+        },
+      ]),
+    );
+
     const products = await ProductModel.find({
-      _id: { $in: [...byProduct.keys()] },
+      _id: { $in: [...byProduct.keys(), ...owned.keys()] },
     }).exec();
 
     const rows: UserProductRowOutDto[] = products.map((product) => {
-      const periods = (byProduct.get(product.id as string) ?? [])
-        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
-        .map((doc) => toPeriodOut(doc, now));
+      const purchase = owned.get(product.id as string);
+      const periods = purchase
+        ? [purchase]
+        : (byProduct.get(product.id as string) ?? [])
+            .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+            .map((doc) => toPeriodOut(doc, now));
       return {
         product: toProductSummary(product),
         active: periods.some((period) => period.isCurrent),
@@ -218,8 +251,11 @@ export class UserProductService {
     return this.getPlan(userId);
   }
 
-  /** Remove a period that has not started; the product is inactive for that time. */
-  async deleteScheduled(
+  /**
+   * Remove a running or scheduled period; the product is inactive for that
+   * time. Any payment for it stays on record.
+   */
+  async deletePeriod(
     userId: string,
     periodId: string,
     now: Date = new Date(),
@@ -293,6 +329,7 @@ export class UserProductService {
   private async requireProduct(productId: string): Promise<void> {
     const product = await ProductModel.findById(productId).exec();
     if (!product) throw new Error("Product not found");
+    if (product.deletedAt) throw new Error("This product has been deleted");
     if (product.kind !== "subscription") {
       throw new Error(
         "That product is a one-time purchase; give it from the user's purchases instead",

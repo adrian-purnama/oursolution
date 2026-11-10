@@ -55,7 +55,9 @@ export default function UserPurchasesForm({ userId }: { userId: string }) {
         setPurchases(purchasesRes.data)
         if (productsRes.success && productsRes.data) {
           setProducts(
-            productsRes.data.filter((product) => product.kind === 'oneTime'),
+            productsRes.data.filter(
+              (product) => product.kind === 'oneTime' && !product.deletedAt,
+            ),
           )
         }
       } catch {

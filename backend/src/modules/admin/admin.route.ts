@@ -37,6 +37,8 @@ router.post(
   productController.updateImage,
 );
 router.delete("/products/:id", productController.remove);
+router.post("/products/:id/restore", productController.restore);
+router.delete("/products/:id/permanent", productController.removePermanently);
 
 router.get("/users/:id/plan", userProductController.getPlan);
 router.post("/users/:id/plan/override", userProductController.overrideNow);
@@ -47,7 +49,7 @@ router.post(
 );
 router.delete(
   "/users/:id/plan/periods/:periodId",
-  userProductController.deleteScheduled,
+  userProductController.deletePeriod,
 );
 
 router.get("/users/:id/purchases", purchaseController.list);

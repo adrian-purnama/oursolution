@@ -35,6 +35,7 @@ function setup(
     provider?: PaymentProvider;
     cannotSchedule?: boolean;
     alreadyOwned?: boolean;
+    subscribed?: boolean;
   } = {},
 ) {
   const created: Record<string, unknown>[] = [];
@@ -50,6 +51,7 @@ function setup(
       get: (async () => opts.product ?? subscription) as never,
     },
     userProducts: {
+      hasLivePeriod: async () => opts.subscribed ?? false,
       planAppendFor: async () => {
         if (opts.cannotSchedule) throw new PlanScheduleError("no end");
         return plan;
@@ -104,9 +106,27 @@ describe("PaymentService.checkout: subscription", () => {
     assert.equal(updates.at(-1)?.update.$set.periodId, "period1");
   });
 
-  it("refuses a product that is not on the pricing page", async () => {
+  it("refuses a hidden subscription to someone who does not have it", async () => {
     const { service, created } = setup({
       product: { ...subscription, showOnPricingPage: false },
+    });
+    await assert.rejects(() => service.checkout("u1", "p1"));
+    assert.equal(created.length, 0);
+  });
+
+  it("lets a current subscriber extend a hidden subscription", async () => {
+    const { service, periods } = setup({
+      product: { ...subscription, showOnPricingPage: false },
+      subscribed: true,
+    });
+    const out = await service.checkout("u1", "p1");
+    assert.equal(out.status, "paid");
+    assert.equal(periods.length, 1);
+  });
+
+  it("refuses a deleted product", async () => {
+    const { service, created } = setup({
+      product: { ...subscription, deletedAt: new Date() },
     });
     await assert.rejects(() => service.checkout("u1", "p1"));
     assert.equal(created.length, 0);
@@ -154,6 +174,15 @@ describe("PaymentService.checkout: one-time", () => {
     assert.deepEqual(purchases[0], { source: "checkout", paymentId: "pay1" });
     assert.equal(periods.length, 0);
     assert.equal(updates.at(-1)?.update.$set.purchaseId, "purchase1");
+  });
+
+  it("refuses a hidden one-time product, even to a subscriber of something", async () => {
+    const { service, created } = setup({
+      product: { ...oneTime, showOnPricingPage: false },
+      subscribed: true,
+    });
+    await assert.rejects(() => service.checkout("u1", "p2"));
+    assert.equal(created.length, 0);
   });
 
   it("charges nothing when the user already owns it", async () => {

@@ -8,7 +8,7 @@ import type { PeriodEndSpec } from "../../dto/userProduct.dto";
  * Invariants:
  * - periods of the same product never overlap (other products are unaffected);
  * - time not covered by a period means the product is not active;
- * - only periods that have not started can be deleted.
+ * - running and scheduled periods can be deleted; ended ones are history.
  */
 
 export type PeriodLike = {
@@ -145,11 +145,15 @@ export function planEndNow(periods: PeriodLike[], now: Date): string {
   return current.id;
 }
 
-/** Only periods that have not started may be deleted. */
+/**
+ * Running and scheduled periods may be deleted. A deleted running period is
+ * gone as if it never happened (unlike ending it now, which keeps it). Ended
+ * periods are history and stay.
+ */
 export function assertDeletable(period: PeriodLike, now: Date): void {
-  if (period.startsAt <= now) {
+  if (period.endsAt !== null && period.endsAt <= now) {
     throw new PlanScheduleError(
-      "Only periods that have not started yet can be deleted",
+      "Periods that have already ended cannot be deleted",
     );
   }
 }

@@ -28,6 +28,11 @@ export interface ProductInterface {
   showOnPricingPage: boolean;
   /** Public image in the "public" GridFS bucket, served from /media/:id. */
   image: Types.ObjectId | null;
+  /**
+   * Set when soft deleted: hidden from the pricing page, checkout and admin
+   * assignment, but kept so owners keep access and it can be restored.
+   */
+  deletedAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -13,6 +13,8 @@ export interface ProductOutDto {
   /** One-time only; admins and owners see it, the pricing page never does. */
   accessUrl: string | null;
   showOnPricingPage: boolean;
+  /** Set when soft deleted. */
+  deletedAt: string | null;
 }
 
 /** What the public pricing page gets: no internal price, no access link. */

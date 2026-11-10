@@ -7,11 +7,11 @@ import UserAvatar from '#/components/UserAvatar'
 import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
-import type { Purchase, UserPlan } from '#/lib/product'
+import type { Purchase, UserPlan, UserProductRow } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 
 export default function ProfileForm() {
-  const { user } = useAuth()
+  const { user, refreshAuth } = useAuth()
 
   const [overview, setOverview] = useState<UserPlan | null>(null)
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -19,6 +19,7 @@ export default function ProfileForm() {
   const [failed, setFailed] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [extending, setExtending] = useState<string | null>(null)
 
   const loadPlan = useCallback(async (run = { cancelled: false }) => {
     setLoading(true)
@@ -54,6 +55,48 @@ export default function ProfileForm() {
       run.cancelled = true
     }
   }, [loadPlan])
+
+  /**
+   * A subscription the user has running or scheduled can be extended here,
+   * even when it is no longer on the pricing page. One with no end date has
+   * nothing to extend.
+   */
+  function canExtend(row: UserProductRow): boolean {
+    if (row.product.kind !== 'subscription' || !overview) return false
+    const now = Date.parse(overview.now)
+    const live = row.periods.filter(
+      (period) => period.endsAt === null || Date.parse(period.endsAt) > now,
+    )
+    return live.length > 0 && live.every((period) => period.endsAt !== null)
+  }
+
+  async function handleExtend(row: UserProductRow) {
+    setExtending(row.product.id)
+    try {
+      const response = await apiFetch<{ redirectUrl: string | null }>(
+        '/me/checkout',
+        {
+          method: 'POST',
+          body: JSON.stringify({ productId: row.product.id }),
+        },
+      )
+      if (!response.success || !response.data) {
+        toast.error(response.message || 'Could not extend')
+        return
+      }
+      if (response.data.redirectUrl) {
+        // A real gateway finishes payment on its own page.
+        window.location.assign(response.data.redirectUrl)
+        return
+      }
+      toast.success(`${row.product.name} extended`)
+      await Promise.all([loadPlan(), refreshAuth()])
+    } catch {
+      toast.error('Unable to reach the server')
+    } finally {
+      setExtending(null)
+    }
+  }
 
   async function handleResetPassword() {
     if (!user) return
@@ -126,14 +169,27 @@ export default function ProfileForm() {
         ) : (
           <div className="space-y-8">
             <div className="space-y-3">
-              <h3 className="text-sm font-medium">Subscriptions</h3>
+              <h3 className="text-sm font-medium">Plan</h3>
               <PlanGantt
                 plan={overview}
-                emptyText="No subscriptions yet. Check one out on the pricing page."
+                rowActions={(row) =>
+                  canExtend(row) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={extending !== null}
+                      onClick={() => void handleExtend(row)}
+                    >
+                      {extending === row.product.id ? 'Extending…' : 'Extend'}
+                    </Button>
+                  ) : null
+                }
+                emptyText="No products yet. Check one out on the pricing page."
               />
             </div>
             <div className="space-y-3">
-              <h3 className="text-sm font-medium">Purchases</h3>
+              <h3 className="text-sm font-medium">Purchases and links</h3>
               <PurchaseList
                 purchases={purchases}
                 emptyText="No purchases yet. One-time products you buy stay here for good."

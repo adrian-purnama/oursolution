@@ -76,7 +76,8 @@ export default function UserProductsForm({ userId }: { userId: string }) {
           // Only subscriptions live on the plan timeline.
           setProducts(
             productsRes.data.filter(
-              (product) => product.kind === 'subscription',
+              (product) =>
+                product.kind === 'subscription' && !product.deletedAt,
             ),
           )
         }
@@ -151,7 +152,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
         const done = await call(
           `/admin/users/${userId}/plan/periods/${deleting.period.periodId}`,
           { method: 'DELETE' },
-          'Scheduled period deleted',
+          'Period deleted',
         )
         if (done) setDeleting(null)
       } else if (stopping) {
@@ -183,10 +184,15 @@ export default function UserProductsForm({ userId }: { userId: string }) {
   }
 
   const now = Date.parse(plan.now)
+  // Running and scheduled subscription periods can be deleted; ended ones are history.
+  // One-time products are taken back from Purchases instead.
   const scheduled: Scheduled[] = plan.rows
+    .filter((row) => row.product.kind === 'subscription')
     .flatMap((row) =>
       row.periods
-        .filter((period) => Date.parse(period.startsAt) > now)
+        .filter(
+          (period) => period.endsAt === null || Date.parse(period.endsAt) > now,
+        )
         .map((period) => ({ product: row.product, period })),
     )
     .sort((a, b) => a.period.startsAt.localeCompare(b.period.startsAt))
@@ -210,18 +216,18 @@ export default function UserProductsForm({ userId }: { userId: string }) {
   return (
     <section className="space-y-6">
       <div>
-        <h2 className="text-base font-medium">Subscriptions</h2>
+        <h2 className="text-base font-medium">Plan</h2>
         <p className={`mt-1 ${hintClassName}`}>
-          Each subscription runs on its own timeline. One with no period
-          covering now is not active.
+          Each subscription runs on its own timeline; one with no period
+          covering now is not active. One-time products never expire.
         </p>
       </div>
 
       <PlanGantt
         plan={plan}
-        emptyText="This user has no subscriptions yet."
+        emptyText="This user has no products yet."
         rowActions={(row) =>
-          row.active ? (
+          row.active && row.product.kind === 'subscription' ? (
             <Button
               type="button"
               variant="ghost"
@@ -236,7 +242,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
 
       {scheduled.length > 0 ? (
         <div>
-          <h3 className="mb-2 text-sm font-medium">Scheduled</h3>
+          <h3 className="mb-2 text-sm font-medium">Running and scheduled</h3>
           <ol className="space-y-2">
             {scheduled.map((item) => (
               <li
@@ -245,6 +251,11 @@ export default function UserProductsForm({ userId }: { userId: string }) {
               >
                 <ProductBadge product={item.product} />
                 <span className="min-w-0 flex-1 text-sm text-[var(--muted)]">
+                  {item.period.isCurrent ? (
+                    <span className="mr-1.5 font-medium text-[var(--ink)]">
+                      Running ·
+                    </span>
+                  ) : null}
                   From {formatDateTime(item.period.startsAt)},{' '}
                   {item.period.endsAt
                     ? `until ${formatDateTime(item.period.endsAt)}`
@@ -254,7 +265,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Delete scheduled ${item.product.name} period`}
+                  aria-label={`Delete ${item.period.isCurrent ? 'running' : 'scheduled'} ${item.product.name} period`}
                   onClick={() => setDeleting(item)}
                 >
                   <Trash2 aria-hidden />
@@ -395,12 +406,14 @@ export default function UserProductsForm({ userId }: { userId: string }) {
           <DialogHeader>
             <DialogTitle>
               {deleting
-                ? `Delete the scheduled ${deleting.product.name} period?`
+                ? `Delete the ${deleting.period.isCurrent ? 'running' : 'scheduled'} ${deleting.product.name} period?`
                 : `Stop ${stopping?.name ?? ''} now?`}
             </DialogTitle>
             <DialogDescription>
               {deleting
-                ? `It was due to start ${formatDateTime(deleting.period.startsAt)}. The product will not be active for that time.`
+                ? deleting.period.isCurrent
+                  ? 'The product stops now and this period is removed as if it never happened. To keep it in history, use Stop instead. Any payment for it stays on record.'
+                  : `It was due to start ${formatDateTime(deleting.period.startsAt)}. The product will not be active for that time.`
                 : 'Its running period ends now. Scheduled periods of it are kept.'}
             </DialogDescription>
           </DialogHeader>
@@ -424,7 +437,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
               {confirmBusy
                 ? 'Working…'
                 : deleting
-                  ? 'Delete scheduled period'
+                  ? 'Delete period'
                   : 'Stop now'}
             </Button>
           </DialogFooter>

@@ -2,36 +2,49 @@
 const STEPS = [
   {
     title: 'Create your account',
-    body: 'Enter your email, confirm the code we send, and choose a password.',
+    body: 'Sign up with your email and confirm the code we send.',
   },
   {
-    title: 'Pick your products',
-    body: 'Check out the products you need. Each one runs for its own period.',
+    title: 'Pick a product',
+    body: 'Check out hosting by the period, or buy a workflow once.',
   },
   {
-    title: 'Start from the dashboard',
-    body: 'Every product you have active is waiting there, ready to use.',
+    title: 'Run it',
+    body: 'Your products appear on your dashboard, with their dates.',
   },
 ]
 
 export default function HowItWorks() {
   return (
-    <section className="text-[var(--paper)]">
-      <div className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
-        <h2 className="font-display mb-14 text-4xl tracking-tight sm:text-5xl">
-          Three steps, then you are in.
-        </h2>
+    <section className="border-b border-[var(--line)]">
+      <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+        <div className="mb-12 max-w-2xl">
+          <p className="mb-3 font-mono text-xs tracking-wider text-[var(--muted)] uppercase">
+            How it works
+          </p>
+          <h2 className="font-display text-3xl text-[var(--ink)] sm:text-4xl">
+            From sign-up to running in minutes.
+          </h2>
+        </div>
 
-        <ol className="grid gap-12 md:grid-cols-3 md:gap-8">
+        <ol className="grid gap-10 md:grid-cols-3 md:gap-8">
           {STEPS.map((step, index) => (
-            <li key={step.title} className="border-t border-white/15 pt-6">
-              <p className="font-display mb-6 text-5xl text-white/30">
-                {String(index + 1).padStart(2, '0')}
+            <li key={step.title} className="relative pt-8">
+              <span
+                aria-hidden
+                className="absolute top-0 left-0 h-px w-full bg-[var(--line)]"
+              />
+              <span
+                aria-hidden
+                className="absolute top-0 left-0 h-px w-12 bg-[var(--ink)]"
+              />
+              <p className="mb-4 font-mono text-xs text-[var(--muted)]">
+                Step {String(index + 1).padStart(2, '0')}
               </p>
-              <h3 className="mb-2 text-lg font-semibold text-white">
+              <h3 className="mb-1.5 text-lg font-semibold text-[var(--ink)]">
                 {step.title}
               </h3>
-              <p className="text-sm leading-relaxed text-white/60">
+              <p className="text-sm leading-relaxed text-[var(--muted)]">
                 {step.body}
               </p>
             </li>

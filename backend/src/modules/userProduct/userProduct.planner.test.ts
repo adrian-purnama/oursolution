@@ -154,16 +154,26 @@ describe("planEndNow", () => {
 });
 
 describe("assertDeletable", () => {
-  it("allows only periods that have not started", () => {
+  it("allows scheduled and running periods", () => {
     assert.doesNotThrow(() =>
       assertDeletable(period("b", at(12), at(18)), at(10)),
     );
-    assert.throws(
-      () => assertDeletable(period("a", at(8), at(12)), at(10)),
-      PlanScheduleError,
+    assert.doesNotThrow(() =>
+      assertDeletable(period("a", at(8), at(12)), at(10)),
     );
+    assert.doesNotThrow(() =>
+      assertDeletable(period("open", at(8), null), at(10)),
+    );
+  });
+
+  it("refuses periods that have ended", () => {
     assert.throws(
       () => assertDeletable(period("old", at(1), at(9)), at(10)),
+      PlanScheduleError,
+    );
+    // Ending exactly now counts as ended.
+    assert.throws(
+      () => assertDeletable(period("edge", at(1), at(10)), at(10)),
       PlanScheduleError,
     );
   });

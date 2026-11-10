@@ -1,6 +1,5 @@
-import { Link, useRouterState } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useBranding } from '#/context/brandingContext'
-import { cn } from '#/lib/utils'
 
 type FooterLink =
   | { label: string; to: '/' | '/pricing' | '/login' | '/register' }
@@ -21,22 +20,11 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
 export default function Footer() {
   const year = new Date().getFullYear()
   const { appName } = useBranding()
-  const isHome = useRouterState({
-    select: (state) => state.location.pathname === '/',
-  })
-
-  const linkClass = isHome
-    ? 'text-sm text-white/60 no-underline transition hover:text-white'
-    : 'text-sm text-[var(--muted)] no-underline transition hover:text-[var(--ink)]'
+  const linkClass =
+    'text-sm text-[var(--muted)] no-underline transition hover:text-[var(--ink)]'
 
   return (
-    <footer
-      className={cn(
-        isHome
-          ? 'bg-[var(--ink)] text-white'
-          : 'border-t border-[var(--line)] bg-white text-[var(--ink)]',
-      )}
-    >
+    <footer className="border-t border-[var(--line)] bg-white text-[var(--ink)]">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="mb-12 grid gap-10 sm:grid-cols-3">
           {FOOTER_COLUMNS.map((column) => (
@@ -60,18 +48,8 @@ export default function Footer() {
             </div>
           ))}
         </div>
-        <div
-          className={cn(
-            'border-t pt-8',
-            isHome ? 'border-white/10' : 'border-[var(--line)]',
-          )}
-        >
-          <p
-            className={cn(
-              'text-sm',
-              isHome ? 'text-white/40' : 'text-[var(--muted)]',
-            )}
-          >
+        <div className="border-t border-[var(--line)] pt-8">
+          <p className="text-sm text-[var(--muted)]">
             &copy; {year} {appName}. All rights reserved.
           </p>
         </div>

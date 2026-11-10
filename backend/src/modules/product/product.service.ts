@@ -32,6 +32,7 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
     durationDays: product.durationDays,
     accessUrl: product.accessUrl,
     showOnPricingPage: product.showOnPricingPage,
+    deletedAt: product.deletedAt?.toISOString() ?? null,
   };
 }
 
@@ -55,9 +56,31 @@ function isDuplicateKeyError(error: unknown): boolean {
 
 function rethrowDuplicate(error: unknown): never {
   if (isDuplicateKeyError(error)) {
-    throw new Error("A product with this name already exists");
+    throw new Error(
+      "A product with this name already exists (it may be deleted: restore or rename it)",
+    );
   }
   throw error;
+}
+
+/**
+ * Why a product cannot be soft deleted right now, or null when it can.
+ * A subscription must not be running or scheduled for anyone; a one-time
+ * product can always go, since owners keep it.
+ */
+export function softDeleteBlocker(
+  kind: ProductInterface["kind"],
+  livePeriods: number,
+): string | null {
+  if (kind === "subscription" && livePeriods > 0) {
+    return `${livePeriods} running or scheduled period(s) still use this subscription. Stop or delete them on the users' plans first.`;
+  }
+  return null;
+}
+
+/** Running or scheduled at `now`. */
+function liveFilter(now: Date) {
+  return { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] };
 }
 
 export class ProductService {
@@ -69,7 +92,10 @@ export class ProductService {
   }
 
   async listPricing(): Promise<PricingProductOutDto[]> {
-    const products = await ProductModel.find({ showOnPricingPage: true })
+    const products = await ProductModel.find({
+      showOnPricingPage: true,
+      deletedAt: null,
+    })
       .sort({ priceIdr: 1, name: 1 })
       .exec();
     return products.map((product) => ({
@@ -86,6 +112,13 @@ export class ProductService {
   async get(id: string): Promise<ProductDoc> {
     const product = await ProductModel.findById(id).exec();
     if (!product) throw new Error("Product not found");
+    return product;
+  }
+
+  /** A product that is not deleted, for checkout and admin assignment. */
+  async getAvailable(id: string): Promise<ProductDoc> {
+    const product = await this.get(id);
+    if (product.deletedAt) throw new Error("This product has been deleted");
     return product;
   }
 
@@ -134,8 +167,38 @@ export class ProductService {
     return toProductOut(product);
   }
 
-  async delete(id: string): Promise<void> {
+  /** Hide a product everywhere new; existing owners keep it. Can be restored. */
+  async softDelete(id: string, now: Date = new Date()): Promise<ProductOutDto> {
     const product = await this.get(id);
+    if (product.deletedAt) return toProductOut(product);
+
+    const livePeriods = await UserProductPeriodModel.countDocuments({
+      productId: product._id,
+      ...liveFilter(now),
+    }).exec();
+    const blocker = softDeleteBlocker(product.kind, livePeriods);
+    if (blocker) throw new Error(blocker);
+
+    product.deletedAt = now;
+    await product.save();
+    return toProductOut(product);
+  }
+
+  async restore(id: string): Promise<ProductOutDto> {
+    const product = await this.get(id);
+    product.deletedAt = null;
+    await product.save();
+    return toProductOut(product);
+  }
+
+  /** Remove a deleted product for good, only when nothing refers to it. */
+  async deletePermanently(id: string): Promise<void> {
+    const product = await this.get(id);
+    if (!product.deletedAt) {
+      throw new Error(
+        "Delete the product first; only deleted products can be removed for good",
+      );
+    }
 
     const [periods, purchases, payments] = await Promise.all([
       UserProductPeriodModel.countDocuments({ productId: product._id }).exec(),
@@ -144,7 +207,7 @@ export class ProductService {
     ]);
     if (periods + purchases + payments > 0) {
       throw new Error(
-        "Users have had, bought or paid for this product, so it cannot be deleted. Hide it from the pricing page instead.",
+        `Still referenced by ${periods} period(s), ${purchases} purchase(s) and ${payments} payment(s), so it can only stay deleted, not be removed for good.`,
       );
     }
 

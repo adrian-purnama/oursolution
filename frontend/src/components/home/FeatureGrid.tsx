@@ -1,10 +1,10 @@
 import {
-  KeyRound,
-  Layers,
-  LifeBuoy,
-  Paintbrush,
-  Shield,
-  Users,
+  CalendarClock,
+  Gauge,
+  LayoutDashboard,
+  Package,
+  ServerCog,
+  ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -14,65 +14,72 @@ type Feature = {
   body: string
 }
 
-// Placeholder copy: replace with what your product actually offers.
+// Placeholder copy: adjust to what your hosting actually includes.
 const FEATURES: Feature[] = [
   {
-    icon: KeyRound,
+    icon: ServerCog,
+    title: 'Managed apps',
+    body: 'We run the servers, updates and certificates. You use the app.',
+  },
+  {
+    icon: CalendarClock,
+    title: 'Subscriptions you control',
+    body: 'Each product runs for its own period. Extend whenever you like.',
+  },
+  {
+    icon: Package,
+    title: 'One-time workflows',
+    body: 'Buy ready-made workflows once and keep them for good.',
+  },
+  {
+    icon: LayoutDashboard,
+    title: 'One dashboard',
+    body: 'See everything you run, what is next, and when it renews.',
+  },
+  {
+    icon: Gauge,
+    title: 'Pay per product',
+    body: 'No bundles. Pick only what you need and run several at once.',
+  },
+  {
+    icon: ShieldCheck,
     title: 'Verified accounts',
-    body: 'Every sign-up confirms its email with a one-time code before the account exists.',
-  },
-  {
-    icon: Layers,
-    title: 'Pick only what you need',
-    body: 'Check out each product on its own and run as many as you like at once.',
-  },
-  {
-    icon: LifeBuoy,
-    title: 'Self-service recovery',
-    body: 'Forgot a password? A reset link arrives by email and signs out old sessions.',
-  },
-  {
-    icon: Shield,
-    title: 'Admin area',
-    body: 'Admins manage users, block accounts and reset passwords from one place.',
-  },
-  {
-    icon: Users,
-    title: 'Open or invite-only',
-    body: 'Switch registration and login on or off without touching the code.',
-  },
-  {
-    icon: Paintbrush,
-    title: 'Your brand',
-    body: 'Set the name and logo once and they appear across the app and its emails.',
+    body: 'Email codes on sign-up and safe password resets, built in.',
   },
 ]
 
 export default function FeatureGrid() {
   return (
-    <section className="border-y border-dashed border-white/10 text-[var(--paper)]">
-      <div className="trust-grid-dots h-10 sm:h-14" />
+    <section className="border-b border-[var(--line)] bg-[var(--surface)]">
+      <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+        <div className="mb-12 max-w-2xl">
+          <p className="mb-3 font-mono text-xs tracking-wider text-[var(--muted)] uppercase">
+            Platform
+          </p>
+          <h2 className="font-display text-3xl text-[var(--ink)] sm:text-4xl">
+            Everything around the app, handled.
+          </h2>
+        </div>
 
-      <div className="mx-auto max-w-6xl border-t border-dashed border-white/10 px-6 py-16 sm:py-20">
-        <h2 className="font-display max-w-2xl text-4xl leading-tight tracking-tight sm:text-5xl">
-          The groundwork is already done.
-        </h2>
+        <ul className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map(({ icon: Icon, title, body }) => (
+            <li
+              key={title}
+              className="bg-white p-7 transition-colors hover:bg-[#fcfcfb]"
+            >
+              <span className="mb-5 inline-flex size-9 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--surface)]">
+                <Icon className="size-4 text-[var(--ink)]" aria-hidden />
+              </span>
+              <h3 className="mb-1.5 text-[15px] font-semibold text-[var(--ink)]">
+                {title}
+              </h3>
+              <p className="text-sm leading-relaxed text-[var(--muted)]">
+                {body}
+              </p>
+            </li>
+          ))}
+        </ul>
       </div>
-
-      <ul className="grid sm:grid-cols-2 lg:grid-cols-3 [&>*]:-mt-px [&>*]:-ml-px">
-        {FEATURES.map(({ icon: Icon, title, body }) => (
-          <li
-            key={title}
-            className="border border-dashed border-white/15 px-6 py-10 transition-colors duration-300 hover:bg-white/[0.03] sm:px-8 sm:py-12"
-          >
-            <Icon className="mb-6 size-5 text-white/60" aria-hidden />
-            <h3 className="mb-2 text-lg font-semibold text-white">{title}</h3>
-            <p className="text-sm leading-relaxed text-white/60">{body}</p>
-          </li>
-        ))}
-      </ul>
-
-      <div className="trust-grid-dots h-10 border-t border-dashed border-white/10 sm:h-14" />
     </section>
   )
 }

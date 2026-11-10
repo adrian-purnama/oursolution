@@ -84,6 +84,12 @@ function describePeriod(period: ProductPeriod): string {
 
 /** One line on where a product stands: running, coming, or stopped. */
 function rowStatus(row: UserProductRow, now: number): string {
+  if (row.product.kind === 'oneTime') {
+    const owned = row.periods.at(0)
+    return owned
+      ? `Owned since ${formatDateTime(owned.startsAt)} · never expires`
+      : 'Owned · never expires'
+  }
   const current = row.periods.find((period) => period.isCurrent)
   if (current) {
     return current.endsAt
@@ -190,8 +196,10 @@ export default function PlanGantt({
                     className={cn(
                       'absolute inset-y-1 rounded-[4px]',
                       isPast && 'opacity-35',
-                      // An open end fades out instead of stopping at a date.
+                      // An open subscription fades out: it runs until changed.
+                      // A one-time product stays solid: it never expires.
                       !period.endsAt &&
+                        row.product.kind === 'subscription' &&
                         '[mask-image:linear-gradient(to_right,black_75%,transparent)]',
                     )}
                     style={{

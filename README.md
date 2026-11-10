@@ -51,8 +51,10 @@ Give every app and environment its own `BUILD` value so they never share a datab
 A **product** is something a user can have. It has a name, a color, an image
 (public, stored in the same GridFS bucket as the app logo and served from
 `/media/:id`), a pricing text (what visitors read), a price in rupiah (what one
-checkout charges) and a "show on pricing page" switch (which also opens it to
-checkout). Every product has a **kind**, fixed when it is created:
+checkout charges) and a "show on pricing page" switch. A listed product is open to checkout for
+anyone. A hidden subscription can still be extended (from the profile) by
+users who have it running or scheduled, but nobody new can buy it; a hidden
+one-time product cannot be bought at all. Every product has a **kind**, fixed when it is created:
 
 - **Subscription** (hosting): active for a period. It has the number of days one
   checkout buys, and lives on the user's plan timeline.
@@ -60,19 +62,28 @@ checkout). Every product has a **kind**, fixed when it is created:
   good. It has an optional **access link**, shown only to owners on their
   profile. Owning one is a `Purchase` (unique per user and product).
 
+**Deleting** a product is a soft delete (`deletedAt`), which can be restored
+from the Deleted section on the admin Products page. A deleted product is
+hidden from the pricing page and cannot be checked out, assigned or given, but
+existing owners keep it (and its access link). A subscription can only be
+deleted when nobody has it running or scheduled; a one-time product can always
+be deleted. A deleted product can be removed for good only when no period,
+purchase or payment refers to it.
+
 A user's **plan** is their subscriptions, each on its own timeline of periods
 (`UserProductPeriod`: product, start, end, source). Periods of the same product
 never overlap; different products overlap freely, so a user can have several
 subscriptions active at once. **There is no default**: time not covered by a
 period means that subscription is not active. The plan is drawn as a Gantt chart
-on the user's profile and on the admin user page.
+on the user's profile and on the admin user page; owned one-time products appear
+on it too, as a bar from the purchase date that never expires.
 
 From a user's page an admin can, per subscription:
 
 - **Start now**: cuts its running period short and starts a new one.
 - **Add after this product's schedule**: queues a period after its last one.
 - **Stop**: ends the running period now; scheduled periods are kept.
-- **Delete a scheduled period**: only periods that have not started.
+- **Delete a period**: running or scheduled. A deleted running period is removed as if it never happened (Stop keeps it in history); ended periods cannot be deleted.
 
 and, for one-time products, **give** one without payment or **take it back**.
 

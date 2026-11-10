@@ -26,6 +26,8 @@ export type Product = ProductSummary & {
   /** One-time only: where buyers get what they bought. */
   accessUrl: string | null
   showOnPricingPage: boolean
+  /** Set when soft deleted: hidden from pricing and assignment, owners keep it. */
+  deletedAt: string | null
 }
 
 export type PricingProduct = ProductSummary & {

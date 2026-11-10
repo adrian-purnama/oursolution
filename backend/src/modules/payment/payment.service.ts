@@ -15,13 +15,18 @@ const logSource = "modules/payment/payment.service.ts";
 type Deps = {
   provider: PaymentProvider;
   products: Pick<typeof productService, "get">;
-  userProducts: Pick<typeof userProductService, "planAppendFor" | "grant">;
+  userProducts: Pick<
+    typeof userProductService,
+    "planAppendFor" | "grant" | "hasLivePeriod"
+  >;
   purchases: Pick<typeof purchaseService, "owns" | "grant">;
   payments: Pick<typeof PaymentModel, "create" | "updateOne">;
 };
 
 /**
- * Checkout: a user buys one product.
+ * Checkout: a user buys one product. Listed products are open to anyone; a
+ * subscription hidden from pricing is open only to its current subscribers.
+ *
  * - A subscription adds its duration after whatever the user already has of
  *   it, so buying again extends access instead of overlapping it.
  * - A one-time product is owned for good once paid, and can be bought once.
@@ -37,8 +42,18 @@ export class PaymentService {
     const { provider, products, userProducts, purchases, payments } = this.deps;
 
     const product = await products.get(productId);
-    if (!product.showOnPricingPage) {
+    if (product.deletedAt) {
       throw new Error("This product is not available for checkout");
+    }
+    // Hidden from pricing: nobody new can buy it, but people who have a
+    // subscription running or scheduled can still extend it.
+    if (!product.showOnPricingPage) {
+      const canExtend =
+        product.kind === "subscription" &&
+        (await userProducts.hasLivePeriod(userId, productId, now));
+      if (!canExtend) {
+        throw new Error("This product is not available for checkout");
+      }
     }
 
     // Check the product can be granted before charging, so nobody pays for

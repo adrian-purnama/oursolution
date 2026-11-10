@@ -83,10 +83,28 @@ export class ProductController {
 
   remove = async (req: Request, res: Response) => {
     try {
-      await productService.delete(parseRouteId(req.params.id));
-      return ok(res, 200, "Product deleted", null);
+      const data = await productService.softDelete(parseRouteId(req.params.id));
+      return ok<ProductOutDto>(res, 200, "Product deleted", data);
     } catch (error) {
       return fail(res, error, "Failed to delete product");
+    }
+  };
+
+  restore = async (req: Request, res: Response) => {
+    try {
+      const data = await productService.restore(parseRouteId(req.params.id));
+      return ok<ProductOutDto>(res, 200, "Product restored", data);
+    } catch (error) {
+      return fail(res, error, "Failed to restore product");
+    }
+  };
+
+  removePermanently = async (req: Request, res: Response) => {
+    try {
+      await productService.deletePermanently(parseRouteId(req.params.id));
+      return ok(res, 200, "Product removed for good", null);
+    } catch (error) {
+      return fail(res, error, "Failed to remove product");
     }
   };
 }

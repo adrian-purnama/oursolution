@@ -10,7 +10,10 @@ export interface ProductPeriodOutDto {
   source: string;
 }
 
-/** One product's row in a user's plan: its periods, oldest first. */
+/**
+ * One product's row in a user's plan: its periods, oldest first. A one-time
+ * product the user owns has a single period from its purchase with no end.
+ */
 export interface UserProductRowOutDto {
   product: ProductSummaryDto;
   /** True when a period covers now. */
@@ -19,7 +22,7 @@ export interface UserProductRowOutDto {
   periods: ProductPeriodOutDto[];
 }
 
-/** A user's plan: every product they have, had recently, or will have. */
+/** A user's plan: subscriptions they have, had recently or will have, plus owned one-time products. */
 export interface UserPlanOutDto {
   /** Server time the plan was read at, so the client draws "now" consistently. */
   now: string;
