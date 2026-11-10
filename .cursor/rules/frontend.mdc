@@ -1,0 +1,98 @@
+---
+description: Frontend architecture, shadcn UI, forms/CRUD placement, and UX standards
+globs: frontend/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+frontend
+
+# Frontend Agent Rules
+
+## Hard rules
+* **Thin routes, fat forms:** Route files own routing only (`beforeLoad`, layout shell, title). Put fetch/mutate/form state and CRUD UI in `frontend/src/components/forms/`.
+* **shadcn first:** Prefer components from `#/components/ui` (shadcn/ui, New York, lucide). Do not add new UI libraries. Do not hand-roll Button/Input/Dialog/Select/Table/Tabs/Checkbox/Badge/Dropdown when a shadcn primitive exists or can be added via the shadcn CLI into `components/ui/`.
+* **Reuse tokens:** Use existing CSS variables (`--ink`, `--muted`, `--line`, `--surface`, …), `cn()` from `#/lib/utils`, and `#/lib/ui-classes` helpers when a shadcn component is not the right fit yet. Do not invent parallel design systems.
+* **Minimal changes:** Smallest diff. Match existing page rhythm. No drive-by restyles of unrelated pages.
+* **Type-safe:** No `any`. Keep TanStack Router types happy; run `npm run generate-routes` after adding/renaming route files.
+
+## Where files go
+
+```
+frontend/src/
+  routes/                      # TanStack file routes — thin
+    admin/route.tsx            # layout, sidebar, authz gate
+    admin/<page>.tsx           # title + render a form component
+  components/
+    ui/                        # shadcn primitives ONLY (cli-generated)
+    forms/                     # feature CRUD + interactive forms
+      auth/                    # LoginForm, RegisterForm, …
+      admin/                   # AppConfigForm, UsersAdminForm, UserDetailForm, …
+      shared/                  # PasswordInput and other form-only shared bits
+    Header.tsx / Footer.tsx    # app chrome
+    home/                      # marketing sections
+  context/                     # AuthProvider, BrandingProvider
+  lib/                         # apiFetch, ui-classes, useDebouncedValue, types
+```
+
+**Imports:** use `#/…` (see `package.json` imports map).
+
+### Forms / CRUD placement
+
+* Put **all** create / read / update / delete UI and its hooks, local state, debounced search, toasts, confirm dialogs, and API calls under `components/forms/`.
+* Folder by domain when a feature grows (`forms/admin/`, `forms/auth/`). Flat files are fine for small forms.
+* A route should look like: gate in `beforeLoad` → short page header → `<SomeForm />`.
+* Do **not** put large interactive trees (tables with row actions, editors, multi-step saves) inline in `routes/`.
+* Shared non-form chrome (admin sidebar, breadcrumbs) stays in the route layout or `components/` outside `forms/`.
+* When touching existing misplaced CRUD (e.g. a large editor outside `forms/`), move it into `forms/<domain>/` as part of that change if the diff stays focused.
+
+### shadcn usage
+
+* Config: `frontend/components.json` (aliases → `#/components/ui`, icons → lucide).
+* Add missing primitives with the shadcn CLI into `src/components/ui/` — do not copy-paste one-off styled clones.
+* Compose feature UI from shadcn primitives inside `forms/`; do not fork primitives into `forms/`.
+* Prefer: Button, Input, Label, Textarea, Checkbox, Select, Dialog, DropdownMenu, Table, Tabs, Badge, Skeleton, Tooltip, Separator, Collapsible, Sheet (mobile admin nav if needed).
+* Toasts: keep `react-hot-toast` (already wired in `__root.tsx`) unless the project standardizes on a shadcn toaster later.
+* Icons: `lucide-react` only.
+
+## Route conventions (TanStack Router)
+
+* File routes under `src/routes/`; regenerate with `npm run generate-routes`.
+* Auth: `bootstrapAuth()` in `beforeLoad`; redirect unauthenticated users.
+* Admin authz: there are two roles, `user` and `admin` (from `/auth/validate`). Use `isAdmin` from `useAuth()` in components and `isAdminUser(user)` in `beforeLoad`. There is no permission system; feature access comes from the user's plan (`user.plan` from `useAuth()`).
+* Admin layout (`/admin/route.tsx`): its `beforeLoad` guards every admin page; sidebar plus breadcrumb above content.
+* After actions that change the **current** user’s role, call `refreshAuth()`.
+
+## Data & API
+
+* Use `apiFetch` / `apiUpload` from `#/lib/api`. Expect `ApiResponseDto<{ success, message, data }>`.
+* Surface failures with concise toasts; show inline field errors when the API returns `data.fields`.
+* Debounce search with `useDebouncedValue(..., 250)` unless a page already uses another agreed delay.
+* Loading: skeletons or a small spinner. Empty: short message + one CTA. Error: message + Retry.
+* Destructive actions: confirm via shadcn `Dialog` (or native `<dialog>` only if already present and untouched).
+
+## UX standard (keep pages cohesive)
+
+Clean, calm, hierarchical SaaS — one product, not a collage of page styles.
+
+* **Hierarchy:** Clear page title → section headings → quiet helper/`sm`/`xs` text. Not everything is loud.
+* **Copy:** Short labels and one-line hints. No large explanatory paragraphs when a sentence will do.
+* **Cards sparingly:** Use containment only to group related controls or create an interaction surface. Prefer spacing/typography over nested boxes. No cards in heroes unless the design already requires it.
+* **One primary action** per view; secondary actions quieter; destructive separated.
+* **Forms:** Related fields grouped, labels on every input, helper text small, progressive disclosure for rare options.
+* **Tables:** Scanable; important columns first; `overflow-x-auto` on small screens; optional card collapse on mobile.
+* **A11y:** Visible focus, keyboard operable menus/dialogs, `aria-expanded` / `aria-checked="mixed"` where used, labels on inputs.
+* Before restyling: reuse existing tokens/components. Fix the shared primitive, not one page’s one-off CSS.
+
+## Auth context
+
+* `useAuth()` exposes `user`, `isAuthenticated`, `isAdmin`, `login`, `logout`, `refreshAuth`, `isLoading`.
+* Header “Admin” link is shown when `isAdmin` is true.
+
+## Done criteria
+
+* New CRUD lives under `components/forms/` (domain subfolder when useful)
+* UI built from `#/components/ui` + existing tokens; no new UI library
+* Route file stays thin (gate + shell + form component)
+* `generate-routes` run if routes changed
+* Loading / empty / error / success states present for interactive views
+* Responsive enough for mobile admin use (sidebar icon-only pattern already used)

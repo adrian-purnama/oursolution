@@ -1,0 +1,35 @@
+import { model, Schema } from "mongoose";
+import { USER_ROLES, UserInterface } from "./user.interface";
+
+const userSchema = new Schema<UserInterface>(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    hashedPassword: {
+      type: String,
+      required: true,
+    },
+    isBlocked: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+    role: {
+      type: String,
+      required: true,
+      enum: USER_ROLES,
+      default: "user",
+    },
+    tokenVersion: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+  },
+  { timestamps: true },
+);
+
+export const UserModel = model<UserInterface>("User", userSchema);

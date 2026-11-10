@@ -1,0 +1,115 @@
+---
+alwaysApply: true
+---
+
+backend
+
+# Backend TypeScript Agent Rules
+
+## Hard rules
+
+* **Type Safety:** Run `npx tsc --noEmit` in `backend/`. Zero type errors before done. No `any`; use interfaces, generics, or `unknown`.
+* **Minimal Changes:** Smallest diff that satisfies the request. No unrelated refactors or new libraries unless required.
+* **Consistency:** Match existing naming, file layout, and patterns. Do not invent a new architecture.
+
+## Layering (Route → Controller → Service → Model)
+
+There is **no separate Repository layer**. Services use Mongoose models directly.
+
+| Layer | Responsibility | Must NOT |
+| --- | --- | --- |
+| **Route** | Wire path + middleware + controller method | Business logic, DB, response shaping |
+| **Controller** | Parse/validate input, call service, return `ApiResponseDto` | Business rules, multi-step domain logic |
+| **Service** | Business logic, DB via models, domain errors | `res.status` / Express concerns |
+| **Model** | Schema + interface only | Business logic |
+
+Thin controllers: `try/catch`, map errors to HTTP, always `satisfies ApiResponseDto<...>`.
+
+## Where files go
+
+```
+backend/src/
+  index.ts                 # bootstrap: middleware, app.use(routers), listen
+  modules/<name>/          # feature modules
+    <name>.route.ts
+    <name>.controller.ts
+    <name>.service.ts
+  models/<entity>/         # <entity>.model.ts + <entity>.interface.ts
+  dto/                     # request/response shapes (*InDto / *OutDto)
+  validation/              # parse* helpers at the HTTP boundary
+  middleware/              # requireUser, requireAdmin, rateLimit, uploadImage
+  environment/env.ts       # typed env; fail fast on missing required vars
+  logger/logger.ts         # logger.info|warn|error|debug(msg, source, method)
+  utils/                   # pure helpers (jwt, email, image, ...)
+  buckets/                 # GridFS / file storage
+  database/database.ts
+  types/express.d.ts       # Express.Request.user
+```
+
+**Naming:** `*.route.ts` (or `*.routes.ts`), `*.controller.ts`, `*.service.ts`, `*.model.ts`, `*.dto.ts`.
+
+## New feature checklist
+
+1. Add `modules/<feature>/` with route + controller + service.
+2. Add model under `models/` if persisted.
+3. Add DTOs under `dto/` and parsers under `validation/`.
+4. Protect routes: `requireUser` for signed-in users, `requireUser, requireAdmin` for admin-only.
+5. Mount the router with `app.use("/path", router)` in `index.ts`.
+6. Typecheck and add tests for the service.
+
+## HTTP responses
+
+Always use `ApiResponseDto` from `dto/apiResponse.dto.ts`:
+
+```ts
+{ success: boolean; message: string; data: T }
+```
+
+Conventions:
+
+* Success: `200` / `201` with typed `data`
+* Client/domain error: usually `400` + `message` (optional `data.fields` for form validation)
+* Auth missing/invalid: `401`
+* Forbidden (not an admin): `403` `{ success: false, message: "Forbidden", data: null }`
+* Rate limited: `429`
+
+Do not invent ad-hoc response envelopes.
+
+## Validation
+
+* Parse and sanitize at the **controller / validation** boundary before services.
+* Prefer dedicated parsers in `validation/` (`parseRouteId`, `parseUpdateAdminUserDto`, `passwordProblem`, …).
+* Route params: `parseRouteId(req.params.id)` for Mongo ObjectIds.
+* Throw plain `Error` or domain errors; controllers map them to status codes.
+
+## AuthN / AuthZ
+
+There are exactly two roles, stored on the user as `role`: `"user"` and `"admin"`. There is no permission system.
+
+* **Identity:** `requireUser` (JWT via `authenticateByToken`). Blocked users and stale tokens are rejected there.
+* **Admin area:** `requireAdmin` after `requireUser`. The whole `/admin` router applies both with `router.use`.
+* **Public:** a route with neither middleware is public. Keep public auth routes behind the rate limiters in `middleware/rateLimit.ts`.
+* `role: "admin"` only opens the admin area. What an account may *use* comes from its plan: gate features on `userPlanService.getCurrentPlan(userId)` for admins and users alike, never on the role.
+* Plan periods never overlap and uncovered time is the default plan (resolved on read, never stored). Change a user's timeline only through the rules in `modules/userPlan/userPlan.planner.ts`.
+* The first account to register becomes the admin (`appConfigService.claimFirstAdmin`). Never leave the app without an unblocked admin.
+* AppConfig (`openLogin`, `openRegister`, `firstRegister`) stays global toggles.
+* Anything that should end a user's sessions (password change, block) must bump `tokenVersion`.
+
+## Env, logging, errors
+
+* Read config only through `environment/env.ts`.
+* Log with `logger.*(message, sourceFile, methodName)`.
+* Controllers catch and return JSON; services throw. Do not swallow errors.
+* Global 404/500 handlers live in `index.ts`.
+
+## Tests
+
+* `node:test` via `npm test` (`src/**/*.test.ts`).
+* Prefer pure planners + mocked models; no Mongo required for unit tests unless already the pattern.
+
+## Done criteria
+
+* `npx tsc --noEmit` clean
+* New/changed routes are mounted in `index.ts` and guarded with `requireUser` / `requireAdmin` where needed
+* Responses use `ApiResponseDto`
+* After code changes that agents explore later: `graphify update .` at repo root
