@@ -58,7 +58,7 @@ frontend/src/
 
 * File routes under `src/routes/`; regenerate with `npm run generate-routes`.
 * Auth: `bootstrapAuth()` in `beforeLoad`; redirect unauthenticated users.
-* Admin authz: there are two roles, `user` and `admin` (from `/auth/validate`). Use `isAdmin` from `useAuth()` in components and `isAdminUser(user)` in `beforeLoad`. There is no permission system; feature access comes from the user's plan (`user.plan` from `useAuth()`).
+* Admin authz: there are two roles, `user` and `admin` (from `/auth/validate`). Use `isAdmin` from `useAuth()` in components and `isAdminUser(user)` in `beforeLoad`. There is no permission system; feature access comes from the user's active products (`user.products` from `useAuth()`).
 * Admin layout (`/admin/route.tsx`): its `beforeLoad` guards every admin page; sidebar plus breadcrumb above content.
 * After actions that change the **current** user’s role, call `refreshAuth()`.
 

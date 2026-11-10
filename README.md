@@ -7,10 +7,10 @@ Starter for a web app with accounts and an admin area: an Express + MongoDB API
 
 - Register with an emailed one-time code, login, forgot/reset password
 - Two roles: `user` and `admin`. The first account to register becomes the admin
-- Admins get the admin area (app config, users, plans)
-- Plans, and a plan timeline per user that admins can change. Gating features by plan is not built yet
+- Admins get the admin area (app config, users, products)
+- Products with images, of two kinds: subscriptions (several active per user, each on its own timeline that admins can change and users extend by checkout) and one-time purchases kept for good. Payment is an allow-all stub for now
 - App config: app name, logo, and switches to open or close login and registration
-- Generic landing page, pricing page, dashboard shell and admin pages (config, users, plans)
+- Generic landing page, pricing page with checkout, dashboard, profile with a plan Gantt chart, and admin pages (config, users, products)
 
 ## Run it locally
 
@@ -46,27 +46,51 @@ Register the first account straight away: it is the one that becomes the admin.
 
 Give every app and environment its own `BUILD` value so they never share a database.
 
-## Plans
+## Products and plans
 
-A plan has a name, a color, a pricing text (what visitors read), a price in
-rupiah (what is charged), a "show on pricing page" switch and a default flag.
-Exactly one plan is the default; a "Free" default is created on first start.
+A **product** is something a user can have. It has a name, a color, an image
+(public, stored in the same GridFS bucket as the app logo and served from
+`/media/:id`), a pricing text (what visitors read), a price in rupiah (what one
+checkout charges) and a "show on pricing page" switch (which also opens it to
+checkout). Every product has a **kind**, fixed when it is created:
 
-Each user has a timeline of plan periods (`UserPlanPeriod`: plan, start, end).
-Periods never overlap. **Time not covered by a period is the default plan**, and
-that is worked out when the plan is read rather than stored, so there can never
-be a gap and nothing has to run when a period expires.
+- **Subscription** (hosting): active for a period. It has the number of days one
+  checkout buys, and lives on the user's plan timeline.
+- **One-time purchase** (for example an n8n workflow): bought once and kept for
+  good. It has an optional **access link**, shown only to owners on their
+  profile. Owning one is a `Purchase` (unique per user and product).
 
-From a user's page an admin can:
+A user's **plan** is their subscriptions, each on its own timeline of periods
+(`UserProductPeriod`: product, start, end, source). Periods of the same product
+never overlap; different products overlap freely, so a user can have several
+subscriptions active at once. **There is no default**: time not covered by a
+period means that subscription is not active. The plan is drawn as a Gantt chart
+on the user's profile and on the admin user page.
 
-- **Change now**: ends the running period immediately and starts a new one.
-- **Add after the current schedule**: queues a period to start when the last scheduled one ends.
-- **Delete a scheduled period**: only periods that have not started; the default covers that time.
+From a user's page an admin can, per subscription:
 
-`userPlanService.getCurrentPlan(userId)` returns the plan a user is on right
-now. Use it to gate features. Subscriptions should create periods with
-`source: "subscription"` through the same scheduling rules in
-`modules/userPlan/userPlan.planner.ts`.
+- **Start now**: cuts its running period short and starts a new one.
+- **Add after this product's schedule**: queues a period after its last one.
+- **Stop**: ends the running period now; scheduled periods are kept.
+- **Delete a scheduled period**: only periods that have not started.
+
+and, for one-time products, **give** one without payment or **take it back**.
+
+**Checkout** (`POST /me/checkout`) goes through `modules/payment`: a `Payment`
+is recorded and a `PaymentProvider` charges it. Once paid, a subscription gets a
+period of its duration added after whatever the user already has of it (buying
+again extends), and a one-time product becomes a `Purchase` (buying something
+already owned is refused before any charge). The only provider today is `allowAllProvider`, which approves
+every checkout without taking money. To add a real gateway, implement
+`PaymentProvider` in `payment.provider.ts` and swap it in `payment.service.ts`;
+a `pending` result with a `redirectUrl` is already passed to the frontend, and
+a webhook would then mark the payment paid and grant the period.
+
+Gate features with `userProductService.hasActiveProduct(userId, productId)` or
+`getActiveProducts(userId)` (in `modules/userProduct/userProduct.service.ts`),
+for admins and users alike. Both count running subscriptions and owned one-time
+products. Change timelines only through the rules in
+`modules/userProduct/userProduct.planner.ts`.
 
 ## Commands
 

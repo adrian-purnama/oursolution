@@ -20,7 +20,7 @@ import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAppConfigRouteImport } from './routes/admin/app-config'
-import { Route as AdminPlansRouteImport } from './routes/admin/plans'
+import { Route as AdminProductsRouteImport } from './routes/admin/products'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
@@ -79,9 +79,9 @@ const AdminAppConfigRoute = AdminAppConfigRouteImport.update({
   path: '/app-config',
   getParentRoute: () => AdminRouteRoute,
 } as any)
-const AdminPlansRoute = AdminPlansRouteImport.update({
-  id: '/plans',
-  path: '/plans',
+const AdminProductsRoute = AdminProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AuthenticatedDashboardIndexRoute =
@@ -116,7 +116,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof AuthRegisterRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
-  '/admin/plans': typeof AdminPlansRoute
+  '/admin/products': typeof AdminProductsRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -131,7 +131,7 @@ export interface FileRoutesByTo {
   '/register': typeof AuthRegisterRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
-  '/admin/plans': typeof AdminPlansRoute
+  '/admin/products': typeof AdminProductsRoute
   '/admin': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
@@ -150,7 +150,7 @@ export interface FileRoutesById {
   '/_auth/register': typeof AuthRegisterRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
-  '/admin/plans': typeof AdminPlansRoute
+  '/admin/products': typeof AdminProductsRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -168,7 +168,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/admin/app-config'
-    | '/admin/plans'
+    | '/admin/products'
     | '/admin/'
     | '/admin/users/$userId'
     | '/dashboard/'
@@ -183,7 +183,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/admin/app-config'
-    | '/admin/plans'
+    | '/admin/products'
     | '/admin'
     | '/admin/users/$userId'
     | '/dashboard'
@@ -201,7 +201,7 @@ export interface FileRouteTypes {
     | '/_auth/register'
     | '/_auth/reset-password'
     | '/admin/app-config'
-    | '/admin/plans'
+    | '/admin/products'
     | '/admin/'
     | '/admin/users/$userId'
     | '/_authenticated/dashboard/'
@@ -296,11 +296,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAppConfigRouteImport
       parentRoute: typeof AdminRouteRoute
     }
-    '/admin/plans': {
-      id: '/admin/plans'
-      path: '/plans'
-      fullPath: '/admin/plans'
-      preLoaderRoute: typeof AdminPlansRouteImport
+    '/admin/products': {
+      id: '/admin/products'
+      path: '/products'
+      fullPath: '/admin/products'
+      preLoaderRoute: typeof AdminProductsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/_authenticated/dashboard/': {
@@ -367,7 +367,7 @@ const AuthenticatedRouteRouteWithChildren =
 
 interface AdminRouteRouteChildren {
   AdminAppConfigRoute: typeof AdminAppConfigRoute
-  AdminPlansRoute: typeof AdminPlansRoute
+  AdminProductsRoute: typeof AdminProductsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
@@ -375,7 +375,7 @@ interface AdminRouteRouteChildren {
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAppConfigRoute: AdminAppConfigRoute,
-  AdminPlansRoute: AdminPlansRoute,
+  AdminProductsRoute: AdminProductsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminUsersUserIdRoute: AdminUsersUserIdRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,

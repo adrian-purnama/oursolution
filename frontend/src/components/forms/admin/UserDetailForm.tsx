@@ -153,7 +153,7 @@ export default function UserDetailForm({ userId }: { userId: string }) {
             </Select>
             <p className={`mt-1.5 text-xs ${hintClassName}`}>
               Admins can open this admin area. What an account can use comes
-              from its plan.
+              from its active products.
             </p>
           </div>
 

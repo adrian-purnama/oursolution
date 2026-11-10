@@ -14,7 +14,7 @@ function PricingPage() {
           Pricing
         </h1>
         <p className={`mt-3 ${hintClassName}`}>
-          Pick the plan that fits. You can change it later.
+          Check out each product on its own. Buying again extends it.
         </p>
       </div>
       <PricingGrid />

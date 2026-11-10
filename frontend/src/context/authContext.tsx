@@ -10,13 +10,13 @@ import type { ReactNode } from 'react'
 import type { UserRole } from '#/lib/adminUser'
 import type { ApiResponseDto } from '#/lib/api'
 import { API_BASE_URL, TOKEN_STORAGE_KEY } from '#/lib/config'
-import type { PlanSummary } from '#/lib/plan'
+import type { ProductSummary } from '#/lib/product'
 
 export interface AuthUser {
   email: string
   role: UserRole
-  /** The plan the user is on right now. */
-  plan: PlanSummary
+  /** Products active right now; empty when none is. */
+  products: ProductSummary[]
 }
 
 interface AuthContextValue {
@@ -77,7 +77,12 @@ async function fetchValidatedUser(): Promise<AuthUser | null> {
     const body =
       (await response.json()) as ApiResponseDto<Partial<AuthUser> | null>
 
-    if (!response.ok || !body.success || !body.data?.email || !body.data.plan) {
+    if (
+      !response.ok ||
+      !body.success ||
+      !body.data?.email ||
+      !Array.isArray(body.data.products)
+    ) {
       clearToken()
       return null
     }
@@ -85,7 +90,7 @@ async function fetchValidatedUser(): Promise<AuthUser | null> {
     return {
       email: body.data.email,
       role: body.data.role === 'admin' ? 'admin' : 'user',
-      plan: body.data.plan,
+      products: body.data.products,
     }
   } catch {
     return null

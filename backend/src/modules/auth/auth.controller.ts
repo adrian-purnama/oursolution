@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
-import type { PlanSummaryDto } from "../../dto/plan.dto";
+import type { ProductSummaryDto } from "../../dto/product.dto";
 import { LoginInDto, LoginOutDto } from "../../dto/login.dto";
 import { RegisterOutDto, RegisterInDto } from "../../dto/register.dto";
 import { ResetPasswordOutDto } from "../../dto/resetPassword.dto";
 import type { UserRole } from "../../models/user/user.interface";
 import { normalizeEmail } from "../../utils/email";
-import { userPlanService } from "../userPlan/userPlan.service";
+import { userProductService } from "../userProduct/userProduct.service";
 import { AuthService } from "./auth.service";
 
 export class AuthController {
@@ -131,19 +131,20 @@ export class AuthController {
   };
 
   validateUser = async (req: Request, res: Response) => {
-    const plan = await userPlanService.getCurrentPlanSummary(req.user!.id);
+    const products = await userProductService.getActiveProducts(req.user!.id);
     return res.status(200).json({
       success: true,
       message: "Token is valid",
       data: {
         email: req.user!.email,
         role: req.user!.role,
-        plan,
+        products,
       },
     } satisfies ApiResponseDto<{
       email: string;
       role: UserRole;
-      plan: PlanSummaryDto;
+      /** Products active right now; empty when none is. */
+      products: ProductSummaryDto[];
     }>);
   };
 

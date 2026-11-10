@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { KeyRound, LoaderCircle } from 'lucide-react'
-import PlanMap from '#/components/PlanMap'
+import PlanGantt from '#/components/PlanGantt'
+import PurchaseList from '#/components/PurchaseList'
 import UserAvatar from '#/components/UserAvatar'
 import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
-import type { UserPlanOverview } from '#/lib/plan'
+import type { Purchase, UserPlan } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 
 export default function ProfileForm() {
   const { user } = useAuth()
 
-  const [overview, setOverview] = useState<UserPlanOverview | null>(null)
+  const [overview, setOverview] = useState<UserPlan | null>(null)
+  const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [sending, setSending] = useState(false)
@@ -22,13 +24,22 @@ export default function ProfileForm() {
     setLoading(true)
     setFailed(false)
     try {
-      const response = await apiFetch<UserPlanOverview>('/me/plan')
+      const [planRes, purchasesRes] = await Promise.all([
+        apiFetch<UserPlan>('/me/plan'),
+        apiFetch<Purchase[]>('/me/purchases'),
+      ])
       if (run.cancelled) return
-      if (!response.success || !response.data) {
+      if (
+        !planRes.success ||
+        !planRes.data ||
+        !purchasesRes.success ||
+        !purchasesRes.data
+      ) {
         setFailed(true)
         return
       }
-      setOverview(response.data)
+      setOverview(planRes.data)
+      setPurchases(purchasesRes.data)
     } catch {
       if (!run.cancelled) setFailed(true)
     } finally {
@@ -94,15 +105,15 @@ export default function ProfileForm() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-base font-medium">Plan</h2>
+        <h2 className="text-base font-medium">Your products</h2>
         {loading ? (
           <div className={`flex items-center gap-2 ${hintClassName}`}>
             <LoaderCircle className="size-4 animate-spin" aria-hidden />
-            Loading plan…
+            Loading your products…
           </div>
         ) : failed || !overview ? (
           <div className="flex items-center gap-3">
-            <p className={hintClassName}>Your plan could not be loaded.</p>
+            <p className={hintClassName}>Your products could not be loaded.</p>
             <Button
               type="button"
               variant="outline"
@@ -113,7 +124,22 @@ export default function ProfileForm() {
             </Button>
           </div>
         ) : (
-          <PlanMap overview={overview} />
+          <div className="space-y-8">
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Subscriptions</h3>
+              <PlanGantt
+                plan={overview}
+                emptyText="No subscriptions yet. Check one out on the pricing page."
+              />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Purchases</h3>
+              <PurchaseList
+                purchases={purchases}
+                emptyText="No purchases yet. One-time products you buy stay here for good."
+              />
+            </div>
+          </div>
         )}
       </section>
     </div>

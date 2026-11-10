@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import UserDetailForm from '#/components/forms/admin/UserDetailForm'
-import UserPlanForm from '#/components/forms/admin/UserPlanForm'
+import UserProductsForm from '#/components/forms/admin/UserProductsForm'
+import UserPurchasesForm from '#/components/forms/admin/UserPurchasesForm'
 
 export const Route = createFileRoute('/admin/users/$userId')({
   component: AdminUserDetailPage,
@@ -9,9 +10,10 @@ export const Route = createFileRoute('/admin/users/$userId')({
 function AdminUserDetailPage() {
   const { userId } = Route.useParams()
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-12">
+    <div className="mx-auto w-full max-w-3xl space-y-12">
       <UserDetailForm userId={userId} />
-      <UserPlanForm userId={userId} />
+      <UserProductsForm userId={userId} />
+      <UserPurchasesForm userId={userId} />
     </div>
   )
 }

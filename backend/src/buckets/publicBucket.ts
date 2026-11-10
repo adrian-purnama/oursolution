@@ -41,6 +41,17 @@ export async function updatePublicFile(
   return uploaded;
 }
 
+export async function deletePublicFile(
+  id: string | Types.ObjectId,
+): Promise<void> {
+  await deleteFileIfExists(BUCKET, id);
+}
+
+/** Where a public file is served from (see modules/media). */
+export function publicFileUrl(id: Types.ObjectId | null): string | null {
+  return id ? `/media/${id.toString()}` : null;
+}
+
 export async function findPublicFile(id: string | Types.ObjectId) {
   return findFile(BUCKET, id);
 }

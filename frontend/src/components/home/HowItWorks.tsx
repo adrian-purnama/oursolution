@@ -5,12 +5,12 @@ const STEPS = [
     body: 'Enter your email, confirm the code we send, and choose a password.',
   },
   {
-    title: 'Pick a plan',
-    body: 'Your plan sets what you can use. Change it whenever your needs change.',
+    title: 'Pick your products',
+    body: 'Check out the products you need. Each one runs for its own period.',
   },
   {
     title: 'Start from the dashboard',
-    body: 'Everything your plan includes is waiting there, ready to use.',
+    body: 'Every product you have active is waiting there, ready to use.',
   },
 ]
 

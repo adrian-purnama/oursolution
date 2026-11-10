@@ -89,8 +89,9 @@ There are exactly two roles, stored on the user as `role`: `"user"` and `"admin"
 * **Identity:** `requireUser` (JWT via `authenticateByToken`). Blocked users and stale tokens are rejected there.
 * **Admin area:** `requireAdmin` after `requireUser`. The whole `/admin` router applies both with `router.use`.
 * **Public:** a route with neither middleware is public. Keep public auth routes behind the rate limiters in `middleware/rateLimit.ts`.
-* `role: "admin"` only opens the admin area. What an account may *use* comes from its plan: gate features on `userPlanService.getCurrentPlan(userId)` for admins and users alike, never on the role.
-* Plan periods never overlap and uncovered time is the default plan (resolved on read, never stored). Change a user's timeline only through the rules in `modules/userPlan/userPlan.planner.ts`.
+* `role: "admin"` only opens the admin area. What an account may *use* comes from its active products: gate features on `userProductService.hasActiveProduct(userId, productId)` / `getActiveProducts(userId)` for admins and users alike, never on the role.
+* Products have a fixed `kind`: `subscription` (periods on the plan timeline) or `oneTime` (a `Purchase`, owned for good; `modules/purchase`). A user's plan is their subscription periods. Periods of the same product never overlap; different products overlap. There is no default plan: uncovered time means the subscription is inactive. Change timelines only through the rules in `modules/userProduct/userProduct.planner.ts`.
+* Checkout goes through `paymentService` (`modules/payment`), which records a `Payment` and calls a `PaymentProvider`. The current provider is an allow-all stub; never grant a checkout period without a paid payment.
 * The first account to register becomes the admin (`appConfigService.claimFirstAdmin`). Never leave the app without an unblocked admin.
 * AppConfig (`openLogin`, `openRegister`, `firstRegister`) stays global toggles.
 * Anything that should end a user's sessions (password change, block) must bump `tokenVersion`.

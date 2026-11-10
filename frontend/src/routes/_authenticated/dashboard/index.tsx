@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import PlanBadge from '#/components/PlanBadge'
+import ProductBadge from '#/components/ProductBadge'
 import { useAuth } from '#/context/authContext'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 
@@ -18,13 +18,28 @@ function DashboardPage() {
         <section
           className={`${cardClassName} flex flex-wrap items-center justify-between gap-3 px-4 py-4`}
         >
-          <div>
-            <p className={`mb-1.5 text-xs ${hintClassName}`}>Your plan</p>
-            <PlanBadge plan={user.plan} />
+          <div className="min-w-0">
+            <p className={`mb-1.5 text-xs ${hintClassName}`}>Your products</p>
+            {user.products.length > 0 ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {user.products.map((product) => (
+                  <li key={product.id}>
+                    <ProductBadge product={product} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Nothing active yet.</p>
+            )}
           </div>
-          <Link to="/pricing" className="text-sm text-[var(--ink)] underline">
-            See all plans
-          </Link>
+          <div className="flex gap-4 text-sm">
+            <Link to="/profile" className="text-[var(--ink)] underline">
+              Details
+            </Link>
+            <Link to="/pricing" className="text-[var(--ink)] underline">
+              Products
+            </Link>
+          </div>
         </section>
       ) : null}
     </main>

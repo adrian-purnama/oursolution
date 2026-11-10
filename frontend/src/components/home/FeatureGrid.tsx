@@ -23,8 +23,8 @@ const FEATURES: Feature[] = [
   },
   {
     icon: Layers,
-    title: 'Access by plan',
-    body: 'Each account sits on a plan, and the plan decides what it can use.',
+    title: 'Pick only what you need',
+    body: 'Check out each product on its own and run as many as you like at once.',
   },
   {
     icon: LifeBuoy,

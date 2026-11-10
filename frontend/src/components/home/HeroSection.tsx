@@ -37,8 +37,8 @@ export default function HeroSection() {
           One account for everything you <em className="italic">run</em>.
         </h1>
         <p className="mb-10 max-w-xl text-base leading-relaxed text-white/70">
-          Sign up, choose a plan and manage it all from a single dashboard. No
-          setup calls, no waiting.
+          Sign up, choose your products and manage it all from a single
+          dashboard. No setup calls, no waiting.
         </p>
         <div className="flex flex-wrap gap-4">
           {isAuthenticated ? (

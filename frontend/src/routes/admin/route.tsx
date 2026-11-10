@@ -5,7 +5,7 @@ import {
   redirect,
   useRouterState,
 } from '@tanstack/react-router'
-import { Layers, Settings, Users } from 'lucide-react'
+import { Package, Settings, Users } from 'lucide-react'
 import { bootstrapAuth, isAdminUser } from '#/context/authContext'
 import { cn } from '#/lib/utils'
 
@@ -28,12 +28,12 @@ export const Route = createFileRoute('/admin')({
 const NAV_ITEMS = [
   { to: '/admin/app-config' as const, label: 'Config', icon: Settings },
   { to: '/admin/users' as const, label: 'Users', icon: Users },
-  { to: '/admin/plans' as const, label: 'Plans', icon: Layers },
+  { to: '/admin/products' as const, label: 'Products', icon: Package },
 ]
 
 function breadcrumbFor(pathname: string): string[] {
   if (pathname.startsWith('/admin/app-config')) return ['Admin', 'Config']
-  if (pathname.startsWith('/admin/plans')) return ['Admin', 'Plans']
+  if (pathname.startsWith('/admin/products')) return ['Admin', 'Products']
   if (pathname.startsWith('/admin/users/')) return ['Admin', 'Users', 'Edit']
   if (pathname.startsWith('/admin/users')) return ['Admin', 'Users']
   return ['Admin']

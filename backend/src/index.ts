@@ -16,9 +16,8 @@ import adminRoutes from "./modules/admin/admin.route";
 import appConfigRoutes from "./modules/appConfig/appConfig.route";
 import authRoutes from "./modules/auth/auth.route";
 import mediaRoutes from "./modules/media/media.route";
-import planRoutes from "./modules/plan/plan.route";
-import userPlanRoutes from "./modules/userPlan/userPlan.route";
-import { planService } from "./modules/plan/plan.service";
+import productRoutes from "./modules/product/product.route";
+import userProductRoutes from "./modules/userProduct/userProduct.route";
 
 function createApp(): Express {
   const app = express();
@@ -50,8 +49,8 @@ function createApp(): Express {
   app.use("/admin", adminRoutes);
   app.use("/app-config", appConfigRoutes);
   app.use("/media", mediaRoutes);
-  app.use("/plans", planRoutes);
-  app.use("/me", userPlanRoutes);
+  app.use("/products", productRoutes);
+  app.use("/me", userProductRoutes);
 
   app.use((_req, res) => {
     res.status(404).json({
@@ -83,7 +82,6 @@ async function bootstrap() {
 
   const app = createApp();
   await appConfigService.init();
-  await planService.ensureDefault();
 
   const httpServer = http.createServer(app);
 
