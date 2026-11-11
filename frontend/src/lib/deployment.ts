@@ -1,0 +1,190 @@
+import type { ProductSummary } from '#/lib/product'
+
+export type DeploymentState =
+  | 'notDeployed'
+  | 'deploying'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'restarting'
+  | 'erasing'
+  | 'failed'
+
+export type RunAction =
+  | 'deploy'
+  | 'redeploy'
+  | 'restart'
+  | 'turnOff'
+  | 'reset'
+  /** Admin only: erases a stopped, unsubscribed customer's data. */
+  | 'wipe'
+export type RunStatus = 'running' | 'succeeded' | 'failed'
+export type StepStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export type RunStep = {
+  key: string
+  label: string
+  status: StepStatus
+  /** Admin view only. */
+  internalLabel?: string
+  /** Admin view only. */
+  error?: string | null
+}
+
+export type DeploymentRun = {
+  id: string
+  action: RunAction
+  status: RunStatus
+  startedAt: string
+  finishedAt: string | null
+  /** Started by the system, e.g. after a subscription ended. */
+  automatic: boolean
+  steps: RunStep[]
+}
+
+export type DeploymentVariable = {
+  key: string
+  value: string
+  editable: boolean
+  /** Admin view only. */
+  visibility?: 'editable' | 'readOnly' | 'hidden'
+}
+
+export type ServiceCheckState = 'up' | 'down' | 'pending' | 'maintenance'
+
+/** How one address did over the last 24 hours. */
+export type ServiceStatus = {
+  host: string
+  state: ServiceCheckState
+  /** Share of checks that were up, 0 to 1. Null before the first check. */
+  uptime: number | null
+  responseMs: number | null
+  checkedAt: string | null
+  /** The latest checks, oldest first. */
+  beats: { state: ServiceCheckState; at: string }[]
+}
+
+export type Deployment = {
+  product: ProductSummary
+  entitled: boolean
+  state: DeploymentState
+  /** When the running subscription ends; null for no end or not running. */
+  subscriptionEndsAt: string | null
+  /** When the service last came up, while it runs; else null. */
+  runningSince: string | null
+  hosts: string[]
+  /** Per address, while the service runs and is monitored; else empty. */
+  status: ServiceStatus[]
+  variables: DeploymentVariable[]
+  actions: RunAction[]
+  /** Latest first. */
+  runs: DeploymentRun[]
+  /** Admin view only. */
+  internal?: {
+    name: string | null
+    username: string
+    composeId: string | null
+    appName: string | null
+    routedHosts: string[]
+    monitors: { host: string; monitorId: number }[]
+    /** Host folders a reset empties. */
+    resetFolders: string[]
+    /** Mounted host paths a reset leaves alone, and why. */
+    resetSkipped: { path: string; reason: string }[]
+    /** Whether "Delete data" may run now, and if not, why. */
+    wipe: { allowed: boolean; reason: string | null }
+  }
+}
+
+/** One line of the admin overview of every deployment. */
+export type AdminDeploymentRow = {
+  user: { id: string; email: string }
+  deployment: Deployment
+}
+
+export const CHECK_STATE_LABELS: Record<ServiceCheckState, string> = {
+  up: 'Up',
+  down: 'Not responding',
+  pending: 'Checking',
+  maintenance: 'Maintenance',
+}
+
+/** "99.9%", never rounding a real outage up to 100%. */
+export function formatUptime(uptime: number): string {
+  if (uptime >= 1) return '100%'
+  return `${Math.min(uptime * 100, 99.99).toFixed(2)}%`
+}
+
+export const BUSY_STATES: DeploymentState[] = [
+  'deploying',
+  'stopping',
+  'restarting',
+  'erasing',
+]
+
+export const STATE_LABELS: Record<DeploymentState, string> = {
+  notDeployed: 'Not deployed',
+  deploying: 'Deploying',
+  running: 'Running',
+  stopping: 'Turning off',
+  stopped: 'Off',
+  restarting: 'Restarting',
+  erasing: 'Deleting data',
+  failed: 'Needs attention',
+}
+
+export const RUN_ACTION_LABELS: Record<RunAction, string> = {
+  deploy: 'Deploy',
+  redeploy: 'Redeploy',
+  restart: 'Restart',
+  turnOff: 'Turn off',
+  reset: 'Reset',
+  wipe: 'Delete data',
+}
+
+/** What each action does, in the customer's words. */
+export const RUN_ACTION_HINTS: Record<RunAction, string> = {
+  deploy: 'Starts the service.',
+  redeploy: 'Applies your settings and the latest version. Your data is kept.',
+  restart: 'Stops and starts the service. Your data is kept.',
+  turnOff:
+    'Takes the service and its address offline. Your data is kept until you turn it on again.',
+  reset: 'Erases everything stored in the service and starts it again as new.',
+  wipe: 'Erases everything stored in the service. It stays off.',
+}
+
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+})
+
+export function formatDate(iso: string): string {
+  return dateFormatter.format(new Date(iso))
+}
+
+/** "3 days", "5 hours", "12 minutes": how long ago `iso` was. */
+export function formatSince(iso: string, now: number = Date.now()): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000))
+  const plural = (count: number, unit: string) =>
+    `${count} ${unit}${count === 1 ? '' : 's'}`
+  if (minutes < 1) return 'moments'
+  if (minutes < 60) return plural(minutes, 'minute')
+  if (minutes < 60 * 24) return plural(Math.floor(minutes / 60), 'hour')
+  return plural(Math.floor(minutes / (60 * 24)), 'day')
+}
+
+/** One line on where the subscription stands. */
+export function subscriptionLine(
+  deployment: Pick<Deployment, 'entitled' | 'subscriptionEndsAt'>,
+): string {
+  if (!deployment.entitled) return 'Subscription not active'
+  return deployment.subscriptionEndsAt
+    ? `Subscription active until ${formatDate(deployment.subscriptionEndsAt)}`
+    : 'Subscription active'
+}
+
+/** The deploy button's label depends on where the service stands. */
+export function actionLabel(action: RunAction, state: DeploymentState): string {
+  if (action === 'deploy' && state === 'stopped') return 'Turn on'
+  if (action === 'deploy' && state === 'failed') return 'Try again'
+  return RUN_ACTION_LABELS[action]
+}

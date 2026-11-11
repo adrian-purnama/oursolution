@@ -1,4 +1,4 @@
-import type { HydratedDocument } from "mongoose";
+import type { HydratedDocument, Types } from "mongoose";
 import {
   deletePublicFile,
   publicFileUrl,
@@ -16,9 +16,30 @@ import { ProductModel } from "../../models/product/product.model";
 import { PaymentModel } from "../../models/payment/payment.model";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
+import { env } from "../../environment/env";
 import { normalizeImage } from "../../utils/image";
 
 export type ProductDoc = HydratedDocument<ProductInterface>;
+
+export class ProductNotFoundError extends Error {
+  constructor() {
+    super("Product not found");
+  }
+}
+
+/** The public shape: no internal price, deployment or access link. */
+export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
+  return {
+    id: product.id,
+    name: product.name,
+    kind: product.kind,
+    color: product.color,
+    imageUrl: publicFileUrl(product.image),
+    pricingText: product.pricingText,
+    description: product.description,
+    durationDays: product.durationDays,
+  };
+}
 
 export function toProductOut(product: ProductDoc): ProductOutDto {
   return {
@@ -28,8 +49,27 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
     color: product.color,
     imageUrl: publicFileUrl(product.image),
     pricingText: product.pricingText,
+    description: product.description,
     priceIdr: product.priceIdr,
     durationDays: product.durationDays,
+    deployment: product.deployment
+      ? {
+          type: product.deployment.type,
+          projectId: product.deployment.projectId,
+          name: product.deployment.name,
+          composeFile: product.deployment.composeFile,
+          variables: product.deployment.variables.map(
+            ({ key, value, visibility }) => ({ key, value, visibility }),
+          ),
+          domains: product.deployment.domains.map(
+            ({ serviceName, subdomain, port }) => ({
+              serviceName,
+              subdomain,
+              port,
+            }),
+          ),
+        }
+      : null,
     accessUrl: product.accessUrl,
     showOnPricingPage: product.showOnPricingPage,
     deletedAt: product.deletedAt?.toISOString() ?? null,
@@ -83,7 +123,52 @@ function liveFilter(now: Date) {
   return { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] };
 }
 
+/**
+ * The subdomain part of a full host saved before domains were split:
+ * "n8n-${USERNAME}.example.com" gives "n8n-${USERNAME}" when the deploy
+ * domain is example.com, else everything before the first dot.
+ */
+export function subdomainFromHost(host: string, domain: string | null): string {
+  const value = host.trim();
+  if (domain && value.endsWith(`.${domain}`)) {
+    return value.slice(0, -(domain.length + 1));
+  }
+  return value.split(".")[0] ?? "";
+}
+
 export class ProductService {
+  /**
+   * Products saved when a domain held a full `host` get a `subdomain`
+   * instead. Runs at startup; returns how many products it changed.
+   */
+  async migrateLegacyDomains(): Promise<number> {
+    type LegacyDomain = {
+      serviceName?: string;
+      host?: string;
+      subdomain?: string;
+      port?: number;
+    };
+    const legacy = await ProductModel.collection
+      .find<{ _id: Types.ObjectId; deployment: { domains: LegacyDomain[] } }>({
+        "deployment.domains.host": { $exists: true },
+      })
+      .toArray();
+    for (const product of legacy) {
+      const domains = product.deployment.domains.map((item) => ({
+        serviceName: item.serviceName ?? "",
+        subdomain:
+          item.subdomain ??
+          subdomainFromHost(item.host ?? "", env.deployDomain),
+        port: item.port ?? 0,
+      }));
+      await ProductModel.collection.updateOne(
+        { _id: product._id },
+        { $set: { "deployment.domains": domains } },
+      );
+    }
+    return legacy.length;
+  }
+
   async list(): Promise<ProductOutDto[]> {
     const products = await ProductModel.find()
       .sort({ priceIdr: 1, name: 1 })
@@ -98,15 +183,18 @@ export class ProductService {
     })
       .sort({ priceIdr: 1, name: 1 })
       .exec();
-    return products.map((product) => ({
-      id: product.id,
-      name: product.name,
-      kind: product.kind,
-      color: product.color,
-      imageUrl: publicFileUrl(product.image),
-      pricingText: product.pricingText,
-      durationDays: product.durationDays,
-    }));
+    return products.map(toPricingProductOut);
+  }
+
+  /** Public: one product, only while it is published and not deleted. */
+  async getPricing(id: string): Promise<PricingProductOutDto> {
+    const product = await ProductModel.findOne({
+      _id: id,
+      showOnPricingPage: true,
+      deletedAt: null,
+    }).exec();
+    if (!product) throw new ProductNotFoundError();
+    return toPricingProductOut(product);
   }
 
   async get(id: string): Promise<ProductDoc> {

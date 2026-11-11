@@ -1,15 +1,23 @@
 import type { Request, Response } from "express";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
+  CheckDeploymentOutDto,
   PricingProductOutDto,
   ProductOutDto,
 } from "../../dto/product.dto";
+import { env } from "../../environment/env";
+import { checkDeployment } from "../../utils/deployment";
 import { parseRouteId } from "../../validation/parseParam";
 import {
+  parseDeploymentDraft,
   parseCreateProductDto,
   parseUpdateProductDto,
 } from "../../validation/product";
-import { productService } from "./product.service";
+import {
+  ProductNotFoundError,
+  productService,
+  toProductOut,
+} from "./product.service";
 
 function fail(res: Response, error: unknown, fallback: string) {
   return res.status(400).json({
@@ -38,12 +46,56 @@ export class ProductController {
     }
   };
 
+  /** Public: one published product, for its own page. */
+  getPricing = async (req: Request, res: Response) => {
+    try {
+      const data = await productService.getPricing(parseRouteId(req.params.id));
+      return ok<PricingProductOutDto>(res, 200, "Product retrieved", data);
+    } catch (error) {
+      if (error instanceof ProductNotFoundError) {
+        return res.status(404).json({
+          success: false,
+          message: error.message,
+          data: null,
+        } satisfies ApiResponseDto);
+      }
+      return fail(res, error, "Failed to load product");
+    }
+  };
+
   list = async (_req: Request, res: Response) => {
     try {
       const data = await productService.list();
       return ok<ProductOutDto[]>(res, 200, "Products retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to list products");
+    }
+  };
+
+  get = async (req: Request, res: Response) => {
+    try {
+      const product = await productService.get(parseRouteId(req.params.id));
+      return ok<ProductOutDto>(
+        res,
+        200,
+        "Product retrieved",
+        toProductOut(product),
+      );
+    } catch (error) {
+      return fail(res, error, "Failed to load product");
+    }
+  };
+
+  /** Checks deployment settings without saving anything. */
+  checkDeployment = (req: Request, res: Response) => {
+    try {
+      const data = checkDeployment(
+        parseDeploymentDraft(req.body),
+        env.deployDomain ?? undefined,
+      );
+      return ok<CheckDeploymentOutDto>(res, 200, "Deployment checked", data);
+    } catch (error) {
+      return fail(res, error, "Failed to check the deployment");
     }
   };
 

@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import ProductsAdminForm from '#/components/forms/admin/ProductsAdminForm'
 import { hintClassName } from '#/lib/ui-classes'
 
-export const Route = createFileRoute('/admin/products')({
+export const Route = createFileRoute('/admin/products/')({
   component: AdminProductsPage,
 })
 

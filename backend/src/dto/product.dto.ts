@@ -1,4 +1,16 @@
-import type { ProductKind } from "../models/product/product.interface";
+import type {
+  ProductDeployment,
+  ProductKind,
+} from "../models/product/product.interface";
+import type {
+  DeploymentCheckResult,
+  DeploymentDraft,
+} from "../utils/deployment";
+
+/** Body of the deployment check: the settings as typed. */
+export type CheckDeploymentInDto = DeploymentDraft;
+
+export type CheckDeploymentOutDto = DeploymentCheckResult;
 
 export interface ProductOutDto {
   id: string;
@@ -7,9 +19,12 @@ export interface ProductOutDto {
   color: string;
   imageUrl: string | null;
   pricingText: string;
+  description: string;
   priceIdr: number;
   /** Subscription only. */
   durationDays: number | null;
+  /** Subscription only; admin-only. */
+  deployment: ProductDeployment | null;
   /** One-time only; admins and owners see it, the pricing page never does. */
   accessUrl: string | null;
   showOnPricingPage: boolean;
@@ -25,6 +40,7 @@ export interface PricingProductOutDto {
   color: string;
   imageUrl: string | null;
   pricingText: string;
+  description: string;
   durationDays: number | null;
 }
 
@@ -42,8 +58,10 @@ export interface CreateProductDto {
   kind: ProductKind;
   color: string;
   pricingText: string;
+  description: string;
   priceIdr: number;
   durationDays: number | null;
+  deployment: ProductDeployment | null;
   accessUrl: string | null;
   showOnPricingPage: boolean;
 }

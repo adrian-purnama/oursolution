@@ -25,3 +25,8 @@ function limiter(limit: number) {
 export const otpRateLimit = limiter(5);
 /** Login, register and reset-password attempts. */
 export const credentialRateLimit = limiter(20);
+/**
+ * Changes to a deployment. The real limits are per customer and stored
+ * (deployment.rules.ts); this only keeps a script from hammering the route.
+ */
+export const deploymentRateLimit = limiter(60);

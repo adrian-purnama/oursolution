@@ -107,6 +107,32 @@ export class UserProductService {
     return Boolean(running) || owned;
   }
 
+  /**
+   * When the subscription that runs at `now` ends, counting periods that
+   * follow on without a gap: a date, null when it has no end, undefined
+   * when it is not running.
+   */
+  async runsUntil(
+    userId: string,
+    productId: string,
+    now: Date = new Date(),
+  ): Promise<Date | null | undefined> {
+    const periods = await UserProductPeriodModel.find({
+      userId,
+      productId,
+      ...liveFilter(now),
+    })
+      .sort({ startsAt: 1 })
+      .exec();
+    if (periods.length === 0 || periods[0].startsAt > now) return undefined;
+    let end = periods[0].endsAt;
+    for (const period of periods.slice(1)) {
+      if (end === null || period.startsAt > end) break;
+      end = period.endsAt;
+    }
+    return end;
+  }
+
   /** The user's plan: one row per product with its recent, running and scheduled periods. */
   async getPlan(
     userId: string,

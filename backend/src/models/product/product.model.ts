@@ -1,5 +1,44 @@
 import { model, Schema } from "mongoose";
-import { PRODUCT_KINDS, ProductInterface } from "./product.interface";
+import {
+  DEPLOYMENT_TYPES,
+  DeploymentDomain,
+  DeploymentVariable,
+  PRODUCT_KINDS,
+  ProductDeployment,
+  ProductInterface,
+  VARIABLE_VISIBILITIES,
+} from "./product.interface";
+
+const variableSchema = new Schema<DeploymentVariable>(
+  {
+    key: { type: String, required: true },
+    value: { type: String, default: "" },
+    visibility: { type: String, required: true, enum: VARIABLE_VISIBILITIES },
+  },
+  { _id: false },
+);
+
+const domainSchema = new Schema<DeploymentDomain>(
+  {
+    serviceName: { type: String, required: true },
+    subdomain: { type: String, required: true },
+    port: { type: Number, required: true, min: 1, max: 65_535 },
+  },
+  { _id: false },
+);
+
+const deploymentSchema = new Schema<ProductDeployment>(
+  {
+    type: { type: String, required: true, enum: DEPLOYMENT_TYPES },
+    projectId: { type: String, required: true },
+    // Products saved before names existed have none until edited.
+    name: { type: String, default: "" },
+    composeFile: { type: String, required: true },
+    variables: { type: [variableSchema], default: [] },
+    domains: { type: [domainSchema], default: [] },
+  },
+  { _id: false },
+);
 
 const productSchema = new Schema<ProductInterface>(
   {
@@ -24,6 +63,11 @@ const productSchema = new Schema<ProductInterface>(
       required: false,
       default: "",
     },
+    description: {
+      type: String,
+      required: false,
+      default: "",
+    },
     priceIdr: {
       type: Number,
       required: true,
@@ -33,6 +77,10 @@ const productSchema = new Schema<ProductInterface>(
       type: Number,
       default: null,
       min: 1,
+    },
+    deployment: {
+      type: deploymentSchema,
+      default: null,
     },
     accessUrl: {
       type: String,

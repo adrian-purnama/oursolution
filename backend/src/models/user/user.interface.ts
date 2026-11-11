@@ -9,6 +9,11 @@ export interface UserInterface {
   role: UserRole;
   /** Bumped to invalidate every token issued before the change. */
   tokenVersion?: number;
+  /**
+   * USERNAME in deployments: from the email, with a number added when
+   * another user already has it. Set at the first deploy, then fixed.
+   */
+  deployUsername?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

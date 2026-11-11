@@ -6,5 +6,6 @@ const productController = new ProductController();
 
 // Public. Product management lives under /admin.
 router.get("/pricing", productController.listPricing);
+router.get("/pricing/:id", productController.getPricing);
 
 export default router;

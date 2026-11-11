@@ -20,11 +20,16 @@ import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAppConfigRouteImport } from './routes/admin/app-config'
-import { Route as AdminProductsRouteImport } from './routes/admin/products'
+import { Route as AdminDeploymentsRouteImport } from './routes/admin/deployments'
+import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
+import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
+import { Route as AdminProductsProductIdRouteImport } from './routes/admin/products/$productId'
+import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
+import { Route as AuthenticatedDashboardDeploymentsProductIdRouteImport } from './routes/_authenticated/dashboard/deployments/$productId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -79,10 +84,15 @@ const AdminAppConfigRoute = AdminAppConfigRouteImport.update({
   path: '/app-config',
   getParentRoute: () => AdminRouteRoute,
 } as any)
-const AdminProductsRoute = AdminProductsRouteImport.update({
-  id: '/products',
-  path: '/products',
+const AdminDeploymentsRoute = AdminDeploymentsRouteImport.update({
+  id: '/deployments',
+  path: '/deployments',
   getParentRoute: () => AdminRouteRoute,
+} as any)
+const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
+  id: '/products/$productId',
+  path: '/products/$productId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
@@ -96,6 +106,21 @@ const AuthenticatedProfileIndexRoute =
     path: '/profile/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
+  id: '/products/',
+  path: '/products/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminProductsProductIdRoute = AdminProductsProductIdRouteImport.update({
+  id: '/products/$productId',
+  path: '/products/$productId',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminProductsNewRoute = AdminProductsNewRouteImport.update({
+  id: '/products/new',
+  path: '/products/new',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
@@ -106,6 +131,12 @@ const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   path: '/users/$userId',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AuthenticatedDashboardDeploymentsProductIdRoute =
+  AuthenticatedDashboardDeploymentsProductIdRouteImport.update({
+    id: '/dashboard/deployments/$productId',
+    path: '/dashboard/deployments/$productId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -116,12 +147,17 @@ export interface FileRoutesByFullPath {
   '/register': typeof AuthRegisterRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
-  '/admin/products': typeof AdminProductsRoute
+  '/admin/deployments': typeof AdminDeploymentsRoute
+  '/products/$productId': typeof ProductsProductIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/products/$productId': typeof AdminProductsProductIdRoute
+  '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
+  '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/dashboard/deployments/$productId': typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -131,12 +167,17 @@ export interface FileRoutesByTo {
   '/register': typeof AuthRegisterRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
-  '/admin/products': typeof AdminProductsRoute
+  '/admin/deployments': typeof AdminDeploymentsRoute
+  '/products/$productId': typeof ProductsProductIdRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/products/$productId': typeof AdminProductsProductIdRoute
+  '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
+  '/admin/products': typeof AdminProductsIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
+  '/dashboard/deployments/$productId': typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -150,12 +191,17 @@ export interface FileRoutesById {
   '/_auth/register': typeof AuthRegisterRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
-  '/admin/products': typeof AdminProductsRoute
+  '/admin/deployments': typeof AdminDeploymentsRoute
+  '/products/$productId': typeof ProductsProductIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/products/$productId': typeof AdminProductsProductIdRoute
+  '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
+  '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/_authenticated/dashboard/deployments/$productId': typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -168,12 +214,17 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/admin/app-config'
-    | '/admin/products'
+    | '/admin/deployments'
+    | '/products/$productId'
     | '/admin/'
+    | '/admin/products/$productId'
+    | '/admin/products/new'
     | '/admin/users/$userId'
     | '/dashboard/'
     | '/profile/'
+    | '/admin/products/'
     | '/admin/users/'
+    | '/dashboard/deployments/$productId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -183,12 +234,17 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/admin/app-config'
-    | '/admin/products'
+    | '/admin/deployments'
+    | '/products/$productId'
     | '/admin'
+    | '/admin/products/$productId'
+    | '/admin/products/new'
     | '/admin/users/$userId'
     | '/dashboard'
     | '/profile'
+    | '/admin/products'
     | '/admin/users'
+    | '/dashboard/deployments/$productId'
   id:
     | '__root__'
     | '/'
@@ -201,12 +257,17 @@ export interface FileRouteTypes {
     | '/_auth/register'
     | '/_auth/reset-password'
     | '/admin/app-config'
-    | '/admin/products'
+    | '/admin/deployments'
+    | '/products/$productId'
     | '/admin/'
+    | '/admin/products/$productId'
+    | '/admin/products/new'
     | '/admin/users/$userId'
     | '/_authenticated/dashboard/'
     | '/_authenticated/profile/'
+    | '/admin/products/'
     | '/admin/users/'
+    | '/_authenticated/dashboard/deployments/$productId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -215,6 +276,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   PricingRoute: typeof PricingRoute
+  ProductsProductIdRoute: typeof ProductsProductIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -296,12 +358,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAppConfigRouteImport
       parentRoute: typeof AdminRouteRoute
     }
-    '/admin/products': {
-      id: '/admin/products'
-      path: '/products'
-      fullPath: '/admin/products'
-      preLoaderRoute: typeof AdminProductsRouteImport
+    '/admin/deployments': {
+      id: '/admin/deployments'
+      path: '/deployments'
+      fullPath: '/admin/deployments'
+      preLoaderRoute: typeof AdminDeploymentsRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/products/$productId': {
+      id: '/products/$productId'
+      path: '/products/$productId'
+      fullPath: '/products/$productId'
+      preLoaderRoute: typeof ProductsProductIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
@@ -317,6 +386,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/admin/products/': {
+      id: '/admin/products/'
+      path: '/products'
+      fullPath: '/admin/products/'
+      preLoaderRoute: typeof AdminProductsIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/products/$productId': {
+      id: '/admin/products/$productId'
+      path: '/products/$productId'
+      fullPath: '/admin/products/$productId'
+      preLoaderRoute: typeof AdminProductsProductIdRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/products/new': {
+      id: '/admin/products/new'
+      path: '/products/new'
+      fullPath: '/admin/products/new'
+      preLoaderRoute: typeof AdminProductsNewRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/users/': {
       id: '/admin/users/'
       path: '/users'
@@ -330,6 +420,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users/$userId'
       preLoaderRoute: typeof AdminUsersUserIdRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/_authenticated/dashboard/deployments/$productId': {
+      id: '/_authenticated/dashboard/deployments/$productId'
+      path: '/dashboard/deployments/$productId'
+      fullPath: '/dashboard/deployments/$productId'
+      preLoaderRoute: typeof AuthenticatedDashboardDeploymentsProductIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
@@ -355,11 +452,14 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
+  AuthenticatedDashboardDeploymentsProductIdRoute: typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
+  AuthenticatedDashboardDeploymentsProductIdRoute:
+    AuthenticatedDashboardDeploymentsProductIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -367,17 +467,23 @@ const AuthenticatedRouteRouteWithChildren =
 
 interface AdminRouteRouteChildren {
   AdminAppConfigRoute: typeof AdminAppConfigRoute
-  AdminProductsRoute: typeof AdminProductsRoute
+  AdminDeploymentsRoute: typeof AdminDeploymentsRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminProductsProductIdRoute: typeof AdminProductsProductIdRoute
+  AdminProductsNewRoute: typeof AdminProductsNewRoute
   AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
+  AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAppConfigRoute: AdminAppConfigRoute,
-  AdminProductsRoute: AdminProductsRoute,
+  AdminDeploymentsRoute: AdminDeploymentsRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminProductsProductIdRoute: AdminProductsProductIdRoute,
+  AdminProductsNewRoute: AdminProductsNewRoute,
   AdminUsersUserIdRoute: AdminUsersUserIdRoute,
+  AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
 }
 
@@ -391,6 +497,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   PricingRoute: PricingRoute,
+  ProductsProductIdRoute: ProductsProductIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

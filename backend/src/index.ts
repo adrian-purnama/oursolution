@@ -15,8 +15,12 @@ import { logger } from "./logger/logger";
 import adminRoutes from "./modules/admin/admin.route";
 import appConfigRoutes from "./modules/appConfig/appConfig.route";
 import authRoutes from "./modules/auth/auth.route";
+import deploymentRoutes from "./modules/deployment/deployment.route";
+import { startLapsedSubscriptionSweep } from "./modules/deployment/deployment.scheduler";
+import { deploymentService } from "./modules/deployment/deployment.service";
 import mediaRoutes from "./modules/media/media.route";
 import productRoutes from "./modules/product/product.route";
+import { productService } from "./modules/product/product.service";
 import userProductRoutes from "./modules/userProduct/userProduct.route";
 
 function createApp(): Express {
@@ -50,6 +54,7 @@ function createApp(): Express {
   app.use("/app-config", appConfigRoutes);
   app.use("/media", mediaRoutes);
   app.use("/products", productRoutes);
+  app.use("/me/deployments", deploymentRoutes);
   app.use("/me", userProductRoutes);
 
   app.use((_req, res) => {
@@ -82,6 +87,11 @@ async function bootstrap() {
 
   const app = createApp();
   await appConfigService.init();
+  // Runs cut short by a restart cannot resume; mark them failed.
+  await productService.migrateLegacyDomains();
+  await deploymentService.recoverInterruptedRuns();
+  // Services whose subscription ended are turned off by themselves.
+  startLapsedSubscriptionSweep();
 
   const httpServer = http.createServer(app);
 

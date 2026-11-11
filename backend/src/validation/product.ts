@@ -2,18 +2,35 @@ import { Types } from "mongoose";
 import type { CheckoutInDto } from "../dto/payment.dto";
 import type { GrantPurchaseInDto } from "../dto/purchase.dto";
 import {
+  DEPLOYMENT_TYPES,
   PRODUCT_KINDS,
+  VARIABLE_VISIBILITIES,
+  type DeploymentDomain,
+  type DeploymentType,
+  type DeploymentVariable,
+  type ProductDeployment,
   type ProductKind,
+  type VariableVisibility,
 } from "../models/product/product.interface";
 import type { CreateProductDto, UpdateProductDto } from "../dto/product.dto";
+import { env } from "../environment/env";
+import { checkDeployment, type DeploymentDraft } from "../utils/deployment";
 import type { AssignProductDto, PeriodEndSpec } from "../dto/userProduct.dto";
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const MAX_NAME_LENGTH = 60;
 const MAX_PRICING_TEXT_LENGTH = 120;
+const MAX_DESCRIPTION_LENGTH = 4000;
 const MAX_PRICE_IDR = 1_000_000_000_000;
 const MAX_DURATION_DAYS = 36_500;
 const MAX_URL_LENGTH = 2000;
+const MAX_COMPOSE_LENGTH = 100_000;
+const DOKPLOY_ID = /^[A-Za-z0-9_-]{1,100}$/;
+const MAX_HOST_LENGTH = 253;
+const MAX_VARIABLES = 100;
+const MAX_DOMAINS = 20;
+const MAX_VARIABLE_KEY_LENGTH = 100;
+const MAX_VARIABLE_VALUE_LENGTH = 4000;
 
 function asRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -48,6 +65,20 @@ function parsePricingText(value: unknown): string {
   if (text.length > MAX_PRICING_TEXT_LENGTH) {
     throw new Error(
       `pricingText must be at most ${MAX_PRICING_TEXT_LENGTH} characters`,
+    );
+  }
+  return text;
+}
+
+/** Multi-line text; line breaks are kept, the ends trimmed. */
+function parseDescription(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("description must be text");
+  }
+  const text = value.trim();
+  if (text.length > MAX_DESCRIPTION_LENGTH) {
+    throw new Error(
+      `description must be at most ${MAX_DESCRIPTION_LENGTH} characters`,
     );
   }
   return text;
@@ -102,6 +133,120 @@ function parseAccessUrl(value: unknown): string | null {
   return url.toString();
 }
 
+function parseText(value: unknown, field: string, max: number): string {
+  if (typeof value !== "string") throw new Error(`${field} must be text`);
+  if (value.length > max) throw new Error(`${field} is too long`);
+  return value;
+}
+
+function parseList(value: unknown, field: string, max: number): unknown[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error(`${field} must be a list`);
+  if (value.length > max) {
+    throw new Error(`${field} can have at most ${max} entries`);
+  }
+  return value;
+}
+
+function parseVariable(value: unknown): DeploymentVariable {
+  const raw = asRecord(value);
+  if (!VARIABLE_VISIBILITIES.includes(raw.visibility as VariableVisibility)) {
+    throw new Error(
+      `variable visibility must be one of ${VARIABLE_VISIBILITIES.join(", ")}`,
+    );
+  }
+  return {
+    key: parseText(raw.key, "variable name", MAX_VARIABLE_KEY_LENGTH).trim(),
+    value: parseText(
+      raw.value ?? "",
+      "variable value",
+      MAX_VARIABLE_VALUE_LENGTH,
+    ),
+    visibility: raw.visibility as VariableVisibility,
+  };
+}
+
+function parseDomain(value: unknown): DeploymentDomain {
+  const raw = asRecord(value);
+  const port =
+    typeof raw.port === "number"
+      ? raw.port
+      : typeof raw.port === "string" && raw.port.trim()
+        ? Number(raw.port)
+        : Number.NaN;
+  return {
+    serviceName: parseText(
+      raw.serviceName ?? "",
+      "service",
+      MAX_NAME_LENGTH,
+    ).trim(),
+    subdomain: parseText(
+      raw.subdomain ?? "",
+      "subdomain",
+      MAX_HOST_LENGTH,
+    ).trim(),
+    port,
+  };
+}
+
+/**
+ * Body: `{ name, composeFile, variables?, domains? }` as typed. Only the
+ * shape is checked here; `checkDeployment` judges the content.
+ */
+export function parseDeploymentDraft(body: unknown): DeploymentDraft {
+  const raw = asRecord(body);
+  return {
+    name: parseText(raw.name ?? "", "name", MAX_NAME_LENGTH * 2),
+    composeFile: parseText(
+      raw.composeFile,
+      "The compose file",
+      MAX_COMPOSE_LENGTH,
+    ),
+    variables: parseList(raw.variables, "variables", MAX_VARIABLES).map(
+      parseVariable,
+    ),
+    domains: parseList(raw.domains, "domains", MAX_DOMAINS).map(parseDomain),
+  };
+}
+
+/**
+ * Null for no deployment. Otherwise it needs a Dokploy project and settings
+ * that pass `checkDeployment`; the compose file is stored re-indented.
+ * Warnings do not block.
+ */
+function parseDeployment(value: unknown): ProductDeployment | null {
+  if (value === null) return null;
+  const raw = asRecord(value);
+  if (!DEPLOYMENT_TYPES.includes(raw.type as DeploymentType)) {
+    throw new Error(
+      `deployment.type must be one of ${DEPLOYMENT_TYPES.join(", ")}`,
+    );
+  }
+  if (typeof raw.projectId !== "string" || !DOKPLOY_ID.test(raw.projectId)) {
+    throw new Error("Choose the Dokploy project to deploy into");
+  }
+  const draft = parseDeploymentDraft(raw);
+  const check = checkDeployment(draft, env.deployDomain ?? undefined);
+  const errors = check.issues.filter((issue) => issue.severity === "error");
+  if (errors.length > 0) {
+    const [first] = errors;
+    const where =
+      first.file === "settings"
+        ? ""
+        : `Compose file${first.line ? ` line ${first.line}` : ""}: `;
+    const more = errors.length > 1 ? ` (and ${errors.length - 1} more)` : "";
+    throw new Error(`${where}${first.message}${more}`);
+  }
+  return {
+    type: raw.type as DeploymentType,
+    projectId: raw.projectId,
+    name: draft.name.trim(),
+    composeFile: check.composeFile,
+    variables: draft.variables,
+    domains: draft.domains,
+  };
+}
+
 function parseBoolean(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`${field} must be true or false`);
@@ -117,8 +262,8 @@ function parseObjectId(value: unknown, field: string): string {
 }
 
 /**
- * A subscription needs a duration and has no access link; a one-time product
- * is the other way round. Fields that do not apply are stored as null.
+ * A subscription needs a duration, may have a deployment and has no access
+ * link; a one-time product is the other way round. Fields that do not apply are stored as null.
  */
 export function parseCreateProductDto(body: unknown): CreateProductDto {
   const raw = asRecord(body);
@@ -128,11 +273,14 @@ export function parseCreateProductDto(body: unknown): CreateProductDto {
     kind,
     color: parseColor(raw.color),
     pricingText: parsePricingText(raw.pricingText ?? ""),
+    description: parseDescription(raw.description ?? ""),
     priceIdr: parsePriceIdr(raw.priceIdr),
     durationDays:
       kind === "subscription"
         ? parseDays(raw.durationDays ?? 30, "durationDays")
         : null,
+    deployment:
+      kind === "subscription" ? parseDeployment(raw.deployment ?? null) : null,
     accessUrl:
       kind === "oneTime" ? parseAccessUrl(raw.accessUrl ?? null) : null,
     showOnPricingPage: parseBoolean(
@@ -159,9 +307,15 @@ export function parseUpdateProductDto(
   if ("pricingText" in raw) {
     patch.pricingText = parsePricingText(raw.pricingText);
   }
+  if ("description" in raw) {
+    patch.description = parseDescription(raw.description);
+  }
   if ("priceIdr" in raw) patch.priceIdr = parsePriceIdr(raw.priceIdr);
   if ("durationDays" in raw && kind === "subscription") {
     patch.durationDays = parseDays(raw.durationDays, "durationDays");
+  }
+  if ("deployment" in raw && kind === "subscription") {
+    patch.deployment = parseDeployment(raw.deployment);
   }
   if ("accessUrl" in raw && kind === "oneTime") {
     patch.accessUrl = parseAccessUrl(raw.accessUrl);

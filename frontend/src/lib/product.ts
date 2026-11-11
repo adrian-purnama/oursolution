@@ -18,11 +18,88 @@ export type ProductSummary = {
   imageUrl: string | null
 }
 
+/** How a subscription's service is deployed. Only Docker Compose for now. */
+/**
+ * - editable: the customer sees and can change it; the value is a default.
+ * - readOnly: the customer sees it, only an admin sets it.
+ * - hidden: the customer never sees it.
+ */
+export type VariableVisibility = 'editable' | 'readOnly' | 'hidden'
+
+export const VARIABLE_VISIBILITY_LABELS: Record<VariableVisibility, string> = {
+  editable: 'Can see and edit',
+  readOnly: 'Can see',
+  hidden: 'Hidden',
+}
+
+export type DeploymentVariable = {
+  key: string
+  /** May use built-ins such as ${USERNAME}. */
+  value: string
+  visibility: VariableVisibility
+}
+
+export type DeploymentDomain = {
+  serviceName: string
+  /** One part, per customer, e.g. n8n-${USERNAME}; the domain is added. */
+  subdomain: string
+  port: number
+}
+
+/** How a subscription's service is deployed. Only Docker Compose for now. */
+export type ProductDeployment = {
+  type: 'dockerCompose'
+  /** The Dokploy project every deployment of this product goes into. */
+  projectId: string
+  /** Per customer, e.g. n8n-${USERNAME}. */
+  name: string
+  composeFile: string
+  variables: DeploymentVariable[]
+  domains: DeploymentDomain[]
+}
+
+export type DokployProject = {
+  id: string
+  name: string
+  description: string
+}
+
+/** An error blocks saving; a warning is advice. */
+export type ComposeIssue = {
+  severity: 'error' | 'warning'
+  file: 'compose' | 'env' | 'settings'
+  /** 1-based; null when it is about the file as a whole. */
+  line: number | null
+  message: string
+  /** Settings only: "name", "variables.<index>" or "domains.<index>". */
+  field?: string
+}
+
+/** The server's verdict on deployment settings, with the file re-spaced. */
+export type DeploymentCheck = {
+  valid: boolean
+  issues: ComposeIssue[]
+  composeFile: string
+  /** Service names; empty when the file does not parse that far. */
+  services: string[]
+  /** The name and each domain's host for a sample customer, when valid. */
+  preview: {
+    username: string
+    /** DEPLOY_DOMAIN, which every host ends with. */
+    domain: string
+    name: string | null
+    hosts: (string | null)[]
+  }
+}
+
 export type Product = ProductSummary & {
   pricingText: string
+  description: string
   priceIdr: number
   /** Subscription only. */
   durationDays: number | null
+  /** Subscription only. */
+  deployment: ProductDeployment | null
   /** One-time only: where buyers get what they bought. */
   accessUrl: string | null
   showOnPricingPage: boolean
@@ -32,6 +109,7 @@ export type Product = ProductSummary & {
 
 export type PricingProduct = ProductSummary & {
   pricingText: string
+  description: string
   durationDays: number | null
 }
 

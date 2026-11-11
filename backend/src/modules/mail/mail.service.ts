@@ -159,6 +159,55 @@ class MailService {
       return false;
     }
   }
+
+  /** Tells admins which step of a customer's deployment failed and why. */
+  async sendDeploymentFailure(
+    to: string[],
+    failure: {
+      customerEmail: string;
+      productName: string;
+      action: string;
+      step: string;
+      reason: string;
+      adminUrl: string;
+    },
+  ): Promise<boolean> {
+    if (to.length === 0) return false;
+    const row = (label: string, value: string) => `
+      <tr>
+        <td style="padding:6px 12px 6px 0;font-family:${sans};font-size:13px;color:#64748b;vertical-align:top;white-space:nowrap;">${label}</td>
+        <td style="padding:6px 0;font-family:${sans};font-size:14px;color:#0f172a;word-break:break-word;">${escapeHtml(value)}</td>
+      </tr>`;
+    try {
+      await this.client.transactionalEmails.sendTransacEmail({
+        subject: `Deployment failed: ${failure.productName} for ${failure.customerEmail}`,
+        sender: { name: appConfigService.appName, email: this.senderEmail },
+        to: to.map((email) => ({ email })),
+        htmlContent: layout(
+          "Deployment failed",
+          "A deployment failed",
+          `
+            <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;">
+              ${row("Customer", failure.customerEmail)}
+              ${row("Product", failure.productName)}
+              ${row("Action", failure.action)}
+              ${row("Failed step", failure.step)}
+              ${row("Reason", failure.reason)}
+            </table>
+            <a href="${escapeHtml(failure.adminUrl)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:14px;font-weight:600;text-decoration:none;padding:12px 20px;border-radius:8px;">Open the customer's deployments</a>
+          `,
+        ),
+      });
+      return true;
+    } catch (error) {
+      logger.error(
+        `Failed to send the deployment failure email: ${error instanceof Error ? error.message : String(error)}`,
+        this.source,
+        "sendDeploymentFailure",
+      );
+      return false;
+    }
+  }
 }
 
 export const mailer = new MailService();

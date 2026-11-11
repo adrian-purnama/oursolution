@@ -1,0 +1,97 @@
+import type { ReactNode } from 'react'
+import { CHECK_STATE_LABELS, STATE_LABELS } from '#/lib/deployment'
+import type {
+  DeploymentState,
+  ServiceCheckState,
+  ServiceStatus,
+} from '#/lib/deployment'
+import { formatDateTime } from '#/lib/product'
+import { cn } from '#/lib/utils'
+
+const STATE_DOT: Record<DeploymentState, string> = {
+  notDeployed: 'bg-[var(--line)]',
+  deploying: 'bg-amber-500 animate-pulse',
+  running: 'bg-[var(--accent)]',
+  stopping: 'bg-amber-500 animate-pulse',
+  stopped: 'bg-[var(--muted)]',
+  restarting: 'bg-amber-500 animate-pulse',
+  erasing: 'bg-amber-500 animate-pulse',
+  failed: 'bg-[var(--destructive)]',
+}
+
+export function StateBadge({ state }: { state: DeploymentState }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-2.5 py-0.5 text-xs">
+      <span
+        aria-hidden
+        className={cn('size-1.5 rounded-full', STATE_DOT[state])}
+      />
+      {STATE_LABELS[state]}
+    </span>
+  )
+}
+
+export const CHECK_COLOR: Record<ServiceCheckState, string> = {
+  up: 'bg-[var(--accent)]',
+  down: 'bg-[var(--destructive)]',
+  pending: 'bg-amber-500',
+  maintenance: 'bg-[var(--muted)]',
+}
+
+/** The worst of several addresses' states: one down means down. */
+export function overallCheckState(
+  statuses: ServiceStatus[],
+): ServiceCheckState | null {
+  const order: ServiceCheckState[] = ['down', 'pending', 'maintenance', 'up']
+  return (
+    order.find((state) => statuses.some((item) => item.state === state)) ?? null
+  )
+}
+
+/** The latest checks as short ovals, oldest on the left. */
+export function BeatBar({
+  status,
+  className,
+}: {
+  status: ServiceStatus
+  className?: string
+}) {
+  return (
+    <div
+      className={cn('flex h-3.5 gap-[3px]', className)}
+      role="img"
+      aria-label={`Last ${status.beats.length} checks of ${status.host}, oldest first`}
+    >
+      {status.beats.map((beat) => (
+        <span
+          key={beat.at}
+          title={`${CHECK_STATE_LABELS[beat.state]} · ${formatDateTime(beat.at)}`}
+          className={cn(
+            'min-w-0 flex-1 rounded-full transition-opacity hover:opacity-60',
+            CHECK_COLOR[beat.state],
+          )}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** A small label over a larger value. */
+export function Stat({
+  label,
+  children,
+  className,
+}: {
+  label: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('bg-white px-5 py-4', className)}>
+      <dt className="text-xs text-[var(--muted)]">{label}</dt>
+      <dd className="mt-1 truncate text-lg font-medium tracking-tight tabular-nums">
+        {children}
+      </dd>
+    </div>
+  )
+}

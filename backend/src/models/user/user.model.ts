@@ -28,6 +28,12 @@ const userSchema = new Schema<UserInterface>(
       required: true,
       default: 0,
     },
+    deployUsername: {
+      type: String,
+      default: undefined,
+      unique: true,
+      sparse: true,
+    },
   },
   { timestamps: true },
 );

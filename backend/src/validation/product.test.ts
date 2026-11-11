@@ -38,6 +38,35 @@ describe("parseCreateProductDto", () => {
   });
 });
 
+describe("product description", () => {
+  it("defaults to empty and keeps line breaks, trimming the ends", () => {
+    assert.equal(parseCreateProductDto(base).description, "");
+    const dto = parseCreateProductDto({
+      ...base,
+      description: "  Line one\n\nLine two  ",
+    });
+    assert.equal(dto.description, "Line one\n\nLine two");
+  });
+
+  it("rejects non-text and text over 4000 characters", () => {
+    assert.throws(() => parseCreateProductDto({ ...base, description: 5 }));
+    assert.throws(
+      () => parseCreateProductDto({ ...base, description: "x".repeat(4001) }),
+      /4000/,
+    );
+    assert.equal(
+      parseCreateProductDto({ ...base, description: "x".repeat(4000) })
+        .description.length,
+      4000,
+    );
+  });
+
+  it("can be updated on its own", () => {
+    const patch = parseUpdateProductDto({ description: "New text" }, "oneTime");
+    assert.deepEqual(patch, { description: "New text" });
+  });
+});
+
 describe("parseUpdateProductDto", () => {
   it("refuses to change the kind", () => {
     assert.throws(
@@ -53,5 +82,97 @@ describe("parseUpdateProductDto", () => {
     );
     assert.equal(patch.durationDays, undefined);
     assert.equal(patch.accessUrl, "https://example.com/");
+  });
+});
+
+describe("product deployment", () => {
+  const deployment = {
+    type: "dockerCompose",
+    composeFile: "services:\n      app:\n          image: nginx\n",
+    projectId: "prj_123",
+    name: "app-${USERNAME}",
+  };
+
+  it("stores a subscription's project and re-indented compose file", () => {
+    const dto = parseCreateProductDto({ ...base, deployment });
+    assert.deepEqual(dto.deployment, {
+      type: "dockerCompose",
+      projectId: "prj_123",
+      name: "app-${USERNAME}",
+      composeFile: "services:\n  app:\n    image: nginx\n",
+      variables: [],
+      domains: [],
+    });
+  });
+
+  it("defaults to no deployment and never gives one to a one-time product", () => {
+    assert.equal(parseCreateProductDto(base).deployment, null);
+    assert.equal(
+      parseCreateProductDto({ ...base, kind: "oneTime", deployment })
+        .deployment,
+      null,
+    );
+  });
+
+  it("rejects a broken compose file, saying where", () => {
+    assert.throws(
+      () =>
+        parseUpdateProductDto(
+          {
+            deployment: {
+              ...deployment,
+              composeFile: "services:\n  app:\n    restart: always\n",
+            },
+          },
+          "subscription",
+        ),
+      /Compose file line 2: .*no `image`/,
+    );
+  });
+
+  it("requires a Dokploy project", () => {
+    assert.throws(
+      () =>
+        parseCreateProductDto({
+          ...base,
+          deployment: { ...deployment, projectId: "" },
+        }),
+      /Choose the Dokploy project/,
+    );
+  });
+
+  it("keeps variables and domains, and rejects a name shared by everyone", () => {
+    const dto = parseCreateProductDto({
+      ...base,
+      deployment: {
+        ...deployment,
+        composeFile: "services:\n  app:\n    image: nginx:${TAG}\n",
+        variables: [{ key: "TAG", value: "1.27", visibility: "editable" }],
+        domains: [
+          {
+            serviceName: "app",
+            subdomain: "app-${USERNAME}",
+            port: "80",
+          },
+        ],
+      },
+    });
+    assert.deepEqual(dto.deployment?.domains, [
+      { serviceName: "app", subdomain: "app-${USERNAME}", port: 80 },
+    ]);
+    assert.equal(dto.deployment?.variables[0].visibility, "editable");
+    assert.throws(
+      () =>
+        parseCreateProductDto({
+          ...base,
+          deployment: { ...deployment, name: "app" },
+        }),
+      /same for every customer/,
+    );
+  });
+
+  it("clears the deployment with null", () => {
+    const patch = parseUpdateProductDto({ deployment: null }, "subscription");
+    assert.equal(patch.deployment, null);
   });
 });
