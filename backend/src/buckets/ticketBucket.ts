@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import {
   deleteFileIfExists,
   findFile,
+  getBucket,
   openDownload,
   uploadFile,
   type GridFsFileResult,
@@ -40,4 +41,20 @@ export async function findTicketFile(id: string | Types.ObjectId) {
 
 export function openTicketDownload(id: string | Types.ObjectId) {
   return openDownload(BUCKET, id);
+}
+
+/**
+ * Deletes every photo of a ticket (files named `{ticketId}/…`). Safe to
+ * run again: files already gone are skipped. Returns how many were deleted.
+ */
+export async function deleteTicketFilesOf(
+  ticketId: Types.ObjectId,
+): Promise<number> {
+  const bucket = getBucket(BUCKET);
+  const files = await bucket
+    .find({ filename: { $regex: `^${ticketId.toHexString()}/` } })
+    .project({ _id: 1 })
+    .toArray();
+  for (const file of files) await deleteFileIfExists(BUCKET, file._id);
+  return files.length;
 }

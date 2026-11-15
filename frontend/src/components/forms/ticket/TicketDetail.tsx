@@ -1,31 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Hourglass, LoaderCircle, Lock } from 'lucide-react'
+import { Hourglass, LoaderCircle, Lock, Pencil } from 'lucide-react'
+import { Select as SelectPrimitive } from 'radix-ui'
+import CloseTicketDialog from '#/components/forms/ticket/CloseTicketDialog'
 import {
   MessageComposer,
   TicketStatusBadge,
   TicketThread,
 } from '#/components/forms/ticket/TicketParts'
 import { Button } from '#/components/ui/button'
-import { Label } from '#/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '#/components/ui/select'
+import { Select, SelectContent, SelectItem } from '#/components/ui/select'
 import { apiFetch, apiUpload } from '#/lib/api'
 import { formatDateTime } from '#/lib/product'
 import {
   MAX_FOLLOWUPS,
   TICKET_STATUSES,
+  TICKET_STATUS_CLASSES,
   TICKET_STATUS_LABELS,
   errorCodeOf,
   shortTicketId,
 } from '#/lib/ticket'
 import type { Ticket, TicketStatus } from '#/lib/ticket'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { cn } from '#/lib/utils'
 
 /**
  * One ticket's thread. Customers follow up within their limit; admins
@@ -45,6 +42,7 @@ export default function TicketDetail({
     'loading',
   )
   const [savingStatus, setSavingStatus] = useState(false)
+  const [closeOpen, setCloseOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -147,54 +145,50 @@ export default function TicketDetail({
           <h1 className="min-w-0 text-xl font-medium tracking-tight break-words">
             {ticket.subject}
           </h1>
-          <TicketStatusBadge status={ticket.status} />
+          {view === 'admin' ? (
+            <EditableStatus
+              status={ticket.status}
+              saving={savingStatus}
+              onChange={(status) => {
+                // Closing needs a product and resolution: the dialog does it.
+                if (status === 'closed') setCloseOpen(true)
+                else void changeStatus(status)
+              }}
+            />
+          ) : (
+            <TicketStatusBadge status={ticket.status} />
+          )}
         </div>
         <p className={hintClassName}>
           {shortTicketId(ticket.id)} · opened {formatDateTime(ticket.createdAt)}
           {view === 'admin' && ticket.user ? ` · ${ticket.user.email}` : ''}
+          {view === 'admin'
+            ? ` · ${ticket.followupCount} of ${MAX_FOLLOWUPS} follow-ups since the last reply${
+                ticket.followupCount >= MAX_FOLLOWUPS ? ', waiting for you' : ''
+              }`
+            : ''}
         </p>
       </header>
 
+      <TicketThread
+        messages={ticket.messages}
+        viewer={view}
+        closure={ticket.closure}
+      />
+
       {view === 'admin' ? (
-        <section
-          className={`${cardClassName} flex flex-wrap items-end gap-x-8 gap-y-4 p-4`}
-        >
-          <div className="w-48 space-y-1.5">
-            <Label htmlFor="ticket-status">Status</Label>
-            <Select
-              value={ticket.status}
-              disabled={savingStatus}
-              onValueChange={(value) =>
-                void changeStatus(value as TicketStatus)
-              }
-            >
-              <SelectTrigger id="ticket-status" className="w-full bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TICKET_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {TICKET_STATUS_LABELS[status]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <p className={`text-xs ${hintClassName}`}>Customer follow-ups</p>
-            <p className="text-sm font-medium">
-              {ticket.followupCount} of {MAX_FOLLOWUPS} since the last reply
-              {ticket.followupCount >= MAX_FOLLOWUPS
-                ? ' · waiting for you'
-                : ''}
-            </p>
-          </div>
-        </section>
+        <CloseTicketDialog
+          ticket={ticket}
+          open={closeOpen}
+          onOpenChange={setCloseOpen}
+          onClosed={setTicket}
+        />
       ) : null}
 
-      <TicketThread messages={ticket.messages} viewer={view} />
-
-      <section className="border-t border-[var(--line)] pt-6">
+      <section className="space-y-4 border-t border-[var(--line)] pt-6">
+        {view === 'admin' && closed ? (
+          <Notice icon={Lock} text="This ticket is closed." />
+        ) : null}
         {view === 'admin' ? (
           <MessageComposer
             label="Reply"
@@ -234,5 +228,51 @@ function Notice({ icon: Icon, text }: { icon: typeof Lock; text: string }) {
       <Icon className="size-4 shrink-0 text-[var(--muted)]" aria-hidden />
       {text}
     </p>
+  )
+}
+
+/** The status badge, editable in place: a pencil shows on hover, a click opens the list. */
+function EditableStatus({
+  status,
+  saving,
+  onChange,
+}: {
+  status: TicketStatus
+  saving: boolean
+  onChange: (status: TicketStatus) => void
+}) {
+  return (
+    <Select
+      value={status}
+      disabled={saving}
+      onValueChange={(value) => {
+        if (value !== status) onChange(value as TicketStatus)
+      }}
+    >
+      <SelectPrimitive.Trigger
+        aria-label={`Status: ${TICKET_STATUS_LABELS[status]}. Change status`}
+        className={cn(
+          'group inline-flex shrink-0 cursor-pointer items-center rounded-full border px-2.5 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/40 disabled:cursor-wait disabled:opacity-60',
+          TICKET_STATUS_CLASSES[status],
+        )}
+      >
+        {TICKET_STATUS_LABELS[status]}
+        {saving ? (
+          <LoaderCircle className="ml-1 size-3 animate-spin" aria-hidden />
+        ) : (
+          <Pencil
+            className="h-3 w-0 opacity-0 transition-all group-hover:ml-1 group-hover:w-3 group-hover:opacity-100 group-focus-visible:ml-1 group-focus-visible:w-3 group-focus-visible:opacity-100 group-data-[state=open]:ml-1 group-data-[state=open]:w-3 group-data-[state=open]:opacity-100"
+            aria-hidden
+          />
+        )}
+      </SelectPrimitive.Trigger>
+      <SelectContent position="popper" align="start" sideOffset={6}>
+        {TICKET_STATUSES.map((item) => (
+          <SelectItem key={item} value={item}>
+            {TICKET_STATUS_LABELS[item]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

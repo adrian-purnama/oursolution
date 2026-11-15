@@ -32,11 +32,29 @@ export interface TicketSummaryOutDto {
   user?: { id: string; email: string };
 }
 
+/** What the last close recorded; kept when the ticket is reopened. */
+export interface TicketClosureOutDto {
+  closedAt: string;
+  /** Admin view only; null means "Other". */
+  productId?: string | null;
+  productName?: string | null;
+  resolution: string | null;
+  summary: string | null;
+}
+
 export interface TicketOutDto extends TicketSummaryOutDto {
   /** The customer may send a message now. */
   canSend: boolean;
   lastAdminReplyAt: string | null;
   messages: TicketMessageOutDto[];
+  /** Null until the ticket is closed for the first time. */
+  closure: TicketClosureOutDto | null;
+}
+
+export interface CloseTicketOutDto {
+  ticket: TicketOutDto;
+  /** False when no summary was asked for, or the model failed. */
+  summarized: boolean;
 }
 
 export interface TicketPageOutDto {

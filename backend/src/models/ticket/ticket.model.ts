@@ -15,6 +15,12 @@ const ticketSchema = new Schema<TicketInterface>(
     lastAdminReplyAt: { type: Date, default: null },
     adminActivityAt: { type: Date, default: null },
     userSeenAt: { type: Date, default: null },
+    productId: { type: Schema.Types.ObjectId, ref: "Product", default: null },
+    productName: { type: String, default: null },
+    resolution: { type: String, default: null },
+    summary: { type: String, default: null },
+    closedAt: { type: Date, default: null },
+    closedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
   },
   { timestamps: true },
 );

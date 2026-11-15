@@ -19,6 +19,19 @@ export interface TicketInterface {
   adminActivityAt: Date | null;
   /** When the customer last opened or wrote in the ticket. */
   userSeenAt: Date | null;
+  /**
+   * Set by the last close (POST /admin/tickets/:id/close) and kept when
+   * the ticket is reopened. Null product means "Other".
+   */
+  productId: Types.ObjectId | null;
+  /** The product's name when the ticket was closed. */
+  productName: string | null;
+  /** What the admin wrote; null when the thread was replaced by a summary. */
+  resolution: string | null;
+  /** AI-written plain text that replaced the thread. */
+  summary: string | null;
+  closedAt: Date | null;
+  closedBy: Types.ObjectId | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

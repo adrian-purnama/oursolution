@@ -391,148 +391,144 @@ export default function DeploymentPanel({
 
   return (
     <div className="space-y-6">
-      <section className={`${cardClassName} overflow-hidden`}>
-        <header className="flex flex-wrap items-start gap-4 p-5">
-          <ProductMark
-            product={deployment.product}
-            className="size-12 rounded-lg"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-medium tracking-tight">
-                {deployment.product.name}
-              </h2>
-              <StateBadge state={state} />
+      <ProductNotices notices={deployment.notices}>
+        <section className={`${cardClassName} overflow-hidden`}>
+          <header className="flex flex-wrap items-start gap-4 p-5">
+            <ProductMark
+              product={deployment.product}
+              className="size-12 rounded-lg"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-medium tracking-tight">
+                  {deployment.product.name}
+                </h2>
+                <StateBadge state={state} />
+              </div>
+              <p className={`mt-0.5 ${hintClassName}`}>
+                {subscriptionLine(deployment)}
+              </p>
             </div>
-            <p className={`mt-0.5 ${hintClassName}`}>
-              {subscriptionLine(deployment)}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {primary ? (
-              <Button
-                type="button"
-                disabled={locked}
-                onClick={() => void start(primary)}
-              >
-                {starting === primary ? (
-                  <LoaderCircle className="animate-spin" aria-hidden />
-                ) : (
-                  <Rocket aria-hidden />
-                )}
-                {actionLabel(primary, state)}
-              </Button>
-            ) : null}
-            {live && deployment.hosts[0] ? (
-              <Button asChild>
-                <a
-                  href={`https://${deployment.hosts[0]}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="no-underline"
-                >
-                  Open
-                  <ExternalLink aria-hidden />
-                </a>
-              </Button>
-            ) : null}
-          </div>
-        </header>
-
-        {deployment.hosts.length > 0 ? (
-          <ul className="border-t border-[var(--line)] px-5 py-3">
-            {deployment.hosts.map((host) => (
-              <li key={host} className="flex items-center gap-1 text-sm">
-                <Globe
-                  className="size-3.5 shrink-0 text-[var(--muted)]"
-                  aria-hidden
-                />
-                {live ? (
-                  <a
-                    href={`https://${host}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ml-1 min-w-0 truncate text-[var(--ink)] underline-offset-4 hover:underline"
-                  >
-                    {host}
-                  </a>
-                ) : (
-                  <span className="ml-1 min-w-0 truncate text-[var(--muted)]">
-                    {host}
-                  </span>
-                )}
+            <div className="flex flex-wrap gap-2">
+              {primary ? (
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={`Copy the address ${host}`}
-                  onClick={() => void copy(host)}
+                  disabled={locked}
+                  onClick={() => void start(primary)}
                 >
-                  <Copy aria-hidden />
+                  {starting === primary ? (
+                    <LoaderCircle className="animate-spin" aria-hidden />
+                  ) : (
+                    <Rocket aria-hidden />
+                  )}
+                  {actionLabel(primary, state)}
                 </Button>
-                {!live ? (
-                  <span className={`ml-auto text-xs ${hintClassName}`}>
-                    Offline while the service is not running
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <dl className="grid grid-cols-2 gap-px border-t border-[var(--line)] bg-[var(--line)] sm:grid-cols-4">
-          <Stat label="Status">
-            <span className="inline-flex items-center gap-2">
-              {check ? (
-                <span
-                  aria-hidden
-                  className={cn('size-2 rounded-full', CHECK_COLOR[check])}
-                />
               ) : null}
-              {check ? CHECK_STATE_LABELS[check] : STATE_LABELS[state]}
-            </span>
-          </Stat>
-          <Stat label="Uptime, last 24 hours">
-            {uptimes.length > 0 ? formatUptime(Math.min(...uptimes)) : '—'}
-          </Stat>
-          <Stat label="Response time">
-            {responses.length > 0
-              ? `${Math.round(
-                  responses.reduce((sum, value) => sum + value, 0) /
-                    responses.length,
-                )} ms`
-              : '—'}
-          </Stat>
-          <Stat label="Running for">
-            {deployment.runningSince
-              ? formatSince(deployment.runningSince)
-              : '—'}
-          </Stat>
-        </dl>
-
-        {charted.map((status) => (
-          <div
-            key={status.host}
-            className="space-y-2 border-t border-[var(--line)] px-5 py-4"
-          >
-            {charted.length > 1 ? (
-              <p className="truncate text-sm">{status.host}</p>
-            ) : null}
-            <BeatBar status={status} />
-            <div className="flex justify-between text-xs text-[var(--muted)]">
-              <span>{formatSince(status.beats[0].at)} ago</span>
-              <span>Checked every minute</span>
-              <span>Now</span>
+              {live && deployment.hosts[0] ? (
+                <Button asChild>
+                  <a
+                    href={`https://${deployment.hosts[0]}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="no-underline"
+                  >
+                    Open
+                    <ExternalLink aria-hidden />
+                  </a>
+                </Button>
+              ) : null}
             </div>
-          </div>
-        ))}
-      </section>
+          </header>
 
-      {deployment.notices.length > 0 ? (
-        <section aria-label="Good to know">
-          <ProductNotices notices={deployment.notices} />
+          {deployment.hosts.length > 0 ? (
+            <ul className="border-t border-[var(--line)] px-5 py-3">
+              {deployment.hosts.map((host) => (
+                <li key={host} className="flex items-center gap-1 text-sm">
+                  <Globe
+                    className="size-3.5 shrink-0 text-[var(--muted)]"
+                    aria-hidden
+                  />
+                  {live ? (
+                    <a
+                      href={`https://${host}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-1 min-w-0 truncate text-[var(--ink)] underline-offset-4 hover:underline"
+                    >
+                      {host}
+                    </a>
+                  ) : (
+                    <span className="ml-1 min-w-0 truncate text-[var(--muted)]">
+                      {host}
+                    </span>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Copy the address ${host}`}
+                    onClick={() => void copy(host)}
+                  >
+                    <Copy aria-hidden />
+                  </Button>
+                  {!live ? (
+                    <span className={`ml-auto text-xs ${hintClassName}`}>
+                      Offline while the service is not running
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <dl className="grid grid-cols-2 gap-px border-t border-[var(--line)] bg-[var(--line)] sm:grid-cols-4">
+            <Stat label="Status">
+              <span className="inline-flex items-center gap-2">
+                {check ? (
+                  <span
+                    aria-hidden
+                    className={cn('size-2 rounded-full', CHECK_COLOR[check])}
+                  />
+                ) : null}
+                {check ? CHECK_STATE_LABELS[check] : STATE_LABELS[state]}
+              </span>
+            </Stat>
+            <Stat label="Uptime, last 24 hours">
+              {uptimes.length > 0 ? formatUptime(Math.min(...uptimes)) : '—'}
+            </Stat>
+            <Stat label="Response time">
+              {responses.length > 0
+                ? `${Math.round(
+                    responses.reduce((sum, value) => sum + value, 0) /
+                      responses.length,
+                  )} ms`
+                : '—'}
+            </Stat>
+            <Stat label="Running for">
+              {deployment.runningSince
+                ? formatSince(deployment.runningSince)
+                : '—'}
+            </Stat>
+          </dl>
+
+          {charted.map((status) => (
+            <div
+              key={status.host}
+              className="space-y-2 border-t border-[var(--line)] px-5 py-4"
+            >
+              {charted.length > 1 ? (
+                <p className="truncate text-sm">{status.host}</p>
+              ) : null}
+              <BeatBar status={status} />
+              <div className="flex justify-between text-xs text-[var(--muted)]">
+                <span>{formatSince(status.beats[0].at)} ago</span>
+                <span>Checked every minute</span>
+                <span>Now</span>
+              </div>
+            </div>
+          ))}
         </section>
-      ) : null}
+      </ProductNotices>
 
       {!deployment.entitled ? (
         <p className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">

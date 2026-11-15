@@ -43,10 +43,30 @@ export type TicketSummary = {
   user?: { id: string; email: string }
 }
 
+/** What the last close recorded; kept when the ticket is reopened. */
+export type TicketClosure = {
+  closedAt: string
+  /** Admin view only; null means "Other". */
+  productId?: string | null
+  productName?: string | null
+  /** What the admin wrote; null when an AI summary replaced the thread. */
+  resolution: string | null
+  /** AI-written plain text. Render as text only. */
+  summary: string | null
+}
+
 export type Ticket = TicketSummary & {
   canSend: boolean
   lastAdminReplyAt: string | null
   messages: TicketMessage[]
+  /** Null until the ticket is closed for the first time. */
+  closure: TicketClosure | null
+}
+
+export type CloseTicketResult = {
+  ticket: Ticket
+  /** False when no summary was asked for, or the model failed. */
+  summarized: boolean
 }
 
 export type TicketPage = {
@@ -60,6 +80,7 @@ export type TicketPage = {
 export const SUBJECT_MIN = 5
 export const SUBJECT_MAX = 120
 export const BODY_MAX = 2000
+export const RESOLUTION_MAX = 1000
 export const MAX_FOLLOWUPS = 3
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']

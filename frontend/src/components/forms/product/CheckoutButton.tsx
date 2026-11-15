@@ -81,17 +81,24 @@ export default function CheckoutButton({
   if (isOwned) {
     return (
       <Button asChild variant="outline" size={size} className={className}>
-        <Link to="/profile">Open in profile</Link>
+        <Link to="/profile" search={{ tab: 'products' }}>
+          Open in profile
+        </Link>
       </Button>
     )
   }
 
   const label =
     product.kind === 'oneTime' ? 'Buy now' : isActive ? 'Extend' : 'Subscribe'
+  /** The main action (buy, subscribe, extend) in the brand blue. */
+  const primary = cn(
+    'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]',
+    className,
+  )
 
   if (!isAuthenticated) {
     return (
-      <Button asChild size={size} className={className}>
+      <Button asChild size={size} className={primary}>
         <Link
           to="/register"
           search={{ redirect: checkoutPath(product.id) }}
@@ -107,8 +114,7 @@ export default function CheckoutButton({
       <Button
         asChild
         size={size}
-        className={className}
-        variant={isActive ? 'outline' : 'default'}
+        className={primary}
       >
         <Link to="/checkout" search={{ productId: product.id }}>
           {label}

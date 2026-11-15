@@ -14,10 +14,20 @@ import {
   TICKET_ERROR_CODES,
   TicketError,
   TicketService,
+  type TicketServiceDeps,
 } from "./ticket.service";
 
 let server: MongoMemoryServer;
 let service: TicketService;
+
+/** No model, and notifications go nowhere: closing tests live in ticket.close.test.ts. */
+const quietDeps: TicketServiceDeps = {
+  llm: { chat: async () => Promise.reject(new Error("no model in tests")) },
+  notifications: { send: async () => [] },
+  mailer: { sendNotification: async () => true },
+  appBaseUrl: "http://app.test",
+};
+const CLOSE_PLAIN = { productId: null, resolution: "Fixed", summarize: false };
 
 before(async () => {
   server = await MongoMemoryServer.create();
@@ -32,7 +42,7 @@ after(async () => {
 
 beforeEach(async () => {
   mock.restoreAll();
-  service = new TicketService();
+  service = new TicketService(quietDeps);
   const db = mongoose.connection.db!;
   for (const collection of await db.collections()) {
     await collection.deleteMany({});
@@ -154,7 +164,7 @@ describe("closed tickets", () => {
   it("refuses customer messages until an admin reopens it", async () => {
     const [user, admin] = [await makeUser(), await makeUser("admin")];
     const ticketId = await openTicket(user);
-    const closed = await service.setStatus(admin, ticketId, "closed");
+    const closed = (await service.close(admin, ticketId, CLOSE_PLAIN)).ticket;
     assert.equal(closed.canSend, false);
     await refused(
       service.addUserMessage(user, ticketId, "hello?", null),
@@ -346,7 +356,7 @@ describe("limits", () => {
     for (let made = 0; made < 5; made++) ids.push(await openTicket(user));
     await refused(openTicket(user), TICKET_ERROR_CODES.openLimit);
     // Closing one frees a place, but 5 in the hour is the other limit.
-    await service.setStatus(admin, ids[0]!, "closed");
+    await service.close(admin, ids[0]!, CLOSE_PLAIN);
     await refused(openTicket(user), TICKET_ERROR_CODES.rateLimited);
   });
 
@@ -427,7 +437,7 @@ describe("unread replies", () => {
     assert.equal(opened.unread, false);
     assert.equal(await service.unreadCount(user), 0);
 
-    await service.setStatus(admin, ticketId, "closed");
+    await service.close(admin, ticketId, CLOSE_PLAIN);
     assert.equal(await service.unreadCount(user), 1);
     // Another customer never sees it.
     assert.equal(await service.unreadCount(await makeUser()), 0);

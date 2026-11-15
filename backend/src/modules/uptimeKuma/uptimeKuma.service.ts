@@ -16,7 +16,9 @@ const STATUS_TTL_MS = 30_000;
 const STATUS_WAIT_MS = 4_000;
 const PERIOD_HOURS = 24;
 const BEATS_SHOWN = 30;
-const CHECK_EVERY_SECONDS = 60;
+const CHECK_EVERY_SECONDS = 5 * 60;
+/** After a failed check, the next comes sooner, so an outage shows fast. */
+const RETRY_EVERY_SECONDS = 60;
 
 type Json = Record<string, unknown>;
 
@@ -103,7 +105,7 @@ export function monitorPayload(host: string, majorVersion: number): Json {
     url: `https://${host}`,
     method: "GET",
     interval: CHECK_EVERY_SECONDS,
-    retryInterval: CHECK_EVERY_SECONDS,
+    retryInterval: RETRY_EVERY_SECONDS,
     resendInterval: 0,
     // One retry before "down", so a single slow answer is not an outage.
     maxretries: 1,

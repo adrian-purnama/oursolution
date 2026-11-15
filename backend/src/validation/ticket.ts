@@ -15,7 +15,7 @@ export const PAGE_SIZE = 20;
  * bidirectional overrides: invisible, and able to make text read other
  * than it is.
  */
-const INVISIBLE =
+export const INVISIBLE =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 
 function length(text: string): number {
@@ -27,7 +27,11 @@ function length(text: string): number {
  * line ends unified, trailing spaces dropped, at most two blank lines in a
  * row. HTML is kept as text; the frontend never renders it as HTML.
  */
-export function cleanBody(value: unknown, label = "The message"): string {
+export function cleanBody(
+  value: unknown,
+  label = "The message",
+  max = BODY_MAX,
+): string {
   if (typeof value !== "string") throw new Error(`${label} is required`);
   const text = value
     .normalize("NFC")
@@ -40,8 +44,8 @@ export function cleanBody(value: unknown, label = "The message"): string {
     .replace(/\n{4,}/g, "\n\n\n")
     .trim();
   if (length(text) < BODY_MIN) throw new Error(`${label} is required`);
-  if (length(text) > BODY_MAX) {
-    throw new Error(`${label} must be at most ${BODY_MAX} characters`);
+  if (length(text) > max) {
+    throw new Error(`${label} must be at most ${max} characters`);
   }
   return text;
 }
@@ -76,6 +80,35 @@ export function parseCreateTicketInDto(body: unknown): {
 export function parseTicketMessageInDto(body: unknown): { body: string } {
   const raw = (body ?? {}) as Record<string, unknown>;
   return { body: cleanBody(raw.body) };
+}
+
+export const RESOLUTION_MAX = 1000;
+const OBJECT_ID = /^[0-9a-f]{24}$/i;
+
+export interface CloseTicketInput {
+  /** Null for "Other". */
+  productId: string | null;
+  resolution: string;
+  summarize: boolean;
+}
+
+export function parseCloseTicketInDto(body: unknown): CloseTicketInput {
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const { productId, summarize } = raw;
+  if (
+    productId !== null &&
+    (typeof productId !== "string" || !OBJECT_ID.test(productId))
+  ) {
+    throw new Error("Choose a product or Other");
+  }
+  if (typeof summarize !== "boolean") {
+    throw new Error("summarize must be true or false");
+  }
+  return {
+    productId,
+    resolution: cleanBody(raw.resolution, "The resolution", RESOLUTION_MAX),
+    summarize,
+  };
 }
 
 export function parseTicketStatus(value: unknown): TicketStatus {

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
+  CloseTicketOutDto,
   TicketErrorDataDto,
   TicketOutDto,
   TicketPageOutDto,
@@ -9,6 +10,7 @@ import { logger } from "../../logger/logger";
 import { TicketImageError } from "../../utils/ticketImage";
 import { parseParam } from "../../validation/parseParam";
 import {
+  parseCloseTicketInDto,
   parseCreateTicketInDto,
   parsePage,
   parseTicketListQuery,
@@ -228,6 +230,26 @@ export class TicketController {
       return ok<TicketOutDto>(res, 201, "Reply sent", data);
     } catch (error) {
       return fail(res, error, "Failed to send the reply", "addAdminMessage");
+    }
+  };
+
+  close = async (req: Request, res: Response) => {
+    try {
+      const ticketId = ticketIdOf(req);
+      const input = validate(() => parseCloseTicketInDto(req.body));
+      const data = await ticketService.close(
+        req.user!.id as string,
+        ticketId,
+        input,
+      );
+      return ok<CloseTicketOutDto>(
+        res,
+        200,
+        data.summarized ? "Ticket closed and summarized" : "Ticket closed",
+        data,
+      );
+    } catch (error) {
+      return fail(res, error, "Failed to close the ticket", "close");
     }
   };
 

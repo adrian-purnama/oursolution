@@ -86,6 +86,7 @@ router.post(
   ticketController.addAdminMessage,
 );
 router.patch("/tickets/:id/status", ticketController.setStatus);
+router.post("/tickets/:id/close", ticketController.close);
 
 router.get("/users/:id/purchases", purchaseController.list);
 router.post("/users/:id/purchases", purchaseController.grant);

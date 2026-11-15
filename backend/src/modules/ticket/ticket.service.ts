@@ -1,11 +1,13 @@
-import { Types, type HydratedDocument } from "mongoose";
+import mongoose, { Types, type HydratedDocument } from "mongoose";
 import {
   deleteTicketFile,
+  deleteTicketFilesOf,
   findTicketFile,
   openTicketDownload,
   uploadTicketFile,
 } from "../../buckets/ticketBucket";
 import type {
+  CloseTicketOutDto,
   TicketMessageOutDto,
   TicketOutDto,
   TicketPageOutDto,
@@ -23,11 +25,21 @@ import type {
   TicketMessageInterface,
 } from "../../models/ticketMessage/ticketMessage.interface";
 import { TicketMessageModel } from "../../models/ticketMessage/ticketMessage.model";
+import { ProductModel } from "../../models/product/product.model";
 import { UserModel } from "../../models/user/user.model";
 import { signLink, verifyLink } from "../../utils/signedLink";
 import { processTicketImage } from "../../utils/ticketImage";
 import { escapeRegex } from "../../validation/adminUser";
-import { PAGE_SIZE } from "../../validation/ticket";
+import { PAGE_SIZE, type CloseTicketInput } from "../../validation/ticket";
+import { LlmError, llmService, type LlmClient } from "../llm/llm.service";
+import { mailer } from "../mail/mail.service";
+import {
+  absoluteLink,
+  notificationService,
+  type NotificationMailer,
+  type SendNotificationOptions,
+} from "../notification/notification.service";
+import { buildSummaryPrompt, sanitizeSummary } from "./ticket.summary";
 
 const SOURCE = "modules/ticket/ticket.service.ts";
 
@@ -53,13 +65,16 @@ export const TICKET_ERROR_CODES = {
   followupLimit: "FOLLOWUP_LIMIT_REACHED",
   openLimit: "OPEN_TICKET_LIMIT_REACHED",
   rateLimited: "RATE_LIMITED",
+  alreadyClosed: "TICKET_ALREADY_CLOSED",
+  invalidProduct: "INVALID_PRODUCT",
+  useCloseEndpoint: "USE_CLOSE_ENDPOINT",
 } as const;
 
 /** A refusal with an HTTP status and a code the page can act on. */
 export class TicketError extends Error {
   constructor(
     message: string,
-    readonly status: 403 | 404 | 429,
+    readonly status: 400 | 403 | 404 | 409 | 429,
     readonly code: string,
   ) {
     super(message);
@@ -68,6 +83,32 @@ export class TicketError extends Error {
 
 const notFound = () =>
   new TicketError("Ticket not found", 404, TICKET_ERROR_CODES.notFound);
+
+const alreadyClosed = () =>
+  new TicketError(
+    "This ticket is already closed",
+    409,
+    TICKET_ERROR_CODES.alreadyClosed,
+  );
+
+/** What closing a ticket talks to, so tests can pass stubs. */
+export interface TicketServiceDeps {
+  llm: LlmClient;
+  notifications: {
+    send(input: unknown, options?: SendNotificationOptions): Promise<unknown>;
+  };
+  mailer: NotificationMailer;
+  appBaseUrl: string;
+}
+
+function defaultDeps(): TicketServiceDeps {
+  return {
+    llm: llmService,
+    notifications: notificationService,
+    mailer,
+    appBaseUrl: env.appBaseUrl,
+  };
+}
 
 /** A photo as sent; checked and re-encoded before anything is stored. */
 export type IncomingImage = Buffer | null;
@@ -115,6 +156,8 @@ function messageOf(error: unknown): string {
  * MAX_FOLLOWUPS again. Every limit is checked here, never only on the page.
  */
 export class TicketService {
+  constructor(private readonly deps: TicketServiceDeps = defaultDeps()) {}
+
   // ---------------------------------------------------------------- customer
 
   async create(
@@ -364,12 +407,22 @@ export class TicketService {
     return this.getAny(ticketId);
   }
 
-  /** Any status, reopening included. Saved in the thread and logged. */
+  /**
+   * Open or in progress, reopening included. Saved in the thread and
+   * logged. Closing goes through `close` only.
+   */
   async setStatus(
     adminId: string,
     ticketId: string,
     status: TicketStatus,
   ): Promise<TicketOutDto> {
+    if (status === "closed") {
+      throw new TicketError(
+        "Close a ticket with the close dialog",
+        400,
+        TICKET_ERROR_CODES.useCloseEndpoint,
+      );
+    }
     const admin = new Types.ObjectId(adminId);
     const before = await TicketModel.findOneAndUpdate(
       { _id: ticketId },
@@ -385,6 +438,243 @@ export class TicketService {
       await this.recordStatus(before._id, admin, before.status, status);
     }
     return this.getAny(ticketId);
+  }
+
+  /**
+   * Closes a ticket with a product ("Other" when null) and the admin's
+   * resolution. With `summarize`, the model's summary replaces the thread:
+   * messages and photos are deleted, status changes stay. If the model
+   * fails, the ticket closes the plain way and nothing is deleted. Of two
+   * concurrent closes only one succeeds; the other gets 409.
+   */
+  async close(
+    adminId: string,
+    ticketId: string,
+    input: CloseTicketInput,
+  ): Promise<CloseTicketOutDto> {
+    const admin = new Types.ObjectId(adminId);
+    const ticket = await TicketModel.findById(ticketId).exec();
+    if (!ticket) throw notFound();
+    if (ticket.status === "closed") throw alreadyClosed();
+
+    let product: { _id: Types.ObjectId; name: string } | null = null;
+    if (input.productId) {
+      product = await ProductModel.findById(input.productId)
+        .select("name")
+        .lean<{ _id: Types.ObjectId; name: string }>()
+        .exec();
+      if (!product) {
+        throw new TicketError(
+          "Product not found",
+          400,
+          TICKET_ERROR_CODES.invalidProduct,
+        );
+      }
+    }
+
+    const summary = input.summarize
+      ? await this.summarize(ticket, product?.name ?? null, input.resolution)
+      : null;
+
+    const closedAt = new Date();
+    const update = {
+      $set: {
+        status: "closed" as const,
+        productId: product?._id ?? null,
+        productName: product?.name ?? null,
+        closedAt,
+        closedBy: admin,
+        adminActivityAt: closedAt,
+        ...(summary
+          ? { summary, resolution: null }
+          : { resolution: input.resolution }),
+      },
+    };
+    const filter = { _id: ticket._id, status: { $ne: "closed" as const } };
+
+    const closing: { before: TicketDoc | null; messagesDeleted: boolean } = {
+      before: null,
+      messagesDeleted: false,
+    };
+    if (summary && (await this.isReplicaSet())) {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          closing.before = await TicketModel.findOneAndUpdate(filter, update, {
+            returnDocument: "before",
+            session,
+          }).exec();
+          if (closing.before) {
+            await TicketMessageModel.deleteMany(
+              { ticketId: ticket._id, kind: "message" },
+              { session },
+            ).exec();
+          }
+        });
+        closing.messagesDeleted = closing.before !== null;
+      } finally {
+        await session.endSession();
+      }
+    } else {
+      closing.before = await TicketModel.findOneAndUpdate(filter, update, {
+        returnDocument: "before",
+      }).exec();
+    }
+    const before = closing.before;
+    if (!before) {
+      throw (await TicketModel.exists({ _id: ticket._id }))
+        ? alreadyClosed()
+        : notFound();
+    }
+
+    await this.recordStatus(ticket._id, admin, before.status, "closed");
+    if (summary) await this.deleteThread(ticket._id, !closing.messagesDeleted);
+    await this.notifyClosed(ticket, input.resolution);
+    return {
+      ticket: await this.getAny(ticketId),
+      summarized: summary !== null,
+    };
+  }
+
+  /** The summary, or null after logging why there is none. */
+  private async summarize(
+    ticket: TicketDoc,
+    productName: string | null,
+    resolution: string,
+  ): Promise<string | null> {
+    const id = ticket._id.toString();
+    try {
+      const messages = await TicketMessageModel.find({
+        ticketId: ticket._id,
+        kind: "message",
+      })
+        .sort({ createdAt: 1, _id: 1 })
+        .select("senderRole body")
+        .lean()
+        .exec();
+      const reply = await this.deps.llm.chat({
+        messages: buildSummaryPrompt({
+          subject: ticket.subject,
+          productName,
+          messages: messages.map((message) => ({
+            role: message.senderRole,
+            body: message.body,
+          })),
+          resolution,
+        }),
+      });
+      const summary = sanitizeSummary(reply);
+      if (!summary) {
+        logger.warn(
+          `Ticket ${id}: the summary was empty; closing without one`,
+          SOURCE,
+          "summarize",
+        );
+      }
+      return summary;
+    } catch (error) {
+      const reason = error instanceof LlmError ? error.code : "UNEXPECTED";
+      logger.warn(
+        `Ticket ${id}: no summary (${reason}); closing without one`,
+        SOURCE,
+        "summarize",
+      );
+      return null;
+    }
+  }
+
+  /**
+   * After a summarized close: the messages (unless a transaction already
+   * removed them), then the photos. Both can run again safely; a failure
+   * is logged and the close stands.
+   */
+  private async deleteThread(
+    ticketId: Types.ObjectId,
+    messagesToo: boolean,
+  ): Promise<void> {
+    const id = ticketId.toString();
+    if (messagesToo) {
+      try {
+        await TicketMessageModel.deleteMany({
+          ticketId,
+          kind: "message",
+        }).exec();
+      } catch (error) {
+        logger.error(
+          `Ticket ${id}: messages could not be deleted after the summary: ${messageOf(error)}`,
+          SOURCE,
+          "deleteThread",
+        );
+      }
+    }
+    try {
+      await deleteTicketFilesOf(ticketId);
+    } catch (error) {
+      logger.error(
+        `Ticket ${id}: photos could not be deleted after the summary: ${messageOf(error)}`,
+        SOURCE,
+        "deleteThread",
+      );
+    }
+  }
+
+  /**
+   * In-app and email. The email carries the full resolution, which the
+   * in-app notification and a summarized ticket do not. Failing here never
+   * undoes the close.
+   */
+  private async notifyClosed(
+    ticket: TicketDoc,
+    resolution: string,
+  ): Promise<void> {
+    const id = ticket._id.toString();
+    const link = `/support/${id}`;
+    const title = "Your ticket was closed";
+    const body = `Your support ticket "${ticket.subject}" was closed.`;
+    const emailBody = `${body}\n\nResolution:\n${resolution}`;
+    const url = absoluteLink(this.deps.appBaseUrl, link);
+    try {
+      await this.deps.notifications.send(
+        {
+          userId: ticket.userId.toString(),
+          title,
+          body,
+          link,
+          channels: "both",
+        },
+        {
+          customEmail: (to) =>
+            this.deps.mailer.sendNotification(to, {
+              title,
+              body: emailBody,
+              url,
+            }),
+        },
+      );
+    } catch (error) {
+      logger.error(
+        `Ticket ${id}: the closing notification failed: ${messageOf(error)}`,
+        SOURCE,
+        "notifyClosed",
+      );
+    }
+  }
+
+  private replicaSet: Promise<boolean> | null = null;
+
+  /** Transactions need a replica set; a standalone server has none. */
+  private isReplicaSet(): Promise<boolean> {
+    this.replicaSet ??= (async () => {
+      try {
+        const hello = await mongoose.connection
+          .db!.admin()
+          .command({ hello: 1 });
+        return typeof hello.setName === "string";
+      } catch {
+        return false;
+      }
+    })();
+    return this.replicaSet;
   }
 
   private async recordStatus(
@@ -557,6 +847,19 @@ export class TicketService {
       ...this.toSummary(ticket, emails),
       canSend: ticket.status !== "closed" && remaining(ticket) > 0,
       lastAdminReplyAt: ticket.lastAdminReplyAt?.toISOString() ?? null,
+      closure: ticket.closedAt
+        ? {
+            closedAt: ticket.closedAt.toISOString(),
+            ...(view === "admin"
+              ? {
+                  productId: ticket.productId?.toString() ?? null,
+                  productName: ticket.productName ?? null,
+                }
+              : {}),
+            resolution: ticket.resolution ?? null,
+            summary: ticket.summary ?? null,
+          }
+        : null,
       messages: messages.map(
         (message): TicketMessageOutDto => ({
           id: String(message._id),

@@ -216,6 +216,71 @@ follow-up limit and reset, closed tickets, ownership, photo checks (type,
 size, renamed files, signed links), clean-up after a failed save, the rate
 limits, and concurrent follow-ups.
 
+### Closing a ticket (with an optional AI summary)
+
+Admins close a ticket only through the close dialog (choosing **Closed** in
+the status menu opens it), which calls
+`POST /admin/tickets/:id/close` with
+`{ productId: ObjectId | null, resolution: string, summarize: boolean }`.
+`PATCH /admin/tickets/:id/status` refuses `closed` (`400`,
+`USE_CLOSE_ENDPOINT`); reopening and the other changes work as before.
+
+- `productId` null means "Other"; otherwise any existing product, hidden or
+  deleted ones included (an unknown id is `400`). The product's name is
+  stored with the ticket as it was at close time.
+- `resolution`: 1–1000 characters, cleaned like ticket messages.
+- A closed ticket answers `409` (`TICKET_ALREADY_CLOSED`). The close is one
+  conditional update (`status != closed`), so of two concurrent closes one
+  wins and only it notifies or deletes anything.
+- **Close ticket** stores the product and resolution; the thread stays.
+- **Close and replace thread with summary** sends the ticket to the model
+  (subject, product name, messages labelled `Customer:`/`Admin:`, the
+  resolution; at most 12,000 characters, the oldest middle messages dropped
+  first). No ids, names, emails (typed ones become `[email]`) or photos are
+  sent; the prompt says the ticket content is untrusted data. On success the
+  summary (plain text, cleaned, at most 1000 characters) is stored, the
+  resolution is set to null, and every message and the photos
+  (`ticketAttachments` files named `{ticketId}/…`) are deleted. Status
+  changes stay. On a replica set the close and the message deletion run in
+  one transaction; on a standalone server they run in that order. If
+  deleting photos fails it is logged and the close stands.
+- If the model fails, times out or returns nothing usable, the ticket closes
+  the plain way, nothing is deleted, and the response says
+  `summarized: false`.
+- The customer gets an in-app notification ("Your ticket was closed", link
+  `/support/<id>`) and an email that always holds the full resolution, also
+  when it is deleted afterwards. A failing notification is logged and never
+  undoes the close.
+- Reopening keeps the product, resolution or summary and the follow-up
+  count; new messages form a new thread. The close details show in the
+  thread where the ticket was closed (product for admins only), rendered
+  as text only.
+
+LLM environment (backend `.env`), an OpenAI-compatible chat endpoint:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `LLM_BASE_URL` | unset | Base URL, e.g. `http://localhost:8080`; `/v1/chat/completions` is appended. Unset: summaries are off and tickets close without one. |
+| `LLM_MODEL` | `bonsai2` | The `model` sent with each request. |
+| `LLM_TIMEOUT_MS` | `30000` | The request is aborted after this. |
+| `LLM_MAX_TOKENS` | `512` | Sent as `max_tokens`. |
+
+No API key is sent. `modules/llm/llm.service.ts` (`llmService.chat`) is
+generic: one request, no retries, a typed `LlmError` (`UNAVAILABLE`,
+`TIMEOUT`, `HTTP_ERROR`, `BAD_RESPONSE`, `EMPTY`), and logs only the outcome
+and duration, never text.
+
+To try it: set `LLM_BASE_URL` to a running server, check it with
+`curl $LLM_BASE_URL/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"bonsai2","messages":[{"role":"user","content":"hi"}],"max_tokens":16}'`,
+restart the backend, open a ticket with a photo and a few messages, then
+close it from `/admin/tickets/<id>` with **Close and replace thread with
+summary**. `npm test` covers it in `modules/llm/llm.service.test.ts` (a
+local HTTP stub: request shape, timeout, errors) and
+`modules/ticket/ticket.close.test.ts` (temporary MongoDB and a stub model:
+both close modes, fallback on failure, sanitizing, the prompt's content and
+size, products, concurrent closes, `409`, `400`, `403`, and the
+notification).
+
 ## Commands
 
 | | backend | frontend |

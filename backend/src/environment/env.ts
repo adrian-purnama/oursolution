@@ -127,6 +127,12 @@ export function mediaSigningSecret(
   return randomBytes(32).toString("hex");
 }
 
+/** A whole number above 0, or null when unset or not one. */
+export function positiveInt(raw: string | undefined): number | null {
+  const value = Number(raw?.trim());
+  return raw?.trim() && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -224,4 +230,10 @@ export const env = {
   ),
   // How long an unpaid invoice can still be paid.
   paymentTtlMinutes: Number(process.env.PAYMENT_TTL_MINUTES) || 60,
+  // An OpenAI-compatible chat endpoint (base only; /v1/chat/completions is
+  // appended). Optional: without it, tickets close without a summary.
+  llmBaseUrl: backendUrl(process.env.LLM_BASE_URL),
+  llmModel: process.env.LLM_MODEL?.trim() || "bonsai2",
+  llmTimeoutMs: positiveInt(process.env.LLM_TIMEOUT_MS) ?? 30_000,
+  llmMaxTokens: positiveInt(process.env.LLM_MAX_TOKENS) ?? 512,
 };

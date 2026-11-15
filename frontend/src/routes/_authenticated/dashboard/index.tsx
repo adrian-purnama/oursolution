@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { ShoppingBag } from 'lucide-react'
 import ProductBadge from '#/components/ProductBadge'
@@ -6,14 +7,67 @@ import SupportButton from '#/components/forms/ticket/SupportButton'
 import DeploymentList from '#/components/forms/deployment/DeploymentList'
 import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
+import { apiFetch } from '#/lib/api'
+import type { Deployment } from '#/lib/deployment'
+import type { ProductSummary } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
   component: DashboardPage,
 })
 
+/** IDs of the user's products that have a deployment page. */
+function useDeployableIds(): Set<string> {
+  const [ids, setIds] = useState<Set<string>>(() => new Set())
+  useEffect(() => {
+    let cancelled = false
+    apiFetch<Deployment[]>('/me/deployments')
+      .then((response) => {
+        if (cancelled || !response.success || !response.data) return
+        setIds(new Set(response.data.map((item) => item.product.id)))
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return ids
+}
+
+/**
+ * A product the user has: its deployment page when it is deployed,
+ * otherwise the products tab of the profile.
+ */
+function OwnedProductLink({
+  product,
+  deployable,
+}: {
+  product: ProductSummary
+  deployable: boolean
+}) {
+  const className =
+    'inline-flex max-w-full rounded-full no-underline transition hover:opacity-80'
+  if (product.kind === 'subscription' && deployable) {
+    return (
+      <Link
+        to="/dashboard/deployments/$productId"
+        params={{ productId: product.id }}
+        className={className}
+      >
+        <ProductBadge product={product} />
+      </Link>
+    )
+  }
+  return (
+    <Link to="/profile" search={{ tab: 'products' }} className={className}>
+      <ProductBadge product={product} />
+    </Link>
+  )
+}
+
 function DashboardPage() {
   const { user } = useAuth()
+  const deployableIds = useDeployableIds()
 
   return (
     <main className="mx-auto mt-8 mb-12 w-full max-w-4xl px-6 py-10 text-[var(--ink)] sm:mt-12">
@@ -48,7 +102,10 @@ function DashboardPage() {
           <ul className="flex flex-wrap gap-1.5">
             {user.products.map((product) => (
               <li key={product.id}>
-                <ProductBadge product={product} />
+                <OwnedProductLink
+                  product={product}
+                  deployable={deployableIds.has(product.id)}
+                />
               </li>
             ))}
           </ul>

@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ImagePlus, LoaderCircle, Send, X } from 'lucide-react'
+import { ImagePlus, LoaderCircle, Send, Sparkles, X } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
 import { Textarea } from '#/components/ui/textarea'
@@ -12,7 +12,7 @@ import {
   TICKET_STATUS_LABELS,
   imageProblem,
 } from '#/lib/ticket'
-import type { TicketMessage, TicketStatus } from '#/lib/ticket'
+import type { TicketClosure, TicketMessage, TicketStatus } from '#/lib/ticket'
 import { hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
 
@@ -227,88 +227,175 @@ export function MessageComposer({
 export function TicketThread({
   messages,
   viewer,
+  closure,
 }: {
   messages: TicketMessage[]
   viewer: 'customer' | 'admin'
+  /** Shown where the ticket was closed, just before that status change. */
+  closure?: TicketClosure | null
 }) {
+  const closedAt = closure ? Date.parse(closure.closedAt) : null
+  let at =
+    closedAt === null
+      ? -1
+      : messages.findIndex((entry) => Date.parse(entry.createdAt) >= closedAt)
+  if (closure && at === -1) at = messages.length
   return (
     <ol className="space-y-4" aria-label="Conversation">
-      {messages.map((message) => {
-        if (message.kind === 'status') {
-          return (
-            <li
-              key={message.id}
-              className={`flex items-center gap-3 text-xs ${hintClassName}`}
-            >
-              <span className="h-px flex-1 bg-[var(--line)]" aria-hidden />
-              <span>
-                {viewer === 'admin' && message.senderEmail
-                  ? message.senderEmail
-                  : 'Support'}{' '}
-                changed the status to{' '}
-                <strong className="font-medium text-[var(--ink)]">
-                  {message.toStatus
-                    ? TICKET_STATUS_LABELS[message.toStatus]
-                    : '—'}
-                </strong>{' '}
-                · {formatDateTime(message.createdAt)}
-              </span>
-              <span className="h-px flex-1 bg-[var(--line)]" aria-hidden />
-            </li>
-          )
-        }
-        const mine =
-          viewer === 'customer'
-            ? message.senderRole === 'user'
-            : message.senderRole === 'admin'
-        const who =
-          message.senderRole === 'admin'
-            ? viewer === 'admin'
-              ? `Support · ${message.senderEmail ?? 'admin'}`
-              : 'Support'
-            : viewer === 'customer'
-              ? 'You'
-              : (message.senderEmail ?? 'Customer')
-        const image = toAbsoluteMediaUrl(message.imageUrl)
-        return (
-          <li
-            key={message.id}
-            className={cn('flex', mine ? 'justify-end' : 'justify-start')}
-          >
-            <div
-              className={cn(
-                'max-w-[85%] rounded-xl border px-4 py-3 sm:max-w-[75%]',
-                message.senderRole === 'admin'
-                  ? 'border-[var(--line)] bg-[var(--surface)]'
-                  : 'border-[var(--line)] bg-white',
-              )}
-            >
-              <p className={`mb-1 text-xs ${hintClassName}`}>
-                {who} · {formatDateTime(message.createdAt)}
-              </p>
-              <p className="text-sm break-words whitespace-pre-wrap text-[var(--ink)]">
-                {message.body}
-              </p>
-              {image ? (
-                <a
-                  href={image}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-3 block"
-                >
-                  <img
-                    src={image}
-                    alt="Attached photo"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    className="max-h-72 rounded-md border border-[var(--line)] object-contain"
-                  />
-                </a>
-              ) : null}
-            </div>
-          </li>
-        )
-      })}
+      {messages.map((message, index) => (
+        <Fragment key={message.id}>
+          {closure && index === at ? (
+            <ClosureCard closure={closure} viewer={viewer} />
+          ) : null}
+          <ThreadEntry message={message} viewer={viewer} />
+        </Fragment>
+      ))}
+      {closure && at === messages.length ? (
+        <ClosureCard closure={closure} viewer={viewer} />
+      ) : null}
     </ol>
+  )
+}
+
+/** Product (admins only), then the summary and/or resolution, as plain text. */
+function ClosureCard({
+  closure,
+  viewer,
+}: {
+  closure: TicketClosure
+  viewer: 'customer' | 'admin'
+}) {
+  return (
+    <li className="space-y-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">
+      <p className={`text-xs ${hintClassName}`}>
+        Closed {formatDateTime(closure.closedAt)}
+        {viewer === 'admin' ? (
+          <>
+            {' · '}Product:{' '}
+            <span className="font-medium text-[var(--ink)]">
+              {closure.productName ?? 'Other'}
+            </span>
+          </>
+        ) : null}
+      </p>
+      {closure.summary ? (
+        <div className="space-y-1">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink)]">
+            <Sparkles className="size-3.5 text-[var(--muted)]" aria-hidden />
+            Summary
+          </p>
+          <p className="break-words whitespace-pre-wrap">{closure.summary}</p>
+          <p className={`text-xs ${hintClassName}`}>
+            Written by AI. The conversation before this point was replaced by
+            this summary.
+          </p>
+        </div>
+      ) : null}
+      {closure.resolution ? (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-[var(--ink)]">Resolution</p>
+          <p className="break-words whitespace-pre-wrap">
+            {closure.resolution}
+          </p>
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+function ThreadEntry({
+  message,
+  viewer,
+}: {
+  message: TicketMessage
+  viewer: 'customer' | 'admin'
+}) {
+  if (message.kind === 'status') {
+    return (
+      <li
+        key={message.id}
+        className={`flex items-center gap-3 text-xs ${hintClassName}`}
+      >
+        <span className="h-px flex-1 bg-[var(--line)]" aria-hidden />
+        <span>
+          {viewer === 'admin' && message.senderEmail
+            ? message.senderEmail
+            : 'Support'}{' '}
+          changed the status to{' '}
+          <strong className="font-medium text-[var(--ink)]">
+            {message.toStatus ? TICKET_STATUS_LABELS[message.toStatus] : '—'}
+          </strong>{' '}
+          · {formatDateTime(message.createdAt)}
+        </span>
+        <span className="h-px flex-1 bg-[var(--line)]" aria-hidden />
+      </li>
+    )
+  }
+  const mine =
+    viewer === 'customer'
+      ? message.senderRole === 'user'
+      : message.senderRole === 'admin'
+  const who =
+    message.senderRole === 'admin'
+      ? viewer === 'admin'
+        ? `Support · ${message.senderEmail ?? 'admin'}`
+        : 'Support'
+      : viewer === 'customer'
+        ? 'You'
+        : (message.senderEmail ?? 'Customer')
+  const image = toAbsoluteMediaUrl(message.imageUrl)
+  return (
+    <li
+      key={message.id}
+      className={cn('flex', mine ? 'justify-end' : 'justify-start')}
+    >
+      <div
+        className={cn(
+          'max-w-[85%] rounded-2xl px-4 py-3 sm:max-w-[75%]',
+          mine
+            ? 'rounded-br-md bg-[var(--accent)] text-white shadow-[0_1px_2px_rgba(19,94,245,0.25)]'
+            : 'rounded-bl-md border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)]',
+        )}
+      >
+        <p
+          className={cn(
+            'mb-1 text-xs',
+            mine ? 'text-white/75' : 'text-[var(--muted)]',
+          )}
+        >
+          <span
+            className={cn(
+              'font-medium',
+              mine ? 'text-white' : 'text-[var(--ink)]',
+            )}
+          >
+            {who}
+          </span>{' '}
+          · {formatDateTime(message.createdAt)}
+        </p>
+        <p className="text-sm break-words whitespace-pre-wrap">
+          {message.body}
+        </p>
+        {image ? (
+          <a
+            href={image}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-3 block"
+          >
+            <img
+              src={image}
+              alt="Attached photo"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className={cn(
+                'max-h-72 rounded-md border bg-white object-contain',
+                mine ? 'border-white/30' : 'border-[var(--line)]',
+              )}
+            />
+          </a>
+        ) : null}
+      </div>
+    </li>
   )
 }

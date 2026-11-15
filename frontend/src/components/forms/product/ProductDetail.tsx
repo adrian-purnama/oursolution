@@ -98,12 +98,14 @@ function Detail({ product }: { product: PricingProduct }) {
   return (
     <article>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-12">
-        <ProductImage
-          product={product}
-          eager
-          className="aspect-[16/10] w-full rounded-xl border border-[var(--line)]"
-          iconClassName="size-16"
-        />
+        <ProductNotices notices={product.notices} className="self-start">
+          <ProductImage
+            product={product}
+            eager
+            className="aspect-[16/10] w-full rounded-xl border border-[var(--line)]"
+            iconClassName="size-16"
+          />
+        </ProductNotices>
 
         <div className="flex flex-col">
           <div className="mb-2 flex items-center gap-2">
@@ -126,13 +128,6 @@ function Detail({ product }: { product: PricingProduct }) {
                 : 'One-time, yours to keep.'}
             </p>
           </div>
-
-          {product.notices.length > 0 ? (
-            <section className="mt-6">
-              <h2 className="sr-only">Good to know</h2>
-              <ProductNotices notices={product.notices} />
-            </section>
-          ) : null}
 
           <div className="mt-6 flex flex-wrap gap-2">
             <CheckoutButton product={product} size="lg" className="flex-1" />
