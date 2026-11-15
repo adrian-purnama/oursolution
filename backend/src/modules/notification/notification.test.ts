@@ -406,7 +406,9 @@ describe("HTML in notifications stays inert", () => {
 
     assert.equal(subject, `<b>Hi</b> "there"`);
     assert.ok(!sentHtml.includes("<script>"));
-    assert.ok(!sentHtml.includes("<img"));
+    // The only image is the brand logo the layout attaches.
+    assert.equal(sentHtml.match(/<img/g)?.length, 1);
+    assert.ok(sentHtml.includes(`<img src="cid:`));
     assert.ok(!sentHtml.includes("<b>Hi"));
     assert.ok(
       sentHtml.includes("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;"),

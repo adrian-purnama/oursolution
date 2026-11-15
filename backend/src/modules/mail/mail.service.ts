@@ -1,9 +1,48 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
 import { env } from "../../environment/env";
 import { logger } from "../../logger/logger";
 import { appConfigService } from "../appConfig/appConfig.service";
 
-const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+/** Brand palette, matching the tokens in frontend/src/styles.css. */
+const color = {
+  navy: "#002060",
+  accent: "#135ef5",
+  ink: "#0c0c0b",
+  body: "#3d3d3a",
+  muted: "#6b6b6b",
+  faint: "#9a9893",
+  line: "#e5e2dc",
+  surface: "#f7f7f5",
+  page: "#f1efeb",
+};
+
+const sans =
+  "Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const mono =
+  "'Geist Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
+
+/** Content id the logo is attached under; the layout shows it as cid:${LOGO_CID}. */
+const LOGO_CID = "brand-logo@oursolution";
+
+/**
+ * The logo is read once and attached inline to every email, so it shows
+ * without the mail client fetching a remote image. src/ and dist/ sit at the
+ * same depth, so this path works in dev and in the build.
+ */
+const logo: Buffer | null = (() => {
+  try {
+    return readFileSync(path.join(__dirname, "../../../assets/email-logo.png"));
+  } catch (error) {
+    logger.error(
+      `Email logo not found, sending emails without it: ${error instanceof Error ? error.message : String(error)}`,
+      "modules/mail/mail.service.ts",
+      "logo",
+    );
+    return null;
+  }
+})();
 
 function escapeHtml(value: string): string {
   return value
@@ -19,34 +58,50 @@ function brand(): string {
 }
 
 function layout(title: string, heading: string, innerHtml: string): string {
+  const mark = logo
+    ? `<img src="cid:${LOGO_CID}" width="160" height="32" alt="${brand()}" style="display:block;width:160px;height:32px;border:0;outline:none;text-decoration:none;" />`
+    : `<p style="margin:0;font-family:${sans};font-size:18px;font-weight:700;color:${color.navy};">${brand()}</p>`;
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
 <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f0f2f5;font-family:Georgia,'Times New Roman',serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0f2f5;padding:40px 16px;">
+<body style="margin:0;padding:0;background-color:${color.page};font-family:${sans};-webkit-font-smoothing:antialiased;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:${color.page};padding:40px 16px;">
   <tr>
     <td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background-color:#ffffff;border:1px solid ${color.line};border-radius:16px;overflow:hidden;">
         <tr>
-          <td style="background:linear-gradient(135deg,#0f766e 0%,#134e4a 100%);padding:28px 32px;">
-            <p style="margin:0;font-family:${sans};font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.75);">${brand()}</p>
-            <h1 style="margin:8px 0 0;font-family:${sans};font-size:22px;font-weight:600;color:#ffffff;line-height:1.3;">${heading}</h1>
+          <td style="height:4px;line-height:4px;font-size:0;background-color:${color.navy};background-image:linear-gradient(90deg,${color.navy} 0%,${color.accent} 100%);">&nbsp;</td>
+        </tr>
+        <tr>
+          <td style="padding:28px 36px 24px;border-bottom:1px solid ${color.line};">
+            ${mark}
           </td>
         </tr>
         <tr>
-          <td style="padding:36px 32px 28px;">
+          <td style="padding:32px 36px 8px;">
+            <h1 style="margin:0;font-family:${sans};font-size:24px;font-weight:600;letter-spacing:-0.01em;line-height:1.3;color:${color.ink};">${heading}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 36px 36px;">
             ${innerHtml}
           </td>
         </tr>
+      </table>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;">
         <tr>
-          <td style="padding:0 32px 28px;">
-            <div style="height:1px;background-color:#e2e8f0;margin-bottom:20px;"></div>
-            <p style="margin:0;font-family:${sans};font-size:12px;color:#94a3b8;text-align:center;">
+          <td style="padding:24px 4px 0;text-align:center;">
+            <p style="margin:0 0 4px;font-family:${sans};font-size:12px;line-height:1.5;color:${color.muted};">
+              Sent by ${brand()}. Please don’t reply to this email.
+            </p>
+            <p style="margin:0;font-family:${sans};font-size:12px;line-height:1.5;color:${color.faint};">
               © ${new Date().getFullYear()} ${brand()}
             </p>
           </td>
@@ -96,7 +151,20 @@ class MailService {
       to: options.to,
       subject: options.subject,
       html: options.html,
-      attachments: options.attachments,
+      attachments: [
+        ...(logo
+          ? [
+              {
+                filename: "logo.png",
+                content: logo,
+                contentType: "image/png",
+                cid: LOGO_CID,
+                contentDisposition: "inline" as const,
+              },
+            ]
+          : []),
+        ...(options.attachments ?? []),
+      ],
     });
   }
 
@@ -109,20 +177,20 @@ class MailService {
           "Verification code",
           "Verify your email",
           `
-            <p style="margin:0 0 8px;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
-              Use this one-time code to finish signing up. It expires shortly   don’t share it with anyone.
+            <p style="margin:0 0 8px;font-family:${sans};font-size:15px;line-height:1.6;color:${color.body};">
+              Use this one-time code to finish signing up. It expires shortly, so don’t share it with anyone.
             </p>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0;">
               <tr>
-                <td align="center" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:22px 16px;">
-                  <p style="margin:0 0 6px;font-family:${sans};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;">Your code</p>
-                  <p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:36px;font-weight:700;letter-spacing:0.28em;color:#0f766e;">
+                <td align="center" style="background-color:${color.surface};border:1px solid ${color.line};border-radius:10px;padding:22px 16px;">
+                  <p style="margin:0 0 6px;font-family:${sans};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${color.muted};">Your code</p>
+                  <p style="margin:0;font-family:${mono};font-size:36px;font-weight:700;letter-spacing:0.28em;color:${color.navy};">
                     ${otp}
                   </p>
                 </td>
               </tr>
             </table>
-            <p style="margin:0;font-family:${sans};font-size:13px;line-height:1.5;color:#94a3b8;">
+            <p style="margin:0;font-family:${sans};font-size:13px;line-height:1.5;color:${color.faint};">
               If you didn’t request this, you can ignore this email.
             </p>
           `,
@@ -150,23 +218,23 @@ class MailService {
           "Reset your password",
           "Reset your password",
           `
-            <p style="margin:0 0 24px;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+            <p style="margin:0 0 24px;font-family:${sans};font-size:15px;line-height:1.6;color:${color.body};">
               Click the button below to choose a new password. This link expires shortly.
             </p>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
               <tr>
                 <td align="center">
-                  <a href="${resetUrl}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                  <a href="${resetUrl}" style="display:inline-block;background-color:${color.navy};color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
                     Reset password
                   </a>
                 </td>
               </tr>
             </table>
-            <p style="margin:24px 0 0;font-family:${sans};font-size:13px;line-height:1.5;color:#94a3b8;word-break:break-all;">
+            <p style="margin:24px 0 0;font-family:${sans};font-size:13px;line-height:1.5;color:${color.faint};word-break:break-all;">
               Or copy and paste this link into your browser:<br />
-              <a href="${resetUrl}" style="color:#0f766e;">${resetUrl}</a>
+              <a href="${resetUrl}" style="color:${color.navy};">${resetUrl}</a>
             </p>
-            <p style="margin:24px 0 0;font-family:${sans};font-size:13px;line-height:1.5;color:#94a3b8;">
+            <p style="margin:24px 0 0;font-family:${sans};font-size:13px;line-height:1.5;color:${color.faint};">
               If you didn't request this, you can ignore this email.
             </p>
           `,
@@ -200,7 +268,7 @@ class MailService {
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
               <tr>
                 <td align="center">
-                  <a href="${escapeHtml(notification.url)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                  <a href="${escapeHtml(notification.url)}" style="display:inline-block;background-color:${color.navy};color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
                     Open
                   </a>
                 </td>
@@ -216,7 +284,7 @@ class MailService {
           escapeHtml(notification.title),
           escapeHtml(notification.title),
           `
-            <p style="margin:0;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+            <p style="margin:0;font-family:${sans};font-size:15px;line-height:1.6;color:${color.body};">
               ${body}
             </p>${button}
           `,
@@ -248,8 +316,8 @@ class MailService {
     if (to.length === 0) return false;
     const row = (label: string, value: string) => `
       <tr>
-        <td style="padding:6px 12px 6px 0;font-family:${sans};font-size:13px;color:#64748b;vertical-align:top;white-space:nowrap;">${label}</td>
-        <td style="padding:6px 0;font-family:${sans};font-size:14px;color:#0f172a;word-break:break-word;">${escapeHtml(value)}</td>
+        <td style="padding:6px 12px 6px 0;font-family:${sans};font-size:13px;color:${color.muted};vertical-align:top;white-space:nowrap;">${label}</td>
+        <td style="padding:6px 0;font-family:${sans};font-size:14px;color:${color.ink};word-break:break-word;">${escapeHtml(value)}</td>
       </tr>`;
     try {
       await this.sendMail({
@@ -266,7 +334,7 @@ class MailService {
               ${row("Failed step", failure.step)}
               ${row("Reason", failure.reason)}
             </table>
-            <a href="${escapeHtml(failure.adminUrl)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:14px;font-weight:600;text-decoration:none;padding:12px 20px;border-radius:8px;">Open the customer's deployments</a>
+            <a href="${escapeHtml(failure.adminUrl)}" style="display:inline-block;background-color:${color.navy};color:#ffffff;font-family:${sans};font-size:14px;font-weight:600;text-decoration:none;padding:12px 20px;border-radius:8px;">Open the customer's deployments</a>
           `,
         ),
       });
@@ -297,8 +365,8 @@ class MailService {
       .map(
         (item) => `
       <tr>
-        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.name)}${item.quantity > 1 ? ` &times; ${item.quantity}` : ""}</td>
-        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;text-align:right;white-space:nowrap;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.amount)}</td>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:${color.ink};border-bottom:1px solid ${color.line};">${escapeHtml(item.name)}${item.quantity > 1 ? ` &times; ${item.quantity}` : ""}</td>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:${color.ink};text-align:right;white-space:nowrap;border-bottom:1px solid ${color.line};">${escapeHtml(item.amount)}</td>
       </tr>`,
       )
       .join("");
@@ -310,20 +378,20 @@ class MailService {
           "New invoice",
           "You have a new invoice",
           `
-            <p style="margin:0 0 20px;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+            <p style="margin:0 0 20px;font-family:${sans};font-size:15px;line-height:1.6;color:${color.body};">
               Invoice <strong>${escapeHtml(invoice.invoiceNumber)}</strong> is ready. Please pay it by <strong>${escapeHtml(invoice.dueAt)}</strong>. The invoice is attached.
             </p>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">
               ${rows}
               <tr>
-                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f172a;">Total due</td>
-                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f766e;text-align:right;white-space:nowrap;">${escapeHtml(invoice.total)}</td>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:${color.ink};">Total due</td>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:${color.navy};text-align:right;white-space:nowrap;">${escapeHtml(invoice.total)}</td>
               </tr>
             </table>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">
               <tr>
                 <td align="center">
-                  <a href="${escapeHtml(invoice.invoiceUrl)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                  <a href="${escapeHtml(invoice.invoiceUrl)}" style="display:inline-block;background-color:${color.navy};color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
                     View and pay
                   </a>
                 </td>
@@ -365,8 +433,8 @@ class MailService {
       .map(
         (item) => `
       <tr>
-        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.name)}${item.quantity > 1 ? ` &times; ${item.quantity}` : ""}</td>
-        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;text-align:right;white-space:nowrap;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.amount)}</td>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:${color.ink};border-bottom:1px solid ${color.line};">${escapeHtml(item.name)}${item.quantity > 1 ? ` &times; ${item.quantity}` : ""}</td>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:${color.ink};text-align:right;white-space:nowrap;border-bottom:1px solid ${color.line};">${escapeHtml(item.amount)}</td>
       </tr>`,
       )
       .join("");
@@ -378,20 +446,20 @@ class MailService {
           "Payment received",
           "Thank you for your payment",
           `
-            <p style="margin:0 0 20px;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+            <p style="margin:0 0 20px;font-family:${sans};font-size:15px;line-height:1.6;color:${color.body};">
               We received your payment for invoice <strong>${escapeHtml(invoice.invoiceNumber)}</strong>. Anything you bought from the store is now active on your account. The invoice is attached.
             </p>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">
               ${rows}
               <tr>
-                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f172a;">Total paid</td>
-                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f766e;text-align:right;white-space:nowrap;">${escapeHtml(invoice.total)}</td>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:${color.ink};">Total paid</td>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:${color.navy};text-align:right;white-space:nowrap;">${escapeHtml(invoice.total)}</td>
               </tr>
             </table>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">
               <tr>
                 <td align="center">
-                  <a href="${escapeHtml(invoice.invoiceUrl)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                  <a href="${escapeHtml(invoice.invoiceUrl)}" style="display:inline-block;background-color:${color.navy};color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
                     View invoice
                   </a>
                 </td>
