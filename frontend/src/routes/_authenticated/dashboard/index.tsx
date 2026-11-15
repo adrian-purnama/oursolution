@@ -1,5 +1,8 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
+import { ShoppingBag } from 'lucide-react'
 import ProductBadge from '#/components/ProductBadge'
+import UnpaidNotice from '#/components/forms/billing/UnpaidNotice'
+import SupportButton from '#/components/forms/ticket/SupportButton'
 import DeploymentList from '#/components/forms/deployment/DeploymentList'
 import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
@@ -22,18 +25,17 @@ function DashboardPage() {
           ) : null}
         </div>
         <div className="flex gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/profile" className="no-underline">
-              Account
-            </Link>
-          </Button>
+          <SupportButton />
           <Button asChild size="sm">
             <Link to="/pricing" className="no-underline">
-              Browse products
+              <ShoppingBag aria-hidden />
+              Shop
             </Link>
           </Button>
         </div>
       </header>
+
+      <UnpaidNotice className="mb-8" />
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium">Your services</h2>

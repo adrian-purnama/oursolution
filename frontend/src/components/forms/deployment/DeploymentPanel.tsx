@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ProductMark } from '#/components/ProductBadge'
+import ProductNotices from '#/components/ProductNotices'
 import {
   BeatBar,
   CHECK_COLOR,
@@ -527,6 +528,12 @@ export default function DeploymentPanel({
         ))}
       </section>
 
+      {deployment.notices.length > 0 ? (
+        <section aria-label="Good to know">
+          <ProductNotices notices={deployment.notices} />
+        </section>
+      ) : null}
+
       {!deployment.entitled ? (
         <p className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">
           {admin
@@ -701,8 +708,8 @@ export default function DeploymentPanel({
           >
             <div className="min-w-0 flex-1 basis-64 space-y-1">
               <p className="text-sm">
-                Erases this customer's own folders. Only once the service is off
-                and the subscription has ended; it stays off.
+                Erases this customer's folders. Needs the service off and the
+                subscription ended.
               </p>
               {deployment.internal.resetFolders.length > 0 ? (
                 <p className="font-mono text-xs break-all text-[var(--muted)]">

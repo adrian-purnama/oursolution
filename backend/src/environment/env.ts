@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { parseDataRoots } from "../utils/deploymentFolders";
 
 function required(name: string): string {
@@ -56,6 +57,76 @@ export function deployDomain(raw: string | undefined): string | null {
   return value || null;
 }
 
+/**
+ * Sandbox unless MIDTRANS_URL points at production (a URL without
+ * "sandbox", e.g. https://app.midtrans.com).
+ */
+export function midtransSandbox(raw: string | undefined): boolean {
+  const value = raw?.trim();
+  return !value || /sandbox/i.test(value);
+}
+
+/** Where Midtrans reaches us, relative to the backend's public URL. */
+export const MIDTRANS_NOTIFICATION_PATH = "/payments/midtrans/notification";
+
+/** True for localhost, 127.x, ::1, 0.0.0.0 and *.localhost: unreachable from outside. */
+function isLocalHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    return (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      /^127\./.test(host)
+    );
+  } catch {
+    return true;
+  }
+}
+
+/** The backend's public base URL without a trailing slash, or null. */
+export function backendUrl(raw: string | undefined): string | null {
+  const value = raw?.trim().replace(/\/+$/, "");
+  return value || null;
+}
+
+/**
+ * The URL sent to Midtrans as X-Override-Notification. An explicit
+ * MIDTRANS_NOTIFICATION_URL wins; otherwise it is BACKEND_URL plus the
+ * notification path. Null for a local address, which Midtrans cannot reach
+ * (then the dashboard's URL applies and pending payments are polled).
+ */
+export function midtransNotificationUrl(
+  explicit: string | undefined,
+  backend: string | null,
+): string | null {
+  const url =
+    explicit?.trim() ||
+    (backend ? `${backend}${MIDTRANS_NOTIFICATION_PATH}` : null);
+  if (!url || isLocalHost(url)) return null;
+  return url;
+}
+
+/**
+ * Signs the short-lived links to private ticket photos. Required outside
+ * development; in development a random one is made per start, so links
+ * from before a restart stop working (they last minutes anyway).
+ */
+export function mediaSigningSecret(
+  raw: string | undefined,
+  buildName: string,
+): string {
+  const value = raw?.trim() ?? "";
+  if (value.length >= MIN_JWT_SECRET_LENGTH) return value;
+  const message = value
+    ? `MEDIA_SIGNING_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters`
+    : "MEDIA_SIGNING_SECRET is required";
+  if (!isDevelopmentBuild(buildName)) throw new Error(message);
+  console.warn(`[WARN] ${message}; using a random one (development only)`);
+  return randomBytes(32).toString("hex");
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -96,9 +167,26 @@ export const env = {
   isDevelopment: isDevelopmentBuild(build()),
   mongodbUrl: required("MONGODB_URL"),
   frontendUrl: required("FRONTEND_URL"),
-  brevoApiKey: required("BREVO_API_KEY"),
-  brevoSenderEmail: required("BREVO_SENDER_EMAIL"),
+  // This API's public URL, e.g. "https://api.example.com". Used for links
+  // that outside services call back, such as Midtrans notifications.
+  backendUrl: backendUrl(process.env.BACKEND_URL),
+  // The site users open, e.g. "https://app.example.com". Links in emails are
+  // this plus a relative path. Defaults to FRONTEND_URL.
+  appBaseUrl:
+    backendUrl(process.env.APP_BASE_URL) ??
+    required("FRONTEND_URL").replace(/\/+$/, ""),
+  // Mail goes out over SMTP.
+  smtpHost: required("SMTP_HOST"),
+  smtpPort: Number(process.env.SMTP_PORT) || 465,
+  smtpSecure: (process.env.SMTP_SECURE?.trim() ?? "true") !== "false",
+  smtpUser: required("SMTP_USER"),
+  smtpPassword: required("SMTP_PASSWORD"),
+  mailFrom: required("MAIL_FROM"),
   jwtSecret: jwtSecret(build()),
+  mediaSigningSecret: mediaSigningSecret(
+    process.env.MEDIA_SIGNING_SECRET,
+    build(),
+  ),
   // Optional: without both, the app runs but nothing can be deployed.
   dokployUrl: dokployUrl(process.env.DOKPLOY_URL),
   dokployApiKey: process.env.DOKPLOY_API_KEY?.trim() || null,
@@ -120,4 +208,20 @@ export const env = {
     process.env.UPTIME_KUMA_URL?.trim().replace(/\/+$/, "") || null,
   uptimeKumaUsername: process.env.UPTIME_KUMA_USERNAME?.trim() || null,
   uptimeKumaPassword: process.env.UPTIME_KUMA_PASSWORD || null,
+  // Midtrans takes the payments. Without a server key, checkout is off
+  // outside development (development approves checkouts without charging).
+  midtransServerKey: process.env.MIDTRANS_SERVER_KEY?.trim() || null,
+  // Public: lets the browser show Snap inside the page.
+  midtransClientKey: process.env.MIDTRANS_CLIENT_KEY?.trim() || null,
+  midtransSandbox: midtransSandbox(process.env.MIDTRANS_URL),
+  // Where Midtrans posts payment notifications for our orders: BACKEND_URL
+  // + /payments/midtrans/notification unless MIDTRANS_NOTIFICATION_URL says
+  // otherwise. Null on localhost: Midtrans then uses the dashboard's URL,
+  // and pending payments are still confirmed by polling.
+  midtransNotificationUrl: midtransNotificationUrl(
+    process.env.MIDTRANS_NOTIFICATION_URL,
+    backendUrl(process.env.BACKEND_URL),
+  ),
+  // How long an unpaid invoice can still be paid.
+  paymentTtlMinutes: Number(process.env.PAYMENT_TTL_MINUTES) || 60,
 };

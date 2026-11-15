@@ -1,5 +1,9 @@
 import { Types } from "mongoose";
 import { logger } from "../../logger/logger";
+import {
+  EMPTY_CONTACT,
+  type ContactDetails,
+} from "../../models/appconfig/appconfig.interface";
 import { AppConfigModel } from "../../models/appconfig/appconfig.model";
 import { UserModel } from "../../models/user/user.model";
 import { updatePublicFile } from "../../buckets/publicBucket";
@@ -21,6 +25,7 @@ export class AppConfigService {
   openLogin: boolean = DEFAULT_OPEN_LOGIN;
   openRegister: boolean = DEFAULT_OPEN_REGISTER;
   appLogo: Types.ObjectId | null = null;
+  contact: ContactDetails = { ...EMPTY_CONTACT };
   firstRegister: boolean = true;
 
   async init(): Promise<void> {
@@ -43,6 +48,7 @@ export class AppConfigService {
       this.openLogin = existAppConfig.openLogin ?? DEFAULT_OPEN_LOGIN;
       this.openRegister = existAppConfig.openRegister ?? DEFAULT_OPEN_REGISTER;
       this.appLogo = existAppConfig.appLogo ?? null;
+      this.contact = { ...EMPTY_CONTACT, ...existAppConfig.contact };
 
       logger.info("Existing app config found, not seeding", logSource, "init");
       return;
@@ -102,13 +108,24 @@ export class AppConfigService {
     openLogin: boolean;
     openRegister: boolean;
     appLogo: string | null;
+    contact: ContactDetails;
   } {
     return {
       appName: this.appName,
       openLogin: this.openLogin,
       openRegister: this.openRegister,
       appLogo: this.appLogo ? `/media/${this.appLogo.toString()}` : null,
+      contact: { ...this.contact },
     };
+  }
+
+  /** Public: what /contact shows. */
+  getContact(): ContactDetails {
+    return { ...this.contact };
+  }
+
+  async changeContact(contact: ContactDetails): Promise<void> {
+    await this.updateField("contact", contact);
   }
 
   async changeAppName(appName: string): Promise<void> {
@@ -175,7 +192,9 @@ export class AppConfigService {
     }
   }
 
-  private async updateField<K extends "appName" | "openLogin" | "openRegister">(
+  private async updateField<
+    K extends "appName" | "openLogin" | "openRegister" | "contact",
+  >(
     field: K,
     value: this[K],
   ): Promise<void> {

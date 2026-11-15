@@ -5,5 +5,6 @@ const router = Router();
 const appConfigController = new AppConfigController();
 
 router.get("/branding", appConfigController.getBranding);
+router.get("/contact", appConfigController.getContact);
 
 export default router;

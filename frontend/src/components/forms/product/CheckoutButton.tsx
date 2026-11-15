@@ -2,18 +2,13 @@ import { useState } from 'react'
 import type { ComponentProps } from 'react'
 import { Link } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { Check } from 'lucide-react'
+import { Check, LoaderCircle, ShoppingCart } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
-import { apiFetch } from '#/lib/api'
+import { addToBasket } from '#/lib/billing'
+import { checkoutPath } from '#/lib/redirect'
 import type { PricingProduct } from '#/lib/product'
 import { cn } from '#/lib/utils'
-
-type CheckoutResult = {
-  paymentId: string
-  status: 'pending' | 'paid' | 'failed'
-  redirectUrl: string | null
-}
 
 /**
  * Whether the signed-in user has this product. For a one-time product
@@ -49,8 +44,10 @@ export function ProductStatusBadge({
 }
 
 /**
- * The one buy action for a product: "Open in profile" when owned, checkout
- * when signed in (Buy / Subscribe / Extend), "Get started" when signed out.
+ * The buy actions for a product: "Open in profile" when owned; when signed
+ * in, "Buy now" (straight to checkout) next to "Add to basket". Signed out,
+ * the same button goes through registration (or sign-in) and then on to
+ * this product's checkout.
  */
 export default function CheckoutButton({
   product,
@@ -61,36 +58,23 @@ export default function CheckoutButton({
   className?: string
   size?: ComponentProps<typeof Button>['size']
 }) {
-  const { isAuthenticated, refreshAuth } = useAuth()
+  const { isAuthenticated } = useAuth()
   const { isActive, isOwned } = useProductAccess(product)
-  const [busy, setBusy] = useState(false)
+  const [adding, setAdding] = useState(false)
 
-  async function checkout() {
-    setBusy(true)
+  async function add() {
+    setAdding(true)
     try {
-      const response = await apiFetch<CheckoutResult>('/me/checkout', {
-        method: 'POST',
-        body: JSON.stringify({ productId: product.id }),
-      })
-      if (!response.success || !response.data) {
-        toast.error(response.message || 'Checkout failed')
+      const response = await addToBasket(product.id)
+      if (!response.success) {
+        toast.error(response.message || 'Could not add to the basket')
         return
       }
-      if (response.data.redirectUrl) {
-        // A real gateway finishes payment on its own page.
-        window.location.assign(response.data.redirectUrl)
-        return
-      }
-      toast.success(
-        product.kind === 'oneTime'
-          ? `${product.name} is yours. Find it on your profile.`
-          : `${product.name} is active`,
-      )
-      await refreshAuth()
+      toast.success(`${product.name} added to your basket`)
     } catch {
       toast.error('Unable to reach the server')
     } finally {
-      setBusy(false)
+      setAdding(false)
     }
   }
 
@@ -102,30 +86,49 @@ export default function CheckoutButton({
     )
   }
 
+  const label =
+    product.kind === 'oneTime' ? 'Buy now' : isActive ? 'Extend' : 'Subscribe'
+
   if (!isAuthenticated) {
     return (
       <Button asChild size={size} className={className}>
-        <Link to="/register">Get started</Link>
+        <Link
+          to="/register"
+          search={{ redirect: checkoutPath(product.id) }}
+        >
+          {label}
+        </Link>
       </Button>
     )
   }
 
   return (
-    <Button
-      type="button"
-      size={size}
-      className={className}
-      variant={isActive ? 'outline' : 'default'}
-      disabled={busy}
-      onClick={() => void checkout()}
-    >
-      {busy
-        ? 'Processing…'
-        : product.kind === 'oneTime'
-          ? 'Buy'
-          : isActive
-            ? 'Extend'
-            : 'Subscribe'}
-    </Button>
+    <>
+      <Button
+        asChild
+        size={size}
+        className={className}
+        variant={isActive ? 'outline' : 'default'}
+      >
+        <Link to="/checkout" search={{ productId: product.id }}>
+          {label}
+        </Link>
+      </Button>
+      <Button
+        type="button"
+        size={size === 'lg' ? 'icon-lg' : 'icon'}
+        variant="outline"
+        disabled={adding}
+        onClick={() => void add()}
+        aria-label={`Add ${product.name} to basket`}
+        title="Add to basket"
+      >
+        {adding ? (
+          <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        ) : (
+          <ShoppingCart className="size-4" aria-hidden />
+        )}
+      </Button>
+    </>
   )
 }

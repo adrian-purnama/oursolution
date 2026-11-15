@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as AuthForgotPasswordRouteImport } from './routes/_auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
@@ -22,11 +23,20 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAppConfigRouteImport } from './routes/admin/app-config'
 import { Route as AdminDeploymentsRouteImport } from './routes/admin/deployments'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
+import { Route as ServicesIndexRouteImport } from './routes/services/index'
+import { Route as ServicesSlugRouteImport } from './routes/services/$slug'
+import { Route as AuthenticatedBillingIndexRouteImport } from './routes/_authenticated/billing/index'
+import { Route as AuthenticatedBillingPaymentIdRouteImport } from './routes/_authenticated/billing/$paymentId'
+import { Route as AuthenticatedCheckoutIndexRouteImport } from './routes/_authenticated/checkout/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
+import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authenticated/support/index'
+import { Route as AuthenticatedSupportTicketIdRouteImport } from './routes/_authenticated/support/$ticketId'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminProductsProductIdRouteImport } from './routes/admin/products/$productId'
 import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
+import { Route as AdminTicketsIndexRouteImport } from './routes/admin/tickets/index'
+import { Route as AdminTicketsTicketIdRouteImport } from './routes/admin/tickets/$ticketId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
 import { Route as AuthenticatedDashboardDeploymentsProductIdRouteImport } from './routes/_authenticated/dashboard/deployments/$productId'
@@ -47,6 +57,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AdminRouteRoute = AdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -94,6 +109,34 @@ const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
   path: '/products/$productId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicesIndexRoute = ServicesIndexRouteImport.update({
+  id: '/services/',
+  path: '/services/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesSlugRoute = ServicesSlugRouteImport.update({
+  id: '/services/$slug',
+  path: '/services/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedBillingIndexRoute =
+  AuthenticatedBillingIndexRouteImport.update({
+    id: '/billing/',
+    path: '/billing/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedBillingPaymentIdRoute =
+  AuthenticatedBillingPaymentIdRouteImport.update({
+    id: '/billing/$paymentId',
+    path: '/billing/$paymentId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCheckoutIndexRoute =
+  AuthenticatedCheckoutIndexRouteImport.update({
+    id: '/checkout/',
+    path: '/checkout/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -104,6 +147,18 @@ const AuthenticatedProfileIndexRoute =
   AuthenticatedProfileIndexRouteImport.update({
     id: '/profile/',
     path: '/profile/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSupportIndexRoute =
+  AuthenticatedSupportIndexRouteImport.update({
+    id: '/support/',
+    path: '/support/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSupportTicketIdRoute =
+  AuthenticatedSupportTicketIdRouteImport.update({
+    id: '/support/$ticketId',
+    path: '/support/$ticketId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
@@ -119,6 +174,16 @@ const AdminProductsProductIdRoute = AdminProductsProductIdRouteImport.update({
 const AdminProductsNewRoute = AdminProductsNewRouteImport.update({
   id: '/products/new',
   path: '/products/new',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminTicketsIndexRoute = AdminTicketsIndexRouteImport.update({
+  id: '/tickets/',
+  path: '/tickets/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminTicketsTicketIdRoute = AdminTicketsTicketIdRouteImport.update({
+  id: '/tickets/$ticketId',
+  path: '/tickets/$ticketId',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
@@ -141,6 +206,7 @@ const AuthenticatedDashboardDeploymentsProductIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
+  '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
@@ -149,18 +215,28 @@ export interface FileRoutesByFullPath {
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
   '/products/$productId': typeof ProductsProductIdRoute
+  '/services/$slug': typeof ServicesSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/services/': typeof ServicesIndexRoute
+  '/billing/$paymentId': typeof AuthenticatedBillingPaymentIdRoute
+  '/support/$ticketId': typeof AuthenticatedSupportTicketIdRoute
   '/admin/products/$productId': typeof AdminProductsProductIdRoute
   '/admin/products/new': typeof AdminProductsNewRoute
+  '/admin/tickets/$ticketId': typeof AdminTicketsTicketIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/billing/': typeof AuthenticatedBillingIndexRoute
+  '/checkout/': typeof AuthenticatedCheckoutIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
+  '/support/': typeof AuthenticatedSupportIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/tickets/': typeof AdminTicketsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/dashboard/deployments/$productId': typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
@@ -169,13 +245,22 @@ export interface FileRoutesByTo {
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
   '/products/$productId': typeof ProductsProductIdRoute
+  '/services/$slug': typeof ServicesSlugRoute
   '/admin': typeof AdminIndexRoute
+  '/services': typeof ServicesIndexRoute
+  '/billing/$paymentId': typeof AuthenticatedBillingPaymentIdRoute
+  '/support/$ticketId': typeof AuthenticatedSupportTicketIdRoute
   '/admin/products/$productId': typeof AdminProductsProductIdRoute
   '/admin/products/new': typeof AdminProductsNewRoute
+  '/admin/tickets/$ticketId': typeof AdminTicketsTicketIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/billing': typeof AuthenticatedBillingIndexRoute
+  '/checkout': typeof AuthenticatedCheckoutIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
+  '/support': typeof AuthenticatedSupportIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
+  '/admin/tickets': typeof AdminTicketsIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/dashboard/deployments/$productId': typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
@@ -185,6 +270,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/admin': typeof AdminRouteRouteWithChildren
+  '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
   '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/login': typeof AuthLoginRoute
@@ -193,13 +279,22 @@ export interface FileRoutesById {
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
   '/products/$productId': typeof ProductsProductIdRoute
+  '/services/$slug': typeof ServicesSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/services/': typeof ServicesIndexRoute
+  '/_authenticated/billing/$paymentId': typeof AuthenticatedBillingPaymentIdRoute
+  '/_authenticated/support/$ticketId': typeof AuthenticatedSupportTicketIdRoute
   '/admin/products/$productId': typeof AdminProductsProductIdRoute
   '/admin/products/new': typeof AdminProductsNewRoute
+  '/admin/tickets/$ticketId': typeof AdminTicketsTicketIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/_authenticated/billing/': typeof AuthenticatedBillingIndexRoute
+  '/_authenticated/checkout/': typeof AuthenticatedCheckoutIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
+  '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/tickets/': typeof AdminTicketsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/_authenticated/dashboard/deployments/$productId': typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
@@ -208,6 +303,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/contact'
     | '/pricing'
     | '/forgot-password'
     | '/login'
@@ -216,18 +312,28 @@ export interface FileRouteTypes {
     | '/admin/app-config'
     | '/admin/deployments'
     | '/products/$productId'
+    | '/services/$slug'
     | '/admin/'
+    | '/services/'
+    | '/billing/$paymentId'
+    | '/support/$ticketId'
     | '/admin/products/$productId'
     | '/admin/products/new'
+    | '/admin/tickets/$ticketId'
     | '/admin/users/$userId'
+    | '/billing/'
+    | '/checkout/'
     | '/dashboard/'
     | '/profile/'
+    | '/support/'
     | '/admin/products/'
+    | '/admin/tickets/'
     | '/admin/users/'
     | '/dashboard/deployments/$productId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/contact'
     | '/pricing'
     | '/forgot-password'
     | '/login'
@@ -236,13 +342,22 @@ export interface FileRouteTypes {
     | '/admin/app-config'
     | '/admin/deployments'
     | '/products/$productId'
+    | '/services/$slug'
     | '/admin'
+    | '/services'
+    | '/billing/$paymentId'
+    | '/support/$ticketId'
     | '/admin/products/$productId'
     | '/admin/products/new'
+    | '/admin/tickets/$ticketId'
     | '/admin/users/$userId'
+    | '/billing'
+    | '/checkout'
     | '/dashboard'
     | '/profile'
+    | '/support'
     | '/admin/products'
+    | '/admin/tickets'
     | '/admin/users'
     | '/dashboard/deployments/$productId'
   id:
@@ -251,6 +366,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_authenticated'
     | '/admin'
+    | '/contact'
     | '/pricing'
     | '/_auth/forgot-password'
     | '/_auth/login'
@@ -259,13 +375,22 @@ export interface FileRouteTypes {
     | '/admin/app-config'
     | '/admin/deployments'
     | '/products/$productId'
+    | '/services/$slug'
     | '/admin/'
+    | '/services/'
+    | '/_authenticated/billing/$paymentId'
+    | '/_authenticated/support/$ticketId'
     | '/admin/products/$productId'
     | '/admin/products/new'
+    | '/admin/tickets/$ticketId'
     | '/admin/users/$userId'
+    | '/_authenticated/billing/'
+    | '/_authenticated/checkout/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/profile/'
+    | '/_authenticated/support/'
     | '/admin/products/'
+    | '/admin/tickets/'
     | '/admin/users/'
     | '/_authenticated/dashboard/deployments/$productId'
   fileRoutesById: FileRoutesById
@@ -275,8 +400,11 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
+  ContactRoute: typeof ContactRoute
   PricingRoute: typeof PricingRoute
   ProductsProductIdRoute: typeof ProductsProductIdRoute
+  ServicesSlugRoute: typeof ServicesSlugRoute
+  ServicesIndexRoute: typeof ServicesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -307,6 +435,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -372,6 +507,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsProductIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/services/': {
+      id: '/services/'
+      path: '/services'
+      fullPath: '/services/'
+      preLoaderRoute: typeof ServicesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/services/$slug': {
+      id: '/services/$slug'
+      path: '/services/$slug'
+      fullPath: '/services/$slug'
+      preLoaderRoute: typeof ServicesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/billing/': {
+      id: '/_authenticated/billing/'
+      path: '/billing'
+      fullPath: '/billing/'
+      preLoaderRoute: typeof AuthenticatedBillingIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/billing/$paymentId': {
+      id: '/_authenticated/billing/$paymentId'
+      path: '/billing/$paymentId'
+      fullPath: '/billing/$paymentId'
+      preLoaderRoute: typeof AuthenticatedBillingPaymentIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/checkout/': {
+      id: '/_authenticated/checkout/'
+      path: '/checkout'
+      fullPath: '/checkout/'
+      preLoaderRoute: typeof AuthenticatedCheckoutIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
       path: '/dashboard'
@@ -384,6 +554,20 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile/'
       preLoaderRoute: typeof AuthenticatedProfileIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/support/': {
+      id: '/_authenticated/support/'
+      path: '/support'
+      fullPath: '/support/'
+      preLoaderRoute: typeof AuthenticatedSupportIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/support/$ticketId': {
+      id: '/_authenticated/support/$ticketId'
+      path: '/support/$ticketId'
+      fullPath: '/support/$ticketId'
+      preLoaderRoute: typeof AuthenticatedSupportTicketIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/admin/products/': {
@@ -405,6 +589,20 @@ declare module '@tanstack/react-router' {
       path: '/products/new'
       fullPath: '/admin/products/new'
       preLoaderRoute: typeof AdminProductsNewRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/tickets/': {
+      id: '/admin/tickets/'
+      path: '/tickets'
+      fullPath: '/admin/tickets/'
+      preLoaderRoute: typeof AdminTicketsIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/tickets/$ticketId': {
+      id: '/admin/tickets/$ticketId'
+      path: '/tickets/$ticketId'
+      fullPath: '/admin/tickets/$ticketId'
+      preLoaderRoute: typeof AdminTicketsTicketIdRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/users/': {
@@ -450,14 +648,24 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBillingPaymentIdRoute: typeof AuthenticatedBillingPaymentIdRoute
+  AuthenticatedSupportTicketIdRoute: typeof AuthenticatedSupportTicketIdRoute
+  AuthenticatedBillingIndexRoute: typeof AuthenticatedBillingIndexRoute
+  AuthenticatedCheckoutIndexRoute: typeof AuthenticatedCheckoutIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
+  AuthenticatedSupportIndexRoute: typeof AuthenticatedSupportIndexRoute
   AuthenticatedDashboardDeploymentsProductIdRoute: typeof AuthenticatedDashboardDeploymentsProductIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBillingPaymentIdRoute: AuthenticatedBillingPaymentIdRoute,
+  AuthenticatedSupportTicketIdRoute: AuthenticatedSupportTicketIdRoute,
+  AuthenticatedBillingIndexRoute: AuthenticatedBillingIndexRoute,
+  AuthenticatedCheckoutIndexRoute: AuthenticatedCheckoutIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
+  AuthenticatedSupportIndexRoute: AuthenticatedSupportIndexRoute,
   AuthenticatedDashboardDeploymentsProductIdRoute:
     AuthenticatedDashboardDeploymentsProductIdRoute,
 }
@@ -471,8 +679,10 @@ interface AdminRouteRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   AdminProductsProductIdRoute: typeof AdminProductsProductIdRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
+  AdminTicketsTicketIdRoute: typeof AdminTicketsTicketIdRoute
   AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
+  AdminTicketsIndexRoute: typeof AdminTicketsIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
 }
 
@@ -482,8 +692,10 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   AdminProductsProductIdRoute: AdminProductsProductIdRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
+  AdminTicketsTicketIdRoute: AdminTicketsTicketIdRoute,
   AdminUsersUserIdRoute: AdminUsersUserIdRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
+  AdminTicketsIndexRoute: AdminTicketsIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
 }
 
@@ -496,8 +708,11 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AdminRouteRoute: AdminRouteRouteWithChildren,
+  ContactRoute: ContactRoute,
   PricingRoute: PricingRoute,
   ProductsProductIdRoute: ProductsProductIdRoute,
+  ServicesSlugRoute: ServicesSlugRoute,
+  ServicesIndexRoute: ServicesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

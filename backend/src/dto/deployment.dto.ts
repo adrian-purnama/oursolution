@@ -4,7 +4,10 @@ import type {
   RunStatus,
   StepStatus,
 } from "../models/deploymentRun/deploymentRun.interface";
-import type { VariableVisibility } from "../models/product/product.interface";
+import type {
+  ProductNotice,
+  VariableVisibility,
+} from "../models/product/product.interface";
 import type { ProductSummaryDto } from "./product.dto";
 
 export interface RunStepOutDto {
@@ -58,6 +61,8 @@ export interface ServiceStatusOutDto {
 
 export interface DeploymentOutDto {
   product: ProductSummaryDto;
+  /** The product's rules and disclaimers, for the customer to read. */
+  notices: ProductNotice[];
   /** The subscription is running, so the service may run. */
   entitled: boolean;
   state: DeploymentState;
@@ -95,6 +100,45 @@ export interface DeploymentOutDto {
 export interface AdminDeploymentRowOutDto {
   user: { id: string; email: string };
   deployment: DeploymentOutDto;
+}
+
+/** One host of a deployment, as a sync found it. */
+export interface DeploymentSyncDomainOutDto {
+  host: string;
+  /** Dokploy has it as a domain of the compose; null: not checked. */
+  registered: boolean | null;
+  /** Routed by the Cloudflare tunnel with its DNS record; null: not checked. */
+  on: boolean | null;
+  /** What is wrong with it for the service's state, or null. */
+  issue: string | null;
+}
+
+/** What a sync did with one deployment. */
+export interface DeploymentSyncItemOutDto {
+  user: { id: string; email: string };
+  product: { id: string; name: string };
+  /** "skipped": a run was in progress, so it was left alone. */
+  outcome: "unchanged" | "changed" | "skipped" | "failed";
+  from: DeploymentState;
+  to: DeploymentState;
+  /** What Dokploy shows; null when never deployed or not checked. */
+  containers: "running" | "stopped" | "degraded" | "missing" | null;
+  /** Why it failed or was skipped, or what else changed. */
+  message: string | null;
+  domains: DeploymentSyncDomainOutDto[];
+}
+
+/** The result of syncing every deployment with Dokploy and Cloudflare. */
+export interface DeploymentSyncOutDto {
+  checked: number;
+  changed: number;
+  skipped: number;
+  failed: number;
+  /** Hosts with an issue. */
+  domainIssues: number;
+  /** Why hosts' on/off could not be checked in Cloudflare, or null. */
+  cloudflareError: string | null;
+  items: DeploymentSyncItemOutDto[];
 }
 
 /** Body of a values update: editable variable keys to values. */

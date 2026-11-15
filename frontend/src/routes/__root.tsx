@@ -38,10 +38,11 @@ function AppThemeShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
-  const theme = pathname === '/' ? 'home' : 'app'
+  const theme =
+    pathname === '/' || pathname.startsWith('/services') ? 'home' : 'app'
 
   return (
-    <div data-theme={theme} className="bg-[var(--surface)] text-[var(--ink)]">
+    <div data-theme={theme} className="min-w-0 bg-[var(--surface)] text-[var(--ink)]">
       {children}
     </div>
   )

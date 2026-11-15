@@ -15,12 +15,21 @@ import { logger } from "./logger/logger";
 import adminRoutes from "./modules/admin/admin.route";
 import appConfigRoutes from "./modules/appConfig/appConfig.route";
 import authRoutes from "./modules/auth/auth.route";
+import basketRoutes from "./modules/basket/basket.route";
 import deploymentRoutes from "./modules/deployment/deployment.route";
 import { startLapsedSubscriptionSweep } from "./modules/deployment/deployment.scheduler";
 import { deploymentService } from "./modules/deployment/deployment.service";
 import mediaRoutes from "./modules/media/media.route";
+import { NotificationModel } from "./models/notification/notification.model";
+import notificationRoutes from "./modules/notification/notification.route";
+import paymentRoutes from "./modules/payment/payment.route";
+import {
+  migrateLegacyPayments,
+  startPaymentSweep,
+} from "./modules/payment/payment.scheduler";
 import productRoutes from "./modules/product/product.route";
 import { productService } from "./modules/product/product.service";
+import ticketRoutes from "./modules/ticket/ticket.route";
 import userProductRoutes from "./modules/userProduct/userProduct.route";
 
 function createApp(): Express {
@@ -54,8 +63,12 @@ function createApp(): Express {
   app.use("/app-config", appConfigRoutes);
   app.use("/media", mediaRoutes);
   app.use("/products", productRoutes);
+  app.use("/payments", paymentRoutes);
+  app.use("/me/basket", basketRoutes);
   app.use("/me/deployments", deploymentRoutes);
+  app.use("/tickets", ticketRoutes);
   app.use("/me", userProductRoutes);
+  app.use("/notifications", notificationRoutes);
 
   app.use((_req, res) => {
     res.status(404).json({
@@ -87,11 +100,16 @@ async function bootstrap() {
 
   const app = createApp();
   await appConfigService.init();
+  // List, unread and 90-day expiry indexes for notifications.
+  await NotificationModel.init();
   // Runs cut short by a restart cannot resume; mark them failed.
   await productService.migrateLegacyDomains();
   await deploymentService.recoverInterruptedRuns();
   // Services whose subscription ended are turned off by themselves.
   startLapsedSubscriptionSweep();
+  // Older one-product payments get an invoice; pending ones are checked.
+  await migrateLegacyPayments();
+  startPaymentSweep();
 
   const httpServer = http.createServer(app);
 

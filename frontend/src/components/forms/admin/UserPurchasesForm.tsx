@@ -144,7 +144,7 @@ export default function UserPurchasesForm({ userId }: { userId: string }) {
       <div>
         <h2 className="text-base font-medium">Purchases</h2>
         <p className={`mt-1 ${hintClassName}`}>
-          One-time products this user owns. They never expire.
+          One-time products this user owns.
         </p>
       </div>
 

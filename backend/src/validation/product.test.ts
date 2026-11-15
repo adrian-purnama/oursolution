@@ -176,3 +176,37 @@ describe("product deployment", () => {
     assert.equal(patch.deployment, null);
   });
 });
+
+describe("product notices", () => {
+  it("defaults to none and keeps order, trimming text", () => {
+    assert.deepEqual(parseCreateProductDto(base).notices, []);
+    const dto = parseCreateProductDto({
+      ...base,
+      notices: [
+        { tone: "warning", text: "  A lost password cannot be recovered " },
+        { tone: "info", text: "[Contact us](https://example.com/contact)" },
+      ],
+    });
+    assert.deepEqual(dto.notices, [
+      { tone: "warning", text: "A lost password cannot be recovered" },
+      { tone: "info", text: "[Contact us](https://example.com/contact)" },
+    ]);
+  });
+
+  it("rejects an unknown tone, empty text and a non-list", () => {
+    assert.throws(() =>
+      parseCreateProductDto({ ...base, notices: [{ tone: "x", text: "a" }] }),
+    );
+    assert.throws(() =>
+      parseCreateProductDto({ ...base, notices: [{ tone: "info", text: " " }] }),
+    );
+    assert.throws(() => parseCreateProductDto({ ...base, notices: "a" }));
+  });
+
+  it("can be cleared on update", () => {
+    assert.deepEqual(
+      parseUpdateProductDto({ notices: [] }, "subscription").notices,
+      [],
+    );
+  });
+});

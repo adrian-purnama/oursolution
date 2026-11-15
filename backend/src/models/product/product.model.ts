@@ -3,7 +3,9 @@ import {
   DEPLOYMENT_TYPES,
   DeploymentDomain,
   DeploymentVariable,
+  NOTICE_TONES,
   PRODUCT_KINDS,
+  ProductNotice,
   ProductDeployment,
   ProductInterface,
   VARIABLE_VISIBILITIES,
@@ -23,6 +25,14 @@ const domainSchema = new Schema<DeploymentDomain>(
     serviceName: { type: String, required: true },
     subdomain: { type: String, required: true },
     port: { type: Number, required: true, min: 1, max: 65_535 },
+  },
+  { _id: false },
+);
+
+const noticeSchema = new Schema<ProductNotice>(
+  {
+    tone: { type: String, required: true, enum: NOTICE_TONES },
+    text: { type: String, required: true },
   },
   { _id: false },
 );
@@ -63,10 +73,16 @@ const productSchema = new Schema<ProductInterface>(
       required: false,
       default: "",
     },
+    // Markdown; the frontend renders it formatted on the product page.
     description: {
       type: String,
       required: false,
       default: "",
+    },
+    // Markdown each; rules and disclaimers shown to buyers and subscribers.
+    notices: {
+      type: [noticeSchema],
+      default: [],
     },
     priceIdr: {
       type: Number,

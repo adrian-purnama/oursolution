@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { dokployUrl } from "../../environment/env";
 import {
   containersOutcome,
+  containersState,
   deploymentOutcome,
   parseDokployProjects,
   pickEnvironment,
@@ -97,6 +98,54 @@ describe("deploymentOutcome", () => {
         since,
       ),
       { status: "error", message: "pull access denied" },
+    );
+  });
+});
+
+describe("containersState", () => {
+  const up = { name: "n8n-1", state: "running", status: "Up 3 hours" };
+
+  it("is running while containers are up, one-off jobs aside", () => {
+    assert.equal(containersState([up]), "running");
+    assert.equal(
+      containersState([
+        up,
+        {
+          name: "migrate-1",
+          state: "exited",
+          status: "Exited (0) 3 hours ago",
+        },
+      ]),
+      "running",
+    );
+  });
+
+  it("is stopped when nothing runs, whatever the exit codes", () => {
+    assert.equal(containersState([]), "stopped");
+    assert.equal(containersState("junk"), "stopped");
+    assert.equal(
+      containersState([
+        { name: "n8n-1", state: "exited", status: "Exited (137) 1 minute ago" },
+      ]),
+      "stopped",
+    );
+  });
+
+  it("is degraded when part of it died or keeps restarting", () => {
+    assert.equal(
+      containersState([
+        up,
+        { name: "db-1", state: "exited", status: "Exited (1) 1 minute ago" },
+      ]),
+      "degraded",
+    );
+    assert.equal(
+      containersState([up, { name: "db-1", state: "dead" }]),
+      "degraded",
+    );
+    assert.equal(
+      containersState([{ name: "n8n-1", state: "restarting" }]),
+      "degraded",
     );
   });
 });

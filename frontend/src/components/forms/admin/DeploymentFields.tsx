@@ -475,8 +475,7 @@ export default function DeploymentFields({
       <fieldset className="space-y-3">
         <legend className={subheadingClassName}>Domains</legend>
         <p className={`text-xs ${hintClassName}`}>
-          Public addresses routed through the Cloudflare tunnel to a service.
-          The subdomain must differ per customer, e.g.{' '}
+          Use a unique subdomain per customer, e.g.{' '}
           <Code>{'n8n-${USERNAME}'}</Code>.
         </p>
 

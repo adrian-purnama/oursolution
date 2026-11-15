@@ -3,6 +3,9 @@ import type {
   AdminDeploymentRowOutDto,
   DeploymentOutDto,
   DeploymentRunOutDto,
+  DeploymentSyncDomainOutDto,
+  DeploymentSyncItemOutDto,
+  DeploymentSyncOutDto,
   DeploymentVariableOutDto,
   ServiceStatusOutDto,
 } from "../../dto/deployment.dto";
@@ -44,21 +47,25 @@ import { cloudflareService } from "../cloudflare/cloudflare.service";
 import { dokployService } from "../dokploy/dokploy.service";
 import { entitlementService } from "../entitlement/entitlement.service";
 import { mailer } from "../mail/mail.service";
-import { toProductSummary } from "../product/product.service";
+import { notificationService } from "../notification/notification.service";
+import { noticesOf, toProductSummary } from "../product/product.service";
 import { uptimeKumaService } from "../uptimeKuma/uptimeKuma.service";
 import { userProductService } from "../userProduct/userProduct.service";
 import {
   ACTION_LABELS,
   allowedActions,
   BUSY_STATES,
+  domainIssue,
   mayBeRunning,
   nextAllowedStart,
   PIPELINES,
   shouldAutoTurnOff,
   START_HISTORY_MS,
   STATE_AFTER,
+  syncedState,
   wipeBlocker,
   STATE_DURING,
+  type ActualContainers,
 } from "./deployment.rules";
 
 type DeploymentDoc = HydratedDocument<DeploymentInterface>;
@@ -69,9 +76,39 @@ type UserDoc = HydratedDocument<UserInterface>;
 /** Customers see vague step names and no errors; admins see everything. */
 export type DeploymentView = "customer" | "admin";
 
+/** What the customer is told when these actions finish. */
+const OWNER_MESSAGES: Partial<
+  Record<
+    RunAction,
+    {
+      done: (name: string) => string;
+      doneBody: string;
+      failed: (name: string) => string;
+    }
+  >
+> = {
+  deploy: {
+    done: (name) => `${name} is on`,
+    doneBody: "Your service was turned on and is running.",
+    failed: (name) => `${name} could not be turned on`,
+  },
+  turnOff: {
+    done: (name) => `${name} is off`,
+    doneBody: "Your service was turned off.",
+    failed: (name) => `${name} could not be turned off`,
+  },
+  restart: {
+    done: (name) => `${name} restarted`,
+    doneBody: "Your service was restarted and is running again.",
+    failed: (name) => `${name} could not be restarted`,
+  },
+};
+
 const SOURCE = "modules/deployment/deployment.service.ts";
 const RUNS_SHOWN = 5;
 const MAX_SUFFIX = 9999;
+/** How many deployments a sync checks at the same time. */
+const SYNC_CONCURRENCY = 4;
 
 /** Thrown when another run holds the deployment. */
 export class DeploymentBusyError extends Error {}
@@ -177,6 +214,25 @@ interface RunContext {
  * stored, so the page can follow them and they survive as history.
  */
 export class DeploymentService {
+  /**
+   * Deployments a run is executing on in this process, counted, so a sync
+   * can tell a run that is really going on from a busy state left behind
+   * by one that died. Taken before the claim, so there is no gap.
+   */
+  private readonly active = new Map<string, number>();
+
+  private hold(deploymentId: string): () => void {
+    this.active.set(deploymentId, (this.active.get(deploymentId) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const left = (this.active.get(deploymentId) ?? 1) - 1;
+      if (left > 0) this.active.set(deploymentId, left);
+      else this.active.delete(deploymentId);
+    };
+  }
+
   // ---------------------------------------------------------------- reading
 
   /** The user's deployable subscriptions, and any they deployed before. */
@@ -446,6 +502,290 @@ export class DeploymentService {
   }
 
   /**
+   * Admin: brings every deployment's stored state in step with what its
+   * containers really do in Dokploy, and checks each host: registered as a
+   * domain in Dokploy, and on (routed, with its DNS record) in Cloudflare.
+   * One deployment failing does not stop the rest. Nothing is started,
+   * stopped or routed here; only our own records change.
+   */
+  async syncAll(): Promise<DeploymentSyncOutDto> {
+    // Asked once up front: without Dokploy nothing can be checked.
+    await dokployService.listProjects();
+
+    let routed: Set<string> | null = null;
+    let cloudflareError: string | null = null;
+    try {
+      routed = await cloudflareService.routedHostnames();
+    } catch (error) {
+      cloudflareError = messageOf(error);
+    }
+
+    const records = await DeploymentModel.find().sort({ updatedAt: -1 }).exec();
+    const [users, products] = await Promise.all([
+      UserModel.find({
+        _id: { $in: records.map((record) => record.userId) },
+      }).exec(),
+      ProductModel.find({
+        _id: { $in: records.map((record) => record.productId) },
+      }).exec(),
+    ]);
+    const userOf = new Map(users.map((item) => [item.id, item]));
+    const productOf = new Map(products.map((item) => [item.id, item]));
+
+    const found: (DeploymentSyncItemOutDto | null)[] = records.map(() => null);
+    let next = 0;
+    const worker = async () => {
+      while (next < records.length) {
+        const index = next++;
+        const record = records[index];
+        const user = userOf.get(String(record.userId));
+        const product = productOf.get(String(record.productId));
+        // Like the overview: records of a deleted user or product are left out.
+        if (!user || !product) continue;
+        found[index] = await this.syncOne(record, user, product, routed);
+      }
+    };
+    await Promise.all(Array.from({ length: SYNC_CONCURRENCY }, worker));
+
+    const items = found.flatMap((item) => (item ? [item] : []));
+    const count = (outcome: DeploymentSyncItemOutDto["outcome"]) =>
+      items.filter((item) => item.outcome === outcome).length;
+    const result: DeploymentSyncOutDto = {
+      checked: items.length - count("skipped") - count("failed"),
+      changed: count("changed"),
+      skipped: count("skipped"),
+      failed: count("failed"),
+      domainIssues: items.reduce(
+        (sum, item) =>
+          sum + item.domains.filter((domain) => domain.issue !== null).length,
+        0,
+      ),
+      cloudflareError,
+      items,
+    };
+    logger.info(
+      `Synced deployments: ${result.checked} checked, ${result.changed} changed, ${result.skipped} skipped, ${result.failed} failed, ${result.domainIssues} host issue(s)`,
+      SOURCE,
+      "syncAll",
+    );
+    return result;
+  }
+
+  /** Syncs one deployment. Never throws: a failure is the item's outcome. */
+  private async syncOne(
+    record: DeploymentDoc,
+    user: UserDoc,
+    product: ProductDoc,
+    routed: Set<string> | null,
+  ): Promise<DeploymentSyncItemOutDto> {
+    const item: DeploymentSyncItemOutDto = {
+      user: { id: user.id, email: user.email },
+      product: { id: product.id, name: product.name },
+      outcome: "unchanged",
+      from: record.state,
+      to: record.state,
+      containers: null,
+      message: null,
+      domains: [],
+    };
+    if (BUSY_STATES.includes(record.state) && this.active.has(record.id)) {
+      return { ...item, outcome: "skipped", message: "A run is in progress" };
+    }
+
+    try {
+      const notes: string[] = [];
+      let cleared = false;
+      if (BUSY_STATES.includes(record.state)) {
+        // Busy, yet no run works on it here: one died and left it stuck.
+        if (!(await this.clearStuck(record))) {
+          return {
+            ...item,
+            outcome: "skipped",
+            message: "A run started meanwhile",
+          };
+        }
+        cleared = true;
+        notes.push(
+          `It was stuck ${item.from}: the run had stopped mid-way and is now marked failed`,
+        );
+      }
+
+      const link = record.dokploy;
+      let actual: ActualContainers | null = null;
+      let registered: string[] | null = null;
+      if (link && (await dokployService.composeExists(link.composeId))) {
+        const appName = link.appName || record.name;
+        if (!appName) throw new Error("Its name in Dokploy is not known");
+        [actual, registered] = await Promise.all([
+          dokployService.containersState(appName),
+          dokployService.domainHosts(link.composeId),
+        ]);
+      } else if (link || record.state !== "notDeployed") {
+        actual = "missing";
+        registered = [];
+        if (link) notes.push("Its compose is gone from Dokploy");
+      }
+      item.containers = actual;
+
+      const to = actual ? syncedState(record.state, actual) : record.state;
+      const forgetLink = actual === "missing" && link !== null;
+      if (to !== record.state || forgetLink) {
+        // Only while no run took it meanwhile: a run's state wins.
+        const saved = await DeploymentModel.findOneAndUpdate(
+          { _id: record._id, state: record.state },
+          { $set: { state: to, ...(forgetLink ? { dokploy: null } : {}) } },
+          { new: true },
+        ).exec();
+        if (!saved) {
+          return {
+            ...item,
+            outcome: "skipped",
+            message: "A run started meanwhile",
+          };
+        }
+        item.to = to;
+        item.outcome = "changed";
+        if (to !== record.state) await this.syncMonitorsTo(record, to);
+      } else if (cleared) {
+        item.to = record.state;
+        item.outcome = "changed";
+      }
+
+      const config = product.deployment;
+      const expected =
+        config && env.deployDomain
+          ? resolveDeployment(
+              config,
+              builtInsFor(
+                user,
+                user.deployUsername ?? usernameFromEmail(user.email),
+              ),
+              valuesOf(record),
+            ).domains.map(({ host }) => host)
+          : [];
+      const stale: string[] = [];
+      for (const host of new Set([...expected, ...record.routedHosts])) {
+        let on: boolean | null = null;
+        if (routed) {
+          try {
+            const pointed = await cloudflareService.pointsToTunnel(host);
+            on = routed.has(host) && pointed;
+            if (!routed.has(host) && !pointed) stale.push(host);
+          } catch (error) {
+            notes.push(`${host}: ${messageOf(error)}`);
+          }
+        }
+        const check = {
+          registered: registered ? registered.includes(host) : null,
+          on,
+        };
+        const domain: DeploymentSyncDomainOutDto = {
+          host,
+          ...check,
+          issue: domainIssue(to, check),
+        };
+        item.domains.push(domain);
+      }
+
+      // Hosts we thought we had in Cloudflare and that are gone there.
+      const forgotten = record.routedHosts.filter((host) =>
+        stale.includes(host),
+      );
+      if (forgotten.length > 0) {
+        await DeploymentModel.updateOne(
+          { _id: record._id },
+          { $pull: { routedHosts: { $in: forgotten } } },
+        ).exec();
+        item.outcome = "changed";
+        notes.push(`No longer in Cloudflare: ${forgotten.join(", ")}`);
+      }
+
+      item.message = notes.length > 0 ? notes.join(". ") : null;
+      return item;
+    } catch (error) {
+      logger.warn(
+        `Deployment ${record.id} could not be synced: ${messageOf(error)}`,
+        SOURCE,
+        "syncOne",
+      );
+      return { ...item, outcome: "failed", message: messageOf(error) };
+    }
+  }
+
+  /**
+   * Fails the runs left "running" on a deployment no run works on, and
+   * moves it out of its busy state to "failed", as a restart would.
+   * Returns false when a run took it meanwhile; `record` then is untouched.
+   */
+  private async clearStuck(record: DeploymentDoc): Promise<boolean> {
+    const runs = await DeploymentRunModel.find({
+      deploymentId: record._id,
+      status: "running",
+    }).exec();
+    if (this.active.has(record.id)) return false;
+    const freed = await DeploymentModel.findOneAndUpdate(
+      { _id: record._id, state: record.state },
+      { $set: { state: "failed" } },
+      { new: true },
+    ).exec();
+    if (!freed) return false;
+    for (const run of runs) {
+      const step =
+        run.steps.find((item) => item.status === "running") ??
+        run.steps.find((item) => item.status === "pending");
+      await this.failRun(
+        run,
+        step?.key ?? null,
+        "Stuck: this run stopped mid-way and a sync found it. Check Dokploy and Cloudflare, then run it again",
+      );
+    }
+    record.state = "failed";
+    logger.warn(
+      `Deployment ${record.id} was stuck; ${runs.length} run(s) marked failed`,
+      SOURCE,
+      "clearStuck",
+    );
+    return true;
+  }
+
+  /**
+   * After a sync changed the state: checks resume for a service found
+   * running and pause for one found off, so being off is not downtime.
+   * An extra, like `syncMonitors`: a failure is only logged.
+   */
+  private async syncMonitorsTo(
+    record: DeploymentDoc,
+    to: DeploymentInterface["state"],
+  ): Promise<void> {
+    if (!uptimeKumaService.configured || record.monitors.length === 0) return;
+    try {
+      if (to === "stopped") {
+        for (const { monitorId } of record.monitors) {
+          await uptimeKumaService.pauseMonitor(monitorId);
+        }
+      } else if (to === "running") {
+        const monitors: DeploymentMonitor[] = [];
+        for (const { host, monitorId } of record.monitors) {
+          monitors.push({
+            host,
+            monitorId: await uptimeKumaService.ensureMonitor(host, monitorId),
+          });
+        }
+        await DeploymentModel.updateOne(
+          { _id: record._id },
+          { $set: { monitors } },
+        ).exec();
+      }
+    } catch (error) {
+      logger.warn(
+        `Deployment ${record.id}: Uptime Kuma is out of step after a sync: ${messageOf(error)}`,
+        SOURCE,
+        "syncMonitorsTo",
+      );
+    }
+  }
+
+  /**
    * After a restart of this server, runs that were going on are marked
    * failed (they stopped mid-way) and admins are told.
    */
@@ -477,18 +817,63 @@ export class DeploymentService {
     action: RunAction,
     startedBy: string | null,
   ): Promise<void> {
+    const release = this.hold(deployment.id);
     const claimed = await DeploymentModel.findOneAndUpdate(
       { _id: deployment._id, state: { $nin: BUSY_STATES } },
       { $set: { state: STATE_DURING[action] } },
       { new: true },
-    ).exec();
+    )
+      .exec()
+      .catch((error: unknown) => {
+        release();
+        throw error;
+      });
     if (!claimed) {
+      release();
       throw new DeploymentBusyError(
         "Something is already in progress. Wait for it to finish",
       );
     }
 
-    const run = await DeploymentRunModel.create({
+    let run: RunDoc;
+    try {
+      run = await this.createRun(deployment, action, startedBy);
+    } catch (error) {
+      // No run to follow: give the deployment back instead of leaving it busy.
+      await DeploymentModel.updateOne(
+        { _id: deployment._id, state: STATE_DURING[action] },
+        { $set: { state: deployment.state } },
+      ).exec();
+      release();
+      throw error;
+    }
+
+    void this.execute(run)
+      .catch(async (error: unknown) => {
+        logger.error(
+          `Deployment run ${run.id} crashed: ${messageOf(error)}`,
+          SOURCE,
+          "launch",
+        );
+        // Never leave it busy: mark the run and the deployment failed.
+        if (run.status === "running") {
+          const step = run.steps.find((item) => item.status === "running");
+          await this.failRun(
+            run,
+            step?.key ?? null,
+            `Crashed: ${messageOf(error)}`,
+          ).catch(() => undefined);
+        }
+      })
+      .finally(release);
+  }
+
+  private createRun(
+    deployment: DeploymentDoc,
+    action: RunAction,
+    startedBy: string | null,
+  ): Promise<RunDoc> {
+    return DeploymentRunModel.create({
       deploymentId: deployment._id,
       userId: deployment.userId,
       productId: deployment.productId,
@@ -504,14 +889,6 @@ export class DeploymentService {
       startedBy,
       startedAt: new Date(),
       finishedAt: null,
-    });
-
-    void this.execute(run).catch((error: unknown) => {
-      logger.error(
-        `Deployment run ${run.id} crashed: ${messageOf(error)}`,
-        SOURCE,
-        "launch",
-      );
     });
   }
 
@@ -564,6 +941,7 @@ export class DeploymentService {
       { $set: { state: STATE_AFTER[run.action] } },
     ).exec();
     await this.syncMonitors(context);
+    await this.notifyOwner(run, true, product.name);
   }
 
   /**
@@ -976,6 +1354,7 @@ export class DeploymentService {
       SOURCE,
       "failRun",
     );
+    await this.notifyOwner(run, false);
     await this.notifyAdmins(run, stepKey, reason).catch((error: unknown) => {
       logger.error(
         `Could not tell admins about run ${run.id}: ${messageOf(error)}`,
@@ -983,6 +1362,44 @@ export class DeploymentService {
         "failRun",
       );
     });
+  }
+
+  /**
+   * Tells the customer in the app (no email) how turning their service on,
+   * off or restarting it went. Other actions are not announced. Never throws.
+   */
+  private async notifyOwner(
+    run: RunDoc,
+    succeeded: boolean,
+    productName?: string,
+  ): Promise<void> {
+    const messages = OWNER_MESSAGES[run.action];
+    if (!messages) return;
+    try {
+      const name =
+        productName ??
+        (await ProductModel.findById(run.productId).select("name").exec())
+          ?.name ??
+        "Your service";
+      await notificationService.send({
+        userId: String(run.userId),
+        title: (succeeded ? messages.done : messages.failed)(name).slice(
+          0,
+          100,
+        ),
+        body: succeeded
+          ? messages.doneBody
+          : "Something went wrong. Our team has been told and will look into it.",
+        link: `/dashboard/deployments/${String(run.productId)}`,
+        channels: "in_app",
+      });
+    } catch (error) {
+      logger.error(
+        `Could not notify the owner of run ${run.id}: ${messageOf(error)}`,
+        SOURCE,
+        "notifyOwner",
+      );
+    }
   }
 
   private async notifyAdmins(
@@ -1140,6 +1557,7 @@ export class DeploymentService {
 
     return {
       product: toProductSummary(product),
+      notices: noticesOf(product),
       entitled,
       state,
       subscriptionEndsAt: endsAt?.toISOString() ?? null,

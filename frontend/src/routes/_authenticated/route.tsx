@@ -3,10 +3,10 @@ import { bootstrapAuth } from '#/context/authContext'
 
 export const Route = createFileRoute('/_authenticated')({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const user = await bootstrapAuth()
     if (!user) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
     return { user }
   },

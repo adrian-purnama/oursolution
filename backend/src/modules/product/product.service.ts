@@ -11,7 +11,10 @@ import type {
   ProductSummaryDto,
   UpdateProductDto,
 } from "../../dto/product.dto";
-import type { ProductInterface } from "../../models/product/product.interface";
+import type {
+  ProductInterface,
+  ProductNotice,
+} from "../../models/product/product.interface";
 import { ProductModel } from "../../models/product/product.model";
 import { PaymentModel } from "../../models/payment/payment.model";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
@@ -27,6 +30,11 @@ export class ProductNotFoundError extends Error {
   }
 }
 
+/** Plain copies: products saved before notices existed have none. */
+export function noticesOf(product: ProductDoc): ProductNotice[] {
+  return (product.notices ?? []).map(({ tone, text }) => ({ tone, text }));
+}
+
 /** The public shape: no internal price, deployment or access link. */
 export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
   return {
@@ -37,6 +45,7 @@ export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
     imageUrl: publicFileUrl(product.image),
     pricingText: product.pricingText,
     description: product.description,
+    notices: noticesOf(product),
     durationDays: product.durationDays,
   };
 }
@@ -50,6 +59,7 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
     imageUrl: publicFileUrl(product.image),
     pricingText: product.pricingText,
     description: product.description,
+    notices: noticesOf(product),
     priceIdr: product.priceIdr,
     durationDays: product.durationDays,
     deployment: product.deployment
@@ -291,7 +301,9 @@ export class ProductService {
     const [periods, purchases, payments] = await Promise.all([
       UserProductPeriodModel.countDocuments({ productId: product._id }).exec(),
       PurchaseModel.countDocuments({ productId: product._id }).exec(),
-      PaymentModel.countDocuments({ productId: product._id }).exec(),
+      PaymentModel.countDocuments({
+        "items.productId": product._id,
+      }).exec(),
     ]);
     if (periods + purchases + payments > 0) {
       throw new Error(

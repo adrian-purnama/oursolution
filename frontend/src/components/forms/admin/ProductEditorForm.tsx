@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { ArrowLeft, ImagePlus, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, ImagePlus, LoaderCircle, Plus, Trash2 } from 'lucide-react'
 import DeploymentFields, {
   EMPTY_DEPLOYMENT,
   checkDeployment,
@@ -13,10 +13,17 @@ import type { DeploymentDraft } from '#/components/forms/admin/DeploymentFields'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
 import { apiFetch, apiUpload, toAbsoluteMediaUrl } from '#/lib/api'
 import { PRODUCT_KIND_LABELS } from '#/lib/product'
-import type { Product, ProductKind } from '#/lib/product'
+import type { Product, ProductKind, ProductNotice } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 
 type DeploymentChoice = 'none' | 'dockerCompose'
@@ -32,6 +39,7 @@ type Draft = {
   color: string
   pricingText: string
   description: string
+  notices: ProductNotice[]
   priceIdr: string
   durationDays: string
   accessUrl: string
@@ -43,9 +51,10 @@ type Draft = {
 const EMPTY_DRAFT: Draft = {
   name: '',
   kind: 'subscription',
-  color: '#1a5c4a',
+  color: '#135ef5',
   pricingText: '',
   description: '',
+  notices: [],
   priceIdr: '0',
   durationDays: '30',
   accessUrl: '',
@@ -61,6 +70,7 @@ function toDraft(product: Product): Draft {
     color: product.color,
     pricingText: product.pricingText,
     description: product.description,
+    notices: product.notices,
     priceIdr: String(product.priceIdr),
     durationDays: String(product.durationDays ?? 30),
     accessUrl: product.accessUrl ?? '',
@@ -71,6 +81,93 @@ function toDraft(product: Product): Draft {
 }
 
 const sectionTitleClassName = 'text-sm font-medium'
+
+const NOTICE_TONE_LABELS: Record<ProductNotice['tone'], string> = {
+  info: 'Note',
+  warning: 'Warning',
+}
+
+/** Rules and disclaimers buyers and subscribers read, in order. */
+function NoticesField({
+  value,
+  onChange,
+}: {
+  value: ProductNotice[]
+  onChange: (notices: ProductNotice[]) => void
+}) {
+  function set(index: number, patch: Partial<ProductNotice>) {
+    onChange(
+      value.map((notice, at) =>
+        at === index ? { ...notice, ...patch } : notice,
+      ),
+    )
+  }
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className={`mb-1 ${sectionTitleClassName}`}>Notices</legend>
+      <p className={`text-xs ${hintClassName}`}>
+        Rules and disclaimers, shown on the product page and on the customer's
+        service. Supports Markdown, e.g. [contact us](https://…). Warnings stand
+        out in amber.
+      </p>
+      {value.map((notice, index) => (
+        <div
+          key={index}
+          className="grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)_auto]"
+        >
+          <Select
+            value={notice.tone}
+            onValueChange={(tone) =>
+              set(index, { tone: tone as ProductNotice['tone'] })
+            }
+          >
+            <SelectTrigger
+              aria-label={`Notice ${index + 1}: kind`}
+              className="w-full bg-white"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(['info', 'warning'] as const).map((tone) => (
+                <SelectItem key={tone} value={tone}>
+                  {NOTICE_TONE_LABELS[tone]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Textarea
+            aria-label={`Notice ${index + 1}: text`}
+            value={notice.text}
+            maxLength={1000}
+            rows={2}
+            placeholder="If you forget your password, it cannot be recovered."
+            onChange={(event) => set(index, { text: event.target.value })}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Remove notice ${index + 1}`}
+            onClick={() => onChange(value.filter((_, at) => at !== index))}
+          >
+            <Trash2 aria-hidden />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={value.length >= 20}
+        onClick={() => onChange([...value, { tone: 'info', text: '' }])}
+      >
+        <Plus aria-hidden />
+        Add notice
+      </Button>
+    </fieldset>
+  )
+}
 
 /** Creates a product, or edits the one with `productId`. */
 export default function ProductEditorForm({
@@ -159,6 +256,9 @@ export default function ProductEditorForm({
       toast.error('The compose file is empty')
       return
     }
+    const notices = draft.notices
+      .map((notice) => ({ ...notice, text: notice.text.trim() }))
+      .filter((notice) => notice.text)
     setSaving(true)
     try {
       if (deploys) {
@@ -184,6 +284,7 @@ export default function ProductEditorForm({
         color: draft.color,
         pricingText: draft.pricingText.trim(),
         description: draft.description.trim(),
+        notices,
         priceIdr,
         ...(isSubscription
           ? {
@@ -248,8 +349,7 @@ export default function ProductEditorForm({
           {isNew ? 'New product' : (product?.name ?? 'Edit product')}
         </h1>
         <p className={`mt-2 ${hintClassName}`}>
-          A subscription stays active for its duration per checkout. A one-time
-          purchase is bought once and kept for good.
+          Subscriptions run per period. One-time purchases are kept for good.
         </p>
       </div>
 
@@ -407,16 +507,20 @@ export default function ProductEditorForm({
                 value={draft.description}
                 maxLength={4000}
                 rows={5}
-                placeholder="What the buyer gets. Line breaks are kept."
+                placeholder={
+                  'What the buyer gets.\n\n- **Bold**, _italic_, [links](https://…)\n- Lists, headings (## Title), tables'
+                }
                 onChange={(event) =>
                   setDraft({ ...draft, description: event.target.value })
                 }
               />
-              <p className={hintClassName}>
-                The card shows the first few lines; the product page shows it
-                all.
-              </p>
+              <p className={hintClassName}>Supports Markdown.</p>
             </div>
+
+            <NoticesField
+              value={draft.notices}
+              onChange={(notices) => setDraft({ ...draft, notices })}
+            />
 
             <label className="flex items-start gap-2 text-sm">
               <input
@@ -431,8 +535,7 @@ export default function ProductEditorForm({
                 }
               />
               <span>
-                Show on the pricing page. When hidden, current subscribers can
-                still extend, but nobody new can buy it.
+                Show in the shop. Hidden products can still be extended.
               </span>
             </label>
           </section>

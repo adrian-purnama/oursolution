@@ -1,21 +1,42 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { LogOut, Menu, X } from 'lucide-react'
+import {
+  ArrowRight,
+  ChevronDown,
+  House,
+  LayoutDashboard,
+  LifeBuoy,
+  Mail,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  UserRound,
+  X,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
+import NotificationMenu from '#/components/forms/notifications/NotificationMenu'
+import {
+  UnreadDot,
+  useUnreadTickets,
+} from '#/components/forms/ticket/SupportButton'
+import ServiceIcon from '#/components/services/ServiceIcon'
 import UserAvatar from '#/components/UserAvatar'
 import { useAuth } from '#/context/authContext'
 import { useBranding } from '#/context/brandingContext'
+import { refreshBasket, useBasketCount } from '#/lib/billing'
+import { startNotificationStream } from '#/lib/notification'
+import { SERVICES } from '#/lib/services'
 import { cn } from '#/lib/utils'
-
-type NavLink = {
-  to: '/' | '/pricing' | '/dashboard' | '/admin'
-  label: string
-}
-
-const HOME_LINK: NavLink = { to: '/', label: 'Home' }
-const PRICING_LINK: NavLink = { to: '/pricing', label: 'Pricing' }
-const DASHBOARD_LINK: NavLink = { to: '/dashboard', label: 'Dashboard' }
-const ADMIN_LINK: NavLink = { to: '/admin', label: 'Admin' }
 
 const DRAWER_TRANSITION_MS = 300
 
@@ -31,9 +52,23 @@ export default function Header() {
     select: (state) => state.location.pathname,
   })
 
+  const basketCount = useBasketCount()
+  const unreadTickets = useUnreadTickets(isAuthenticated)
+
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // The basket badge follows whoever is signed in.
+  useEffect(() => {
+    void refreshBasket()
+  }, [user?.email])
+
+  // One live notification stream per signed-in user, closed on sign-out.
+  useEffect(() => {
+    if (!isAuthenticated || !user?.email) return
+    return startNotificationStream(user.email)
+  }, [isAuthenticated, user?.email])
 
   useEffect(() => {
     setMenuOpen(false)
@@ -87,88 +122,90 @@ export default function Header() {
   }
 
   const navLinkClass =
-    'text-sm font-medium text-[var(--muted)] no-underline transition hover:text-[var(--ink)]'
+    'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium text-[var(--muted)] no-underline transition hover:bg-[var(--surface)] hover:text-[var(--ink)]'
 
-  const activeNavClass = cn(navLinkClass, 'text-[var(--ink)]')
+  const activeNavClass = cn(
+    navLinkClass,
+    'bg-[var(--surface)] text-[var(--ink)]',
+  )
 
   const drawerLinkClass =
     'block px-6 py-3 text-base font-medium text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]'
+  const drawerSubLinkClass =
+    'flex items-center gap-3 py-2.5 pr-6 pl-10 text-sm font-medium text-[var(--muted)] no-underline transition hover:bg-[var(--surface)] hover:text-[var(--ink)]'
   const drawerActiveClass = cn(
     drawerLinkClass,
     'bg-[var(--surface)] font-semibold',
   )
 
   const ctaOutlineClass =
-    'rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm font-medium text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]'
+    'rounded-full px-3.5 py-2 text-sm font-medium text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]'
 
   const ctaPrimaryClass =
-    'rounded-[var(--radius-sm)] bg-[var(--ink)] px-3.5 py-1.5 text-sm font-medium text-white no-underline transition hover:opacity-90'
-
-  // Everyone sees Pricing; signed-in users get Dashboard, admins also Admin.
-  const visibleLinks: NavLink[] = !isAuthenticated
-    ? [HOME_LINK, PRICING_LINK]
-    : isAdmin
-      ? [DASHBOARD_LINK, PRICING_LINK, ADMIN_LINK]
-      : [DASHBOARD_LINK, PRICING_LINK]
+    'inline-flex items-center gap-1.5 rounded-full bg-[var(--navy)] px-4 py-2 text-sm font-medium text-white no-underline shadow-[0_1px_2px_rgba(0,32,96,0.25)] transition hover:bg-[var(--accent)]'
 
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 border-b border-[var(--line)] bg-white/80 text-[var(--ink)] backdrop-blur-md',
+        'sticky top-0 z-50 border-b border-[var(--line)]/80 bg-white/80 text-[var(--ink)] backdrop-blur-xl',
       )}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6 md:grid md:grid-cols-[1fr_auto_1fr]">
         <Link
-          to="/"
-          className="font-display inline-flex items-center gap-2 justify-self-start text-lg no-underline"
+          to={isAuthenticated ? '/dashboard' : '/'}
+          className="font-display inline-flex items-center gap-2.5 justify-self-start text-[17px] no-underline"
         >
           {appLogo ? (
-            <img
-              src={appLogo}
-              alt={appName}
-              className="size-7 object-contain"
-            />
-          ) : (
-            appName
-          )}
+            <img src={appLogo} alt="" className="size-8 object-contain" />
+          ) : null}
+          {appName}
         </Link>
 
-        <div className="hidden items-center justify-center gap-6 sm:flex">
-          {visibleLinks.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
+        <div className="hidden items-center justify-center gap-1 md:flex">
+          {isAuthenticated ? (
+            <DashboardMenu
+              pathname={pathname}
+              activeClassName={activeNavClass}
               className={navLinkClass}
+              unreadTickets={unreadTickets}
+            />
+          ) : (
+            <Link
+              to="/"
+              className={navLinkClass}
+              activeOptions={{ exact: true }}
               activeProps={{ className: activeNavClass }}
             >
-              {link.label}
+              Home
             </Link>
-          ))}
+          )}
+          <ServicesMenu
+            className={
+              pathname.startsWith('/services') ? activeNavClass : navLinkClass
+            }
+          />
+          <Link
+            to="/pricing"
+            className={navLinkClass}
+            activeProps={{ className: activeNavClass }}
+          >
+            <ShoppingBag className="size-4" aria-hidden />
+            Shop
+          </Link>
         </div>
 
-        <div className="hidden items-center justify-self-end gap-3 sm:flex">
+        <div className="hidden items-center justify-self-end gap-2 md:flex">
           {isLoading ? null : isAuthenticated ? (
             <>
+              <NotificationMenu />
+              <BasketLink count={basketCount} />
               {user ? (
-                <Link
-                  to="/profile"
-                  title={user.email}
-                  aria-label={`Profile (${user.email})`}
-                  className="rounded-full no-underline transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  <UserAvatar email={user.email} />
-                </Link>
+                <AccountMenu
+                  email={user.email}
+                  isAdmin={isAdmin}
+                  onLogout={handleLogout}
+                />
               ) : null}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className={cn(
-                  'inline-flex cursor-pointer items-center justify-center bg-transparent px-2 text-[var(--ink)] transition hover:opacity-70',
-                )}
-                aria-label="Log out"
-              >
-                <LogOut className="size-5" aria-hidden />
-              </button>
             </>
           ) : (
             <>
@@ -179,7 +216,7 @@ export default function Header() {
                   className: cn(ctaOutlineClass, 'bg-[var(--surface)]'),
                 }}
               >
-                Login
+                Log in
               </Link>
               <Link
                 to="/register"
@@ -188,24 +225,33 @@ export default function Header() {
                   className: cn(ctaPrimaryClass, 'opacity-90'),
                 }}
               >
-                Register
+                Get started
+                <ArrowRight className="size-4" aria-hidden />
               </Link>
             </>
           )}
         </div>
 
-        <button
-          type="button"
-          className={cn(
-            'inline-flex size-10 items-center justify-center text-[var(--ink)] sm:hidden',
-          )}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-nav"
-          onClick={openMenu}
-        >
-          <Menu className="size-6" aria-hidden />
-          <span className="sr-only">Open menu</span>
-        </button>
+        <div className="flex items-center gap-1 md:hidden">
+          {isAuthenticated ? (
+            <>
+              <NotificationMenu />
+              <BasketLink count={basketCount} />
+            </>
+          ) : null}
+          <button
+            type="button"
+            className={cn(
+              'inline-flex size-10 items-center justify-center text-[var(--ink)] md:hidden',
+            )}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-nav"
+            onClick={openMenu}
+          >
+            <Menu className="size-6" aria-hidden />
+            <span className="sr-only">Open menu</span>
+          </button>
+        </div>
       </nav>
 
       {mounted &&
@@ -213,7 +259,7 @@ export default function Header() {
         createPortal(
           <div
             className={cn(
-              'fixed inset-0 z-[100] sm:hidden',
+              'fixed inset-0 z-[100] md:hidden',
               menuAnimated ? 'pointer-events-auto' : 'pointer-events-none',
             )}
           >
@@ -239,16 +285,15 @@ export default function Header() {
               )}
             >
               <div className="flex items-center justify-between border-b border-[var(--line)] bg-white px-4 py-3">
-                <span className="inline-flex items-center gap-2 text-xl tracking-tight">
+                <span className="font-display inline-flex items-center gap-2.5 text-[17px]">
                   {appLogo ? (
                     <img
                       src={appLogo}
-                      alt={appName}
-                      className="size-7 object-contain"
+                      alt=""
+                      className="size-8 object-contain"
                     />
-                  ) : (
-                    appName
-                  )}
+                  ) : null}
+                  {appName}
                 </span>
                 <button
                   type="button"
@@ -261,17 +306,121 @@ export default function Header() {
               </div>
 
               <div className="flex flex-1 flex-col bg-white py-2">
-                {visibleLinks.map((link) => (
+                <Link
+                  to={isAuthenticated ? '/dashboard' : '/'}
+                  className={drawerLinkClass}
+                  activeOptions={{ exact: true }}
+                  activeProps={{ className: drawerActiveClass }}
+                  onClick={closeMenu}
+                >
+                  {isAuthenticated ? 'Dashboard' : 'Home'}
+                </Link>
+                {isAuthenticated ? (
+                  <>
+                    <Link
+                      to="/"
+                      className={drawerSubLinkClass}
+                      activeOptions={{ exact: true }}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <House className="size-5" aria-hidden />
+                      Home page
+                    </Link>
+                    <Link
+                      to="/contact"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <Mail className="size-5" aria-hidden />
+                      Contact
+                    </Link>
+                    <Link
+                      to="/support"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <span className="relative">
+                        <LifeBuoy className="size-5" aria-hidden />
+                        {unreadTickets > 0 ? (
+                          <UnreadDot className="-top-0.5 -right-0.5" />
+                        ) : null}
+                      </span>
+                      Tickets
+                      {unreadTickets > 0 ? (
+                        <span className="text-xs font-medium text-red-600">
+                          New reply
+                        </span>
+                      ) : null}
+                    </Link>
+                  </>
+                ) : null}
+                <Link
+                  to="/services"
+                  className={drawerLinkClass}
+                  activeOptions={{ exact: true }}
+                  activeProps={{ className: drawerActiveClass }}
+                  onClick={closeMenu}
+                >
+                  Services
+                </Link>
+                {SERVICES.map((service) => (
                   <Link
-                    key={link.to}
-                    to={link.to}
+                    key={service.slug}
+                    to="/services/$slug"
+                    params={{ slug: service.slug }}
+                    className={drawerSubLinkClass}
+                    activeProps={{
+                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                    }}
+                    onClick={closeMenu}
+                  >
+                    <ServiceIcon service={service} className="size-5" />
+                    {service.name}
+                  </Link>
+                ))}
+                <Link
+                  to="/pricing"
+                  className={cn(drawerLinkClass, 'flex items-center gap-2.5')}
+                  activeProps={{
+                    className: cn(
+                      drawerActiveClass,
+                      'flex items-center gap-2.5',
+                    ),
+                  }}
+                  onClick={closeMenu}
+                >
+                  <ShoppingBag className="size-5" aria-hidden />
+                  Shop
+                </Link>
+                {!isAuthenticated ? (
+                  <Link
+                    to="/contact"
                     className={drawerLinkClass}
                     activeProps={{ className: drawerActiveClass }}
                     onClick={closeMenu}
                   >
-                    {link.label}
+                    Contact
                   </Link>
-                ))}
+                ) : null}
+                {isAdmin ? (
+                  <Link
+                    to="/admin"
+                    className={drawerLinkClass}
+                    activeProps={{ className: drawerActiveClass }}
+                    onClick={closeMenu}
+                  >
+                    Admin
+                  </Link>
+                ) : null}
               </div>
 
               <div className="mt-auto border-t border-[var(--line)] bg-white p-4">
@@ -303,14 +452,14 @@ export default function Header() {
                       className="block rounded-[var(--radius-sm)] border border-[var(--line)] bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--ink)] no-underline transition hover:border-[var(--ink)]"
                       onClick={closeMenu}
                     >
-                      Login
+                      Log in
                     </Link>
                     <Link
                       to="/register"
-                      className="block rounded-[var(--radius-sm)] bg-[var(--ink)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
+                      className="block rounded-[var(--radius-sm)] bg-[var(--navy)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
                       onClick={closeMenu}
                     >
-                      Register
+                      Get started
                     </Link>
                   </div>
                 )}
@@ -320,5 +469,281 @@ export default function Header() {
           document.body,
         )}
     </header>
+  )
+}
+
+/**
+ * The first item of the top bar for signed-in users: the dashboard, the
+ * public home page, and contact and tickets (also links of their own). It
+ * is named after the dashboard or home page when the user is on one, and
+ * reads "Dashboard" anywhere else.
+ */
+function DashboardMenu({
+  pathname,
+  className,
+  activeClassName,
+  unreadTickets,
+}: {
+  pathname: string
+  className: string
+  activeClassName: string
+  unreadTickets: number
+}) {
+  const items = [
+    {
+      to: '/dashboard' as const,
+      label: 'Dashboard',
+      hint: 'Your services and tickets',
+      icon: LayoutDashboard,
+    },
+    {
+      to: '/' as const,
+      label: 'Home page',
+      hint: 'What we offer',
+      icon: House,
+    },
+  ]
+  const shortcuts = [
+    {
+      to: '/contact' as const,
+      label: 'Contact',
+      hint: 'Email, phone and address',
+      icon: Mail,
+      unread: 0,
+    },
+    {
+      to: '/support' as const,
+      label: 'Tickets',
+      hint:
+        unreadTickets > 0
+          ? `${unreadTickets} with a new reply`
+          : 'Ask us for help',
+      icon: LifeBuoy,
+      unread: unreadTickets,
+    },
+  ]
+  const current = items.find((item) =>
+    item.to === '/' ? pathname === '/' : pathname.startsWith(item.to),
+  )
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          current ? activeClassName : className,
+          'group cursor-pointer border-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]',
+        )}
+      >
+        {current?.label ?? 'Dashboard'}
+        <ChevronDown
+          className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180"
+          aria-hidden
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="center"
+        sideOffset={10}
+        className="w-72 rounded-2xl border-[var(--line)] p-2 shadow-[0_24px_48px_-20px_rgba(12,12,11,0.25)]"
+      >
+        {items.map(({ to, label, hint, icon: Icon }) => (
+          <DropdownMenuItem
+            key={to}
+            asChild
+            className="cursor-pointer rounded-xl p-0"
+          >
+            <Link to={to} className="flex items-start gap-3 p-3 no-underline">
+              <Icon
+                className="mt-0.5 size-5 shrink-0 text-[var(--accent)]"
+                aria-hidden
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-[var(--ink)]">
+                  {label}
+                </span>
+                <span className="block text-xs text-[var(--muted)]">
+                  {hint}
+                </span>
+              </span>
+            </Link>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator className="my-2" />
+        {shortcuts.map(({ to, label, hint, icon: Icon, unread }) => (
+          <DropdownMenuItem
+            key={to}
+            asChild
+            className="cursor-pointer rounded-xl p-0"
+          >
+            <Link to={to} className="flex items-start gap-3 p-3 no-underline">
+              <span className="relative mt-0.5 shrink-0">
+                <Icon className="size-5 text-[var(--accent)]" aria-hidden />
+                {unread > 0 ? (
+                  <UnreadDot className="-top-0.5 -right-0.5" />
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-[var(--ink)]">
+                  {label}
+                </span>
+                <span
+                  className={cn(
+                    'block text-xs',
+                    unread > 0 ? 'text-red-600' : 'text-[var(--muted)]',
+                  )}
+                >
+                  {hint}
+                </span>
+              </span>
+            </Link>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** "Services" in the top bar: opens the three services and the overview. */
+function ServicesMenu({ className }: { className: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          className,
+          'group cursor-pointer border-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]',
+        )}
+      >
+        Services
+        <ChevronDown
+          className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180"
+          aria-hidden
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="center"
+        sideOffset={10}
+        className="w-80 rounded-2xl border-[var(--line)] p-2 shadow-[0_24px_48px_-20px_rgba(12,12,11,0.25)]"
+      >
+        {SERVICES.map((service) => (
+          <DropdownMenuItem
+            key={service.slug}
+            asChild
+            className="cursor-pointer rounded-xl p-0"
+          >
+            <Link
+              to="/services/$slug"
+              params={{ slug: service.slug }}
+              className="flex items-start gap-3 p-3 no-underline"
+            >
+              <ServiceIcon
+                service={service}
+                className="size-9 shrink-0 text-[var(--accent)]"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-[var(--ink)]">
+                  {service.name}
+                </span>
+                <span className="block text-xs leading-relaxed text-[var(--muted)]">
+                  {service.tagline}
+                </span>
+              </span>
+            </Link>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator className="my-2" />
+        <DropdownMenuItem asChild className="cursor-pointer rounded-xl p-0">
+          <Link
+            to="/services"
+            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[var(--ink)] no-underline"
+          >
+            All services
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The signed-in user's avatar: opens profile, admin and log out. */
+function AccountMenu({
+  email,
+  isAdmin,
+  onLogout,
+}: {
+  email: string
+  isAdmin: boolean
+  onLogout: () => void
+}) {
+  const itemClass =
+    'flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-[var(--ink)] no-underline'
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`Account menu (${email})`}
+        className="group inline-flex cursor-pointer items-center gap-1 rounded-full border-0 bg-transparent p-1 outline-none transition hover:bg-[var(--surface)] focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
+      >
+        <UserAvatar email={email} />
+        <ChevronDown
+          className="size-4 text-[var(--muted)] transition-transform duration-200 group-data-[state=open]:rotate-180"
+          aria-hidden
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={10}
+        className="w-60 rounded-2xl border-[var(--line)] p-2 shadow-[0_24px_48px_-20px_rgba(12,12,11,0.25)]"
+      >
+        <DropdownMenuLabel className="px-3 py-2">
+          <span className="block text-xs font-normal text-[var(--muted)]">
+            Signed in as
+          </span>
+          <span className="block truncate text-sm font-medium text-[var(--ink)]">
+            {email}
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="my-1" />
+        <DropdownMenuItem asChild className="p-0">
+          <Link to="/profile" className={itemClass}>
+            <UserRound className="size-4" aria-hidden />
+            Profile
+          </Link>
+        </DropdownMenuItem>
+        {isAdmin ? (
+          <DropdownMenuItem asChild className="p-0">
+            <Link to="/admin" className={itemClass}>
+              <ShieldCheck className="size-4" aria-hidden />
+              Admin
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator className="my-1" />
+        <DropdownMenuItem
+          onSelect={onLogout}
+          className={cn(itemClass, 'text-red-600 focus:text-red-600')}
+        >
+          <LogOut className="size-4 text-red-600" aria-hidden />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The basket icon with how many products are in it. */
+function BasketLink({ count }: { count: number }) {
+  return (
+    <Link
+      to="/checkout"
+      aria-label={count > 0 ? `Basket, ${count} products` : 'Basket'}
+      title="Basket"
+      className="relative inline-flex size-10 items-center justify-center rounded-full text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]"
+    >
+      <ShoppingCart className="size-5" aria-hidden />
+      {count > 0 ? (
+        <span className="absolute top-1 right-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--ink)] px-1 text-[10px] leading-4 font-semibold text-white">
+          {count}
+        </span>
+      ) : null}
+    </Link>
   )
 }

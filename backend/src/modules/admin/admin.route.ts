@@ -4,9 +4,12 @@ import { requireUser } from "../../middleware/requireUser";
 import { uploadSingleImage } from "../../middleware/uploadImage";
 import { DeploymentController } from "../deployment/deployment.controller";
 import { DokployController } from "../dokploy/dokploy.controller";
+import { PaymentController } from "../payment/payment.controller";
 import { ProductController } from "../product/product.controller";
 import { PurchaseController } from "../purchase/purchase.controller";
+import { TicketController } from "../ticket/ticket.controller";
 import { UserProductController } from "../userProduct/userProduct.controller";
+import { MAX_TICKET_IMAGE_BYTES } from "../../utils/ticketImage";
 import { AdminController } from "./admin.controller";
 
 const router = Router();
@@ -16,6 +19,8 @@ const dokployController = new DokployController();
 const deploymentController = new DeploymentController("admin");
 const userProductController = new UserProductController();
 const purchaseController = new PurchaseController();
+const paymentController = new PaymentController();
+const ticketController = new TicketController();
 
 // Everything under /admin is admin-only.
 router.use(requireUser, requireAdmin);
@@ -61,6 +66,7 @@ router.delete(
 );
 
 router.get("/deployments", deploymentController.listAll);
+router.post("/deployments/sync", deploymentController.syncAll);
 router.get("/users/:id/deployments", deploymentController.list);
 router.get("/users/:id/deployments/:productId", deploymentController.get);
 router.put(
@@ -72,8 +78,22 @@ router.post(
   deploymentController.start,
 );
 
+router.get("/tickets", ticketController.listAll);
+router.get("/tickets/:id", ticketController.getAny);
+router.post(
+  "/tickets/:id/messages",
+  uploadSingleImage("image", MAX_TICKET_IMAGE_BYTES),
+  ticketController.addAdminMessage,
+);
+router.patch("/tickets/:id/status", ticketController.setStatus);
+
 router.get("/users/:id/purchases", purchaseController.list);
 router.post("/users/:id/purchases", purchaseController.grant);
 router.delete("/users/:id/purchases/:purchaseId", purchaseController.revoke);
+
+router.get("/users/:id/payments", paymentController.listForUser);
+router.post("/users/:id/payments", paymentController.createForUser);
+router.get("/payments/:paymentId", paymentController.getAny);
+router.get("/payments/:paymentId/invoice.pdf", paymentController.invoiceAny);
 
 export default router;

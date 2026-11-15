@@ -92,9 +92,16 @@ export type DeploymentCheck = {
   }
 }
 
+/** A rule or disclaimer; text is Markdown. Warnings are drawn in amber. */
+export type ProductNotice = {
+  tone: 'info' | 'warning'
+  text: string
+}
+
 export type Product = ProductSummary & {
   pricingText: string
   description: string
+  notices: ProductNotice[]
   priceIdr: number
   /** Subscription only. */
   durationDays: number | null
@@ -110,6 +117,7 @@ export type Product = ProductSummary & {
 export type PricingProduct = ProductSummary & {
   pricingText: string
   description: string
+  notices: ProductNotice[]
   durationDays: number | null
 }
 

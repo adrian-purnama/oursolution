@@ -1,5 +1,17 @@
 import { model, Schema, Types } from "mongoose";
-import { AppConfigInterface } from "./appconfig.interface";
+import { AppConfigInterface, ContactDetails } from "./appconfig.interface";
+
+const contactSchema = new Schema<ContactDetails>(
+  {
+    email: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    whatsapp: { type: String, default: "" },
+    address: { type: String, default: "" },
+    hours: { type: String, default: "" },
+    mapUrl: { type: String, default: "" },
+  },
+  { _id: false },
+);
 
 const appConfigSchema = new Schema<AppConfigInterface>({
   appName: {
@@ -19,6 +31,11 @@ const appConfigSchema = new Schema<AppConfigInterface>({
 
   appLogo: {
     type: Types.ObjectId,
+    required: false,
+  },
+
+  contact: {
+    type: contactSchema,
     required: false,
   },
 

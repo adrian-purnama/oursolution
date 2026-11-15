@@ -218,8 +218,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
       <div>
         <h2 className="text-base font-medium">Plan</h2>
         <p className={`mt-1 ${hintClassName}`}>
-          Each subscription runs on its own timeline; one with no period
-          covering now is not active. One-time products never expire.
+          Active subscriptions and their periods.
         </p>
       </div>
 

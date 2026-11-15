@@ -16,7 +16,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@getbrevo/brevo": "^6.0.3",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
@@ -25,6 +24,9 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.4",
     "multer": "^2.3.0",
+    "nodemailer": "^10.5.0",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4",
     "sharp": "^0.35.4",
     "socket.io-client": "^4.8.4",
     "yaml": "^2.9.1"
@@ -37,7 +39,11 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.4.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pdfkit": "^0.17.7",
+    "@types/qrcode": "^1.5.6",
     "@types/sharp": "^0.31.1",
+    "mongodb-memory-server": "^11.3.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"

@@ -1,6 +1,36 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cloudflareTunnelId, isDevelopmentBuild } from "./env";
+import {
+  cloudflareTunnelId,
+  isDevelopmentBuild,
+  midtransNotificationUrl,
+} from "./env";
+
+describe("midtransNotificationUrl", () => {
+  it("builds the URL from the backend's public URL", () => {
+    assert.equal(
+      midtransNotificationUrl(undefined, "https://api.example.com"),
+      "https://api.example.com/payments/midtrans/notification",
+    );
+  });
+
+  it("lets MIDTRANS_NOTIFICATION_URL win", () => {
+    assert.equal(
+      midtransNotificationUrl(
+        " https://hooks.example.com/midtrans ",
+        "https://api.example.com",
+      ),
+      "https://hooks.example.com/midtrans",
+    );
+  });
+
+  it("sends nothing for an address Midtrans cannot reach", () => {
+    assert.equal(midtransNotificationUrl(undefined, "http://localhost:8000"), null);
+    assert.equal(midtransNotificationUrl(undefined, "http://127.0.0.1:8000"), null);
+    assert.equal(midtransNotificationUrl(undefined, "http://api.localhost"), null);
+    assert.equal(midtransNotificationUrl("", null), null);
+  });
+});
 
 describe("isDevelopmentBuild", () => {
   it("accepts development, dev and suffixed variants", () => {

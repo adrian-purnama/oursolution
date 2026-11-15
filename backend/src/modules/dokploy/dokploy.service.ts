@@ -170,6 +170,34 @@ export function containersOutcome(containers: unknown): ContainersOutcome {
   return running ? { status: "running" } : { status: "done" };
 }
 
+/** Whether a compose's containers are up, as Docker reports them now. */
+export type ContainersState = "running" | "stopped" | "degraded";
+
+/**
+ * What Dokploy's list of a compose's containers says about a service that
+ * should stay up. "degraded": some run while others died, keep restarting
+ * or exited with an error. Exit codes do not matter once nothing runs:
+ * stopping a compose leaves non-zero ones behind.
+ */
+export function containersState(containers: unknown): ContainersState {
+  let running = 0;
+  let restarting = 0;
+  let broken = 0;
+  for (const item of list(containers)) {
+    const state = text(item.state);
+    if (state === "running") running++;
+    else if (state === "restarting") restarting++;
+    else if (state === "dead") broken++;
+    else if (state === "exited") {
+      const code = /^Exited \((\d+)\)/.exec(text(item.status) ?? "")?.[1];
+      if (code !== undefined && code !== "0") broken++;
+    }
+  }
+  if (restarting > 0) return "degraded";
+  if (running === 0) return "stopped";
+  return broken > 0 ? "degraded" : "running";
+}
+
 /** Talks to the Dokploy server set by DOKPLOY_URL and DOKPLOY_API_KEY. */
 export class DokployService {
   private async request(
@@ -285,6 +313,27 @@ export class DokployService {
       }
       throw error;
     }
+  }
+
+  /** Whether the compose's containers are up right now. */
+  async containersState(appName: string): Promise<ContainersState> {
+    return containersState(
+      await this.request("GET", "docker.getContainersByAppNameMatch", {
+        appName,
+        appType: "docker-compose",
+      }),
+    );
+  }
+
+  /** The hosts Dokploy has registered as domains of the compose. */
+  async domainHosts(composeId: string): Promise<string[]> {
+    const domains = list(
+      await this.request("GET", "domain.byComposeId", { composeId }),
+    );
+    return domains.flatMap((item) => {
+      const host = text(item.host);
+      return host ? [host] : [];
+    });
   }
 
   async updateCompose(

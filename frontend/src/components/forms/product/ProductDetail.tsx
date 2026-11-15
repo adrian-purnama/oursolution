@@ -6,6 +6,8 @@ import CheckoutButton, {
   useProductAccess,
 } from '#/components/forms/product/CheckoutButton'
 import ProductImage from '#/components/forms/product/ProductImage'
+import Markdown from '#/components/Markdown'
+import ProductNotices from '#/components/ProductNotices'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
 import { formatDays } from '#/lib/product'
@@ -125,6 +127,13 @@ function Detail({ product }: { product: PricingProduct }) {
             </p>
           </div>
 
+          {product.notices.length > 0 ? (
+            <section className="mt-6">
+              <h2 className="sr-only">Good to know</h2>
+              <ProductNotices notices={product.notices} />
+            </section>
+          ) : null}
+
           <div className="mt-6 flex flex-wrap gap-2">
             <CheckoutButton product={product} size="lg" className="flex-1" />
             {isSubscription && isActive ? (
@@ -141,9 +150,9 @@ function Detail({ product }: { product: PricingProduct }) {
           <h2 className="mb-3 text-lg font-semibold text-[var(--ink)]">
             About this product
           </h2>
-          <p className="leading-relaxed whitespace-pre-line text-[var(--ink)]/80">
+          <Markdown className="prose-base leading-relaxed">
             {product.description}
-          </p>
+          </Markdown>
         </section>
       ) : null}
     </article>

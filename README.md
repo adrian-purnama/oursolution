@@ -40,6 +40,7 @@ Register the first account straight away: it is the one that becomes the admin.
 | `BUILD` | backend | Also the **database name**, so every app and environment needs its own. `development` or `development-<name>` (for example `development-fedier`) counts as development: debug logs on, short `JWT_SECRET` tolerated |
 | `MONGODB_URL` | backend | |
 | `FRONTEND_URL` | backend | Allowed CORS origin and base of the reset-password link |
+| `APP_BASE_URL` | backend | Optional. The site users open; notification emails link to `APP_BASE_URL` + the notification's relative path. Defaults to `FRONTEND_URL` |
 | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | backend | Transactional email |
 | `JWT_SECRET` | backend | At least 32 characters; shorter values are refused outside development |
 | `VITE_API_URL` | frontend | Base URL of the backend |
@@ -102,6 +103,118 @@ Gate features with `userProductService.hasActiveProduct(userId, productId)` or
 for admins and users alike. Both count running subscriptions and owned one-time
 products. Change timelines only through the rules in
 `modules/userProduct/userProduct.planner.ts`.
+
+## Notifications
+
+Users get notifications under the bell in the header, live over server-sent
+events, and optionally by email (through `modules/mail/mail.service.ts`).
+Other backend code sends them with one call; there is no HTTP endpoint for
+sending.
+
+```ts
+import { notificationService } from "../notification/notification.service";
+
+const results = await notificationService.send({
+  userId,                    // or userIds: [...] (up to 500)
+  title: "Your ticket has a reply",   // 1-100 chars, one line
+  body: "An admin answered your question.", // 1-500 chars
+  link: `/support/${ticketId}`,       // optional, relative path only
+  channels: "both",          // "in_app" | "email" | "both"
+});
+```
+
+- `in_app` stores the notification and pushes it to the user's open tabs.
+  `email` only sends an email; nothing is stored. `both` does both.
+- Emails go out in the background: the call does not wait for SMTP, and a
+  failed email never affects the in-app part (it is logged).
+- `send` throws `NotificationInputError` only for invalid input. Delivery
+  problems come back per recipient: `inApp.status` is `stored`, `skipped`
+  (unknown user, or not requested) or `failed`; `email.status` is `queued`,
+  `skipped` or `failed`.
+- Titles and bodies are stored as plain text (control characters removed)
+  and rendered as text, never HTML. Do not put secrets in them.
+- `link` must start with a single `/`; absolute URLs, `//`, `\`, schemes
+  such as `javascript:` and anything over 300 characters are refused.
+- Notifications are deleted by MongoDB 90 days after creation (TTL index).
+
+User API, all behind `requireUser` and scoped to the caller (another user's
+notification is a 404):
+
+| | |
+| --- | --- |
+| `GET /notifications?cursor=&limit=` | Newest first, `limit` up to 50; pass `nextCursor` back as `cursor` |
+| `GET /notifications/unread-count` | `{ count }` |
+| `PATCH /notifications/:id/read` | Idempotent |
+| `POST /notifications/read-all` | `{ updated }` |
+| `GET /notifications/stream` | SSE. `notification` events whose id is the notification id; a heartbeat comment every 25s; send `Last-Event-ID` to get what was missed |
+
+The stream needs the `Authorization` header, so the frontend reads it with
+`fetch` (`frontend/src/lib/notification.ts`) instead of `EventSource`, and
+reconnects with backoff. Open streams live in memory (at most 5 per user;
+the oldest closes): this assumes **one backend instance**. Running several
+needs a fan-out (MongoDB change streams or Redis pub/sub) in
+`notification.stream.ts`. Behind nginx, `X-Accel-Buffering: no` is already
+sent; other proxies must not buffer `/notifications/stream`.
+
+To try it: sign in, then from a backend script or a temporary call in any
+service run `notificationService.send({ userId, title, body, link: "/dashboard", channels: "both" })`.
+The bell's badge updates without a refresh, and the email arrives with an
+absolute link. `npm test` in `backend/` runs the notification tests against a
+temporary MongoDB (`mongodb-memory-server`; the first run downloads MongoDB).
+
+## Contact page and support tickets
+
+`/contact` is public: the company's email, phone, WhatsApp, address, opening
+hours and map link, edited by admins under Admin → Config → Contact details
+(stored in the app config; empty fields are hidden). Its button leads
+customers to `/support`.
+
+`/support` (signed in) is where a customer opens tickets (subject 5–120
+characters, description 1–2000, one optional photo) and follows each thread.
+Admins work them at `/admin/tickets`: filter by status, search subject or
+customer email, reply, and set the status (`open`, `in_progress`, `closed`).
+
+Rules, all enforced in `modules/ticket/ticket.service.ts`:
+
+- After opening a ticket the customer may send 3 follow-ups; the 4th is
+  refused (`429`, `FOLLOWUP_LIMIT_REACHED`) until an admin replies, which
+  resets the count. The slot is taken by one conditional update
+  (`status != closed` and `followupCount < 3`), so concurrent sends cannot
+  exceed it; it is given back if storing the message fails.
+- An admin reply moves an `open` ticket to `in_progress`. A `closed` ticket
+  refuses customer messages (`403`, `TICKET_CLOSED`) until an admin reopens
+  it. Every status change is saved in the thread and logged (who, when, from,
+  to).
+- At most 5 tickets that are not closed per customer, 5 new tickets an hour,
+  and 10 messages a minute (`429`). These are counted from the stored
+  tickets and messages, so they hold across restarts and instances.
+- Another customer's ticket answers `404`, never `403`.
+- Text is stored as typed, minus control, zero-width and bidi-override
+  characters, and rendered as text, never HTML.
+
+Photos: JPEG, PNG or WebP up to 2 MB, recognised by their bytes (not name or
+content type), re-encoded to WebP (quality 85, at most 2000 px, no metadata)
+and stored in the private GridFS bucket `ticketAttachments` as
+`{ticketId}/{messageId}.webp`. The bucket is created by the first upload and
+has no public route. A photo is only served by
+`GET /tickets/attachments/:messageId?exp=&sig=`: an HMAC-SHA256 of the message
+id and expiry (5 minutes), signed with `MEDIA_SIGNING_SECRET` and handed out
+only with a ticket its reader may see. Without a valid signature it answers
+`403`; responses are `Cache-Control: private`.
+
+Environment: `MEDIA_SIGNING_SECRET`, at least 32 characters (e.g.
+`openssl rand -hex 32`). Required outside development; development makes a
+random one per start.
+
+To try it: set the contact details under Admin → Config, open `/contact`,
+sign in as a customer, open a ticket with a photo at `/support` and send 3
+follow-ups (the box then waits for an admin). As an admin, reply at
+`/admin/tickets` and the customer can write again; close the ticket and the
+box disappears. `npm test` in `backend/` runs
+`modules/ticket/ticket.service.test.ts` against a temporary MongoDB: the
+follow-up limit and reset, closed tickets, ownership, photo checks (type,
+size, renamed files, signed links), clean-up after a failed save, the rate
+limits, and concurrent follow-ups.
 
 ## Commands
 

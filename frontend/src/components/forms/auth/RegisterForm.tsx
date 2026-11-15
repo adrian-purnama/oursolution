@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { Send } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useState } from 'react'
@@ -7,6 +7,7 @@ import PasswordInput from '#/components/forms/shared/PasswordInput'
 import { apiFetch } from '#/lib/api'
 import { MIN_PASSWORD_LENGTH } from '#/lib/password'
 import { useAuth } from '#/context/authContext'
+import { safeRedirect } from '#/lib/redirect'
 import {
   buttonClassName,
   buttonClassNameFull,
@@ -20,8 +21,10 @@ interface RegisterResponse {
   jwt: string
 }
 
-export default function RegisterForm() {
+/** `redirect`: where to continue once the account exists, e.g. the checkout. */
+export default function RegisterForm({ redirect }: { redirect?: string }) {
   const navigate = useNavigate()
+  const router = useRouter()
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
@@ -101,7 +104,9 @@ export default function RegisterForm() {
 
       await login(response.data.jwt)
       toast.success(response.message || 'Account created successfully')
-      await navigate({ to: '/dashboard' })
+      const next = safeRedirect(redirect)
+      if (next) router.history.push(next)
+      else await navigate({ to: '/dashboard' })
     } catch {
       toast.error('Unable to reach the server. Please try again.')
     } finally {
@@ -112,6 +117,11 @@ export default function RegisterForm() {
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`}>
       <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">Register</h1>
+      {redirect?.startsWith('/checkout') ? (
+        <p className={`-mt-3 mb-6 ${hintClassName}`}>
+          Create an account to continue to checkout.
+        </p>
+      ) : null}
 
       <form className="w-full space-y-4" onSubmit={handleRegister}>
         <div className="w-full">
@@ -208,7 +218,11 @@ export default function RegisterForm() {
 
       <p className={`mt-6 ${hintClassName}`}>
         Already have an account?{' '}
-        <Link to="/login" className="text-[var(--ink)] underline">
+        <Link
+          to="/login"
+          search={redirect ? { redirect } : {}}
+          className="text-[var(--ink)] underline"
+        >
           Sign in
         </Link>
       </p>

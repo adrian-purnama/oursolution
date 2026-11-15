@@ -12,8 +12,7 @@ function AdminUsersPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-medium tracking-tight">Users</h1>
         <p className={`mt-2 ${hintClassName}`}>
-          Browse users, filter by email, then open one to change its role, block
-          it or reset its password.
+          Search by email and open a user to manage them.
         </p>
       </div>
 

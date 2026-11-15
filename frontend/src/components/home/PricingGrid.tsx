@@ -7,6 +7,7 @@ import CheckoutButton, {
   useProductAccess,
 } from '#/components/forms/product/CheckoutButton'
 import ProductImage from '#/components/forms/product/ProductImage'
+import { markdownToPlainText } from '#/components/Markdown'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
 import { formatDays } from '#/lib/product'
@@ -23,12 +24,12 @@ const GROUPS = [
   {
     kind: 'subscription',
     title: 'Hosting',
-    hint: 'Runs for a period per checkout. Buy again to extend.',
+    hint: 'Buy again to extend.',
   },
   {
     kind: 'oneTime',
     title: 'One-time purchases',
-    hint: 'Pay once and keep it for good.',
+    hint: 'Pay once, keep it.',
   },
 ] as const
 
@@ -182,7 +183,7 @@ function ProductCard({ product }: { product: PricingProduct }) {
         </h3>
         {product.description ? (
           <p className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-[var(--muted)]">
-            {product.description}
+            {markdownToPlainText(product.description)}
           </p>
         ) : null}
 

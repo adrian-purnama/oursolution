@@ -11,13 +11,62 @@ import {
   inputClassName,
 } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { EMPTY_CONTACT } from '#/lib/contact'
+import type { ContactDetails } from '#/lib/contact'
+import { Textarea } from '#/components/ui/textarea'
 
 export type AppConfigData = {
   appName: string
   openLogin: boolean
   openRegister: boolean
   appLogo: string | null
+  contact: ContactDetails
 }
+
+const CONTACT_FIELDS: {
+  key: keyof ContactDetails
+  label: string
+  placeholder: string
+  multiline?: boolean
+  type?: string
+}[] = [
+  {
+    key: 'email',
+    label: 'Email',
+    placeholder: 'hello@example.com',
+    type: 'email',
+  },
+  {
+    key: 'phone',
+    label: 'Phone',
+    placeholder: '+62 21 1234 5678',
+    type: 'tel',
+  },
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp',
+    placeholder: '6281234567890 (with country code)',
+    type: 'tel',
+  },
+  {
+    key: 'address',
+    label: 'Address',
+    placeholder: 'Street, city, postal code',
+    multiline: true,
+  },
+  {
+    key: 'hours',
+    label: 'Opening hours',
+    placeholder: 'Mon–Fri 09:00–17:00',
+    multiline: true,
+  },
+  {
+    key: 'mapUrl',
+    label: 'Map link',
+    placeholder: 'https://maps.google.com/…',
+    type: 'url',
+  },
+]
 
 export default function AppConfigForm() {
   const { refreshBranding } = useBranding()
@@ -31,6 +80,7 @@ export default function AppConfigForm() {
   const [openRegister, setOpenRegister] = useState(true)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [contact, setContact] = useState<ContactDetails>(EMPTY_CONTACT)
 
   useEffect(() => {
     const run = { cancelled: false }
@@ -47,6 +97,7 @@ export default function AppConfigForm() {
         setOpenLogin(response.data.openLogin)
         setOpenRegister(response.data.openRegister)
         setLogoPreview(toAbsoluteMediaUrl(response.data.appLogo))
+        setContact({ ...EMPTY_CONTACT, ...response.data.contact })
       } catch {
         toast.error('Unable to reach the server. Please try again.')
       } finally {
@@ -99,6 +150,7 @@ export default function AppConfigForm() {
           appName: appName.trim(),
           openLogin,
           openRegister,
+          contact,
         }),
       })
 
@@ -152,9 +204,6 @@ export default function AppConfigForm() {
       <section className="space-y-4 border-b border-[var(--line)] pb-8">
         <div>
           <h2 className="text-base font-medium text-[var(--ink)]">Branding</h2>
-          <p className={`mt-1 ${hintClassName}`}>
-            Name and logo shown in the header and public pages.
-          </p>
         </div>
 
         <div>
@@ -241,9 +290,6 @@ export default function AppConfigForm() {
       <section className="space-y-4 border-b border-[var(--line)] pb-8">
         <div>
           <h2 className="text-base font-medium text-[var(--ink)]">Access</h2>
-          <p className={`mt-1 ${hintClassName}`}>
-            Control whether visitors can sign in or create accounts.
-          </p>
         </div>
 
         <ToggleRow
@@ -260,6 +306,56 @@ export default function AppConfigForm() {
           checked={openRegister}
           onChange={setOpenRegister}
         />
+      </section>
+
+      <section className="space-y-4 border-b border-[var(--line)] pb-8">
+        <div>
+          <h2 className="text-base font-medium text-[var(--ink)]">
+            Contact details
+          </h2>
+          <p className={`mt-0.5 ${hintClassName}`}>
+            Shown on the public contact page. Empty fields are hidden.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {CONTACT_FIELDS.map((field) => (
+            <div
+              key={field.key}
+              className={field.multiline ? 'sm:col-span-2' : undefined}
+            >
+              <label
+                htmlFor={`contact-${field.key}`}
+                className="mb-1.5 block text-sm text-[var(--ink)]"
+              >
+                {field.label}
+              </label>
+              {field.multiline ? (
+                <Textarea
+                  id={`contact-${field.key}`}
+                  rows={3}
+                  maxLength={500}
+                  value={contact[field.key]}
+                  placeholder={field.placeholder}
+                  onChange={(event) =>
+                    setContact({ ...contact, [field.key]: event.target.value })
+                  }
+                />
+              ) : (
+                <input
+                  id={`contact-${field.key}`}
+                  type={field.type ?? 'text'}
+                  maxLength={200}
+                  value={contact[field.key]}
+                  placeholder={field.placeholder}
+                  onChange={(event) =>
+                    setContact({ ...contact, [field.key]: event.target.value })
+                  }
+                  className={inputClassName}
+                />
+              )}
+            </div>
+          ))}
+        </div>
       </section>
 
       <div className="flex justify-end">

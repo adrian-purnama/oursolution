@@ -1,9 +1,11 @@
 import { Types } from "mongoose";
-import type { CheckoutInDto } from "../dto/payment.dto";
 import type { GrantPurchaseInDto } from "../dto/purchase.dto";
 import {
   DEPLOYMENT_TYPES,
+  NOTICE_TONES,
   PRODUCT_KINDS,
+  type NoticeTone,
+  type ProductNotice,
   VARIABLE_VISIBILITIES,
   type DeploymentDomain,
   type DeploymentType,
@@ -21,6 +23,8 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const MAX_NAME_LENGTH = 60;
 const MAX_PRICING_TEXT_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 4000;
+const MAX_NOTICES = 20;
+const MAX_NOTICE_LENGTH = 1000;
 const MAX_PRICE_IDR = 1_000_000_000_000;
 const MAX_DURATION_DAYS = 36_500;
 const MAX_URL_LENGTH = 2000;
@@ -82,6 +86,31 @@ function parseDescription(value: unknown): string {
     );
   }
   return text;
+}
+
+/** A list of `{ tone, text }`; text is Markdown, trimmed, never empty. */
+function parseNotices(value: unknown): ProductNotice[] {
+  if (!Array.isArray(value)) throw new Error("notices must be a list");
+  if (value.length > MAX_NOTICES) {
+    throw new Error(`At most ${MAX_NOTICES} notices`);
+  }
+  return value.map((item: unknown, index) => {
+    const raw = asRecord(item);
+    const at = `Notice ${index + 1}`;
+    if (!NOTICE_TONES.includes(raw.tone as NoticeTone)) {
+      throw new Error(`${at}: tone must be one of ${NOTICE_TONES.join(", ")}`);
+    }
+    if (typeof raw.text !== "string" || !raw.text.trim()) {
+      throw new Error(`${at} needs text`);
+    }
+    const text = raw.text.trim();
+    if (text.length > MAX_NOTICE_LENGTH) {
+      throw new Error(
+        `${at} must be at most ${MAX_NOTICE_LENGTH} characters`,
+      );
+    }
+    return { tone: raw.tone as NoticeTone, text };
+  });
 }
 
 function parsePriceIdr(value: unknown): number {
@@ -274,6 +303,7 @@ export function parseCreateProductDto(body: unknown): CreateProductDto {
     color: parseColor(raw.color),
     pricingText: parsePricingText(raw.pricingText ?? ""),
     description: parseDescription(raw.description ?? ""),
+    notices: parseNotices(raw.notices ?? []),
     priceIdr: parsePriceIdr(raw.priceIdr),
     durationDays:
       kind === "subscription"
@@ -310,6 +340,7 @@ export function parseUpdateProductDto(
   if ("description" in raw) {
     patch.description = parseDescription(raw.description);
   }
+  if ("notices" in raw) patch.notices = parseNotices(raw.notices);
   if ("priceIdr" in raw) patch.priceIdr = parsePriceIdr(raw.priceIdr);
   if ("durationDays" in raw && kind === "subscription") {
     patch.durationDays = parseDays(raw.durationDays, "durationDays");
@@ -366,12 +397,6 @@ export function parseAssignProductDto(body: unknown): AssignProductDto {
   }
 
   return { productId, end };
-}
-
-/** Body: `{ productId }`. */
-export function parseCheckoutInDto(body: unknown): CheckoutInDto {
-  const raw = asRecord(body);
-  return { productId: parseObjectId(raw.productId, "productId") };
 }
 
 /** Body: `{ productId }`. */

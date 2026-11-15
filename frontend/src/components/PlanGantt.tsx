@@ -77,6 +77,27 @@ function percent(at: number, { start, end }: Range): number {
   return Math.min(Math.max(((at - start) / (end - start)) * 100, 0), 100)
 }
 
+/** Periods closer than this count as back to back and are drawn joined. */
+const JOIN_MS = 60 * 1000
+
+/** Whether the period right before (after) this one ends (starts) where it touches. */
+function joins(periods: ProductPeriod[], index: number) {
+  const period = periods[index]
+  const prev = index > 0 ? periods[index - 1] : undefined
+  const next = index < periods.length - 1 ? periods[index + 1] : undefined
+  const start = Date.parse(period.startsAt)
+  const end = period.endsAt ? Date.parse(period.endsAt) : null
+  return {
+    prev:
+      prev?.endsAt != null &&
+      Math.abs(Date.parse(prev.endsAt) - start) <= JOIN_MS,
+    next:
+      next !== undefined &&
+      end !== null &&
+      Math.abs(Date.parse(next.startsAt) - end) <= JOIN_MS,
+  }
+}
+
 function describePeriod(period: ProductPeriod): string {
   const end = period.endsAt ? formatDateTime(period.endsAt) : 'no end'
   return `${formatDateTime(period.startsAt)} – ${end}`
@@ -182,7 +203,8 @@ export default function PlanGantt({
                 />
               ))}
 
-              {row.periods.map((period) => {
+              {row.periods.map((period, index) => {
+                const joined = joins(row.periods, index)
                 const left = percent(Date.parse(period.startsAt), range)
                 const right = period.endsAt
                   ? percent(Date.parse(period.endsAt), range)
@@ -195,6 +217,9 @@ export default function PlanGantt({
                     title={`${row.product.name}: ${describePeriod(period)}`}
                     className={cn(
                       'absolute inset-y-1 rounded-[4px]',
+                      // Back-to-back periods read as one bar with a seam.
+                      joined.prev && 'rounded-l-none border-l border-white/80',
+                      joined.next && 'rounded-r-none',
                       isPast && 'opacity-35',
                       // An open subscription fades out: it runs until changed.
                       // A one-time product stays solid: it never expires.

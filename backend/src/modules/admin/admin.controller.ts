@@ -8,6 +8,8 @@ import {
   parseEmailSearchQuery,
   parseUpdateAdminUserDto,
 } from "../../validation/adminUser";
+import type { ContactDetails } from "../../models/appconfig/appconfig.interface";
+import { parseContactDetails } from "../../validation/contact";
 import { parseRouteId } from "../../validation/parseParam";
 import { AdminService } from "./admin.service";
 
@@ -16,6 +18,7 @@ type AppConfigPayload = {
   openLogin: boolean;
   openRegister: boolean;
   appLogo: string | null;
+  contact: ContactDetails;
 };
 
 export class AdminController {
@@ -44,6 +47,7 @@ export class AdminController {
     try {
       const body = req.body as Record<string, unknown>;
       const patch: {
+        contact?: ContactDetails;
         appName?: string;
         openLogin?: boolean;
         openRegister?: boolean;
@@ -82,7 +86,21 @@ export class AdminController {
         patch.openRegister = body.openRegister;
       }
 
+      if ("contact" in body) {
+        try {
+          patch.contact = parseContactDetails(body.contact);
+        } catch (error) {
+          return res.status(400).json({
+            success: false,
+            message:
+              error instanceof Error ? error.message : "Invalid contact details",
+            data: null,
+          } satisfies ApiResponseDto);
+        }
+      }
+
       if (
+        patch.contact === undefined &&
         patch.appName === undefined &&
         patch.openLogin === undefined &&
         patch.openRegister === undefined

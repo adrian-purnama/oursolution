@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { LoaderCircle, RefreshCw, Search, Server } from 'lucide-react'
+import {
+  ArrowDownUp,
+  LoaderCircle,
+  RefreshCw,
+  Search,
+  Server,
+  X,
+} from 'lucide-react'
 import {
   BeatBar,
   StateBadge,
@@ -15,6 +22,7 @@ import {
   BUSY_STATES,
   CHECK_STATE_LABELS,
   RUN_ACTION_LABELS,
+  STATE_LABELS,
   formatSince,
   formatUptime,
   subscriptionLine,
@@ -22,6 +30,8 @@ import {
 import type {
   AdminDeploymentRow,
   Deployment,
+  DeploymentSync,
+  DeploymentSyncItem,
   ServiceCheckState,
 } from '#/lib/deployment'
 import { formatDateTime } from '#/lib/product'
@@ -112,6 +122,37 @@ export default function DeploymentsAdminForm() {
     }
   }, [])
 
+  const [syncing, setSyncing] = useState(false)
+  const [sync, setSync] = useState<DeploymentSync | null>(null)
+
+  /** Checks every deployment against Dokploy and Cloudflare, then reloads. */
+  async function handleSync() {
+    setSyncing(true)
+    try {
+      const response = await apiFetch<DeploymentSync>(
+        '/admin/deployments/sync',
+        { method: 'POST' },
+      )
+      if (!response.success || !response.data) {
+        toast.error(response.message || 'Failed to sync deployments')
+        return
+      }
+      const result = response.data
+      setSync(result)
+      const summary = `${result.checked} checked, ${result.changed} changed`
+      if (result.failed > 0) {
+        toast.error(`${summary}, ${result.failed} failed`)
+      } else {
+        toast.success(`Synced: ${summary}`)
+      }
+      await load(true)
+    } catch {
+      toast.error('Unable to reach the server')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   useEffect(() => {
     void load(false)
     const timer = window.setInterval(() => void load(true), REFRESH_MS)
@@ -191,7 +232,22 @@ export default function DeploymentsAdminForm() {
           <RefreshCw className={cn(refreshing && 'animate-spin')} aria-hidden />
           Refresh
         </Button>
+        <Button
+          type="button"
+          disabled={syncing}
+          onClick={() => void handleSync()}
+          title="Check every deployment's containers and addresses in Dokploy and Cloudflare"
+        >
+          {syncing ? (
+            <LoaderCircle className="animate-spin" aria-hidden />
+          ) : (
+            <ArrowDownUp aria-hidden />
+          )}
+          {syncing ? 'Syncing…' : 'Sync'}
+        </Button>
       </div>
+
+      {sync ? <SyncResult sync={sync} onClose={() => setSync(null)} /> : null}
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
         {FILTERS.map(({ key, label }) => (
@@ -243,6 +299,111 @@ export default function DeploymentsAdminForm() {
         </ul>
       )}
     </div>
+  )
+}
+
+/** What a sync says about one deployment, or nothing when all is as stored. */
+function syncLines(item: DeploymentSyncItem): string[] {
+  const lines: string[] = []
+  if (item.outcome === 'failed') {
+    lines.push(`Could not be checked: ${item.message ?? 'unknown error'}`)
+  } else if (item.outcome === 'skipped') {
+    lines.push(`Skipped: ${item.message ?? 'busy'}`)
+  } else {
+    if (item.from !== item.to) {
+      lines.push(`${STATE_LABELS[item.from]} → ${STATE_LABELS[item.to]}`)
+    }
+    if (item.message) lines.push(item.message)
+  }
+  for (const domain of item.domains) {
+    if (domain.issue) lines.push(`${domain.host}: ${domain.issue}`)
+  }
+  return lines
+}
+
+/** The outcome of the last sync: totals, then only what needs a look. */
+function SyncResult({
+  sync,
+  onClose,
+}: {
+  sync: DeploymentSync
+  onClose: () => void
+}) {
+  const notable = sync.items.flatMap((item) => {
+    const lines = syncLines(item)
+    return lines.length > 0 ? [{ item, lines }] : []
+  })
+  const totals = [
+    `${sync.checked} checked`,
+    `${sync.changed} changed`,
+    ...(sync.skipped > 0 ? [`${sync.skipped} skipped`] : []),
+    ...(sync.failed > 0 ? [`${sync.failed} failed`] : []),
+    `${sync.domainIssues} address ${sync.domainIssues === 1 ? 'issue' : 'issues'}`,
+  ]
+
+  return (
+    <section
+      className={`${cardClassName} px-4 py-3 sm:px-5`}
+      aria-label="Sync result"
+      aria-live="polite"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--ink)]">
+            Synced with Dokploy
+          </p>
+          <p className={`text-xs tabular-nums ${hintClassName}`}>
+            {totals.join(' · ')}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Dismiss sync result"
+          onClick={onClose}
+        >
+          <X aria-hidden />
+        </Button>
+      </div>
+      {sync.cloudflareError ? (
+        <p className="mt-2 text-xs text-amber-800">
+          Addresses were not checked in Cloudflare: {sync.cloudflareError}
+        </p>
+      ) : null}
+      {notable.length === 0 ? (
+        <p className={`mt-2 text-xs ${hintClassName}`}>
+          Everything matches what is stored.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-2 border-t border-[var(--line)] pt-3 text-sm">
+          {notable.map(({ item, lines }) => (
+            <li key={`${item.user.id}-${item.product.id}`} className="min-w-0">
+              <p className="truncate text-[var(--ink)]">
+                {item.product.name}
+                <span className="text-[var(--muted)]">
+                  {' '}
+                  · {item.user.email}
+                </span>
+              </p>
+              {lines.map((line) => (
+                <p
+                  key={line}
+                  className={cn(
+                    'text-xs break-words',
+                    item.outcome === 'failed'
+                      ? 'text-[var(--destructive)]'
+                      : 'text-[var(--muted)]',
+                  )}
+                >
+                  {line}
+                </p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

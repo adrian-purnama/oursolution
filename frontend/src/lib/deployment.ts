@@ -1,4 +1,4 @@
-import type { ProductSummary } from '#/lib/product'
+import type { ProductNotice, ProductSummary } from '#/lib/product'
 
 export type DeploymentState =
   | 'notDeployed'
@@ -66,6 +66,8 @@ export type ServiceStatus = {
 
 export type Deployment = {
   product: ProductSummary
+  /** The product's rules and disclaimers. */
+  notices: ProductNotice[]
   entitled: boolean
   state: DeploymentState
   /** When the running subscription ends; null for no end or not running. */
@@ -100,6 +102,41 @@ export type Deployment = {
 export type AdminDeploymentRow = {
   user: { id: string; email: string }
   deployment: Deployment
+}
+
+/** One host of a deployment, as a sync found it; null: not checked. */
+export type DeploymentSyncDomain = {
+  host: string
+  /** Dokploy has it as a domain of the compose. */
+  registered: boolean | null
+  /** Routed by the Cloudflare tunnel, with its DNS record. */
+  on: boolean | null
+  issue: string | null
+}
+
+/** What a sync did with one deployment. */
+export type DeploymentSyncItem = {
+  user: { id: string; email: string }
+  product: { id: string; name: string }
+  /** "skipped": a run was in progress, so it was left alone. */
+  outcome: 'unchanged' | 'changed' | 'skipped' | 'failed'
+  from: DeploymentState
+  to: DeploymentState
+  containers: 'running' | 'stopped' | 'degraded' | 'missing' | null
+  message: string | null
+  domains: DeploymentSyncDomain[]
+}
+
+/** The result of syncing every deployment with Dokploy and Cloudflare. */
+export type DeploymentSync = {
+  checked: number
+  changed: number
+  skipped: number
+  failed: number
+  domainIssues: number
+  /** Why hosts' on/off could not be checked in Cloudflare, or null. */
+  cloudflareError: string | null
+  items: DeploymentSyncItem[]
 }
 
 export const CHECK_STATE_LABELS: Record<ServiceCheckState, string> = {

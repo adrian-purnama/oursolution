@@ -100,6 +100,47 @@ export function shouldAutoTurnOff(
   );
 }
 
+/** What Dokploy shows of a deployment's compose; "missing": it is gone. */
+export type ActualContainers = "running" | "stopped" | "degraded" | "missing";
+
+/**
+ * The state a sync stores once Dokploy has shown what really runs. Running
+ * containers win over what we had; a service we thought was up and is not
+ * becomes off. "failed" and "stopped" stay when nothing runs: a failed run
+ * still needs an admin, and turning off is what cleans up its address.
+ */
+export function syncedState(
+  stored: DeploymentState,
+  actual: ActualContainers,
+): DeploymentState {
+  if (BUSY_STATES.includes(stored) || stored === "notDeployed") return stored;
+  if (actual === "running") return "running";
+  if (actual === "degraded") return "failed";
+  return stored === "running" ? "stopped" : stored;
+}
+
+/** Where one host stands; null means it could not be checked. */
+export interface DomainCheck {
+  /** Dokploy has it as a domain of the compose. */
+  registered: boolean | null;
+  /** The Cloudflare tunnel routes it and its DNS record points there. */
+  on: boolean | null;
+}
+
+/** What is wrong with a host given the service's state, or null. */
+export function domainIssue(
+  state: DeploymentState,
+  check: DomainCheck,
+): string | null {
+  if (state === "running") {
+    if (check.registered === false) return "Not registered in Dokploy";
+    if (check.on === false) return "Off in Cloudflare while the service runs";
+    return null;
+  }
+  if (BUSY_STATES.includes(state) || state === "failed") return null;
+  return check.on ? "On in Cloudflare while the service is off" : null;
+}
+
 const HOUR_MS = 60 * 60_000;
 
 /**

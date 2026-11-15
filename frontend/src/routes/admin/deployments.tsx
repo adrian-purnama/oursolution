@@ -12,8 +12,7 @@ function AdminDeploymentsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-medium tracking-tight">Deployments</h1>
         <p className={`mt-2 ${hintClassName}`}>
-          Every customer's deployment and how it is doing. Open one to manage it
-          or delete its data.
+          Every customer's deployment and its status.
         </p>
       </div>
       <DeploymentsAdminForm />

@@ -15,5 +15,10 @@ router.use(requireUser);
 router.get("/plan", userProductController.getOwnPlan);
 router.get("/purchases", purchaseController.listOwn);
 router.post("/checkout", paymentController.checkout);
+router.post("/checkout/quote", paymentController.quote);
+router.get("/payments", paymentController.listOwn);
+router.get("/payments/:id", paymentController.getOwn);
+router.post("/payments/:id/cancel", paymentController.cancelOwn);
+router.get("/payments/:id/invoice.pdf", paymentController.invoiceOwn);
 
 export default router;

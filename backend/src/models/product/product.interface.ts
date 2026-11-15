@@ -62,6 +62,20 @@ export interface ProductDeployment {
   domains: DeploymentDomain[];
 }
 
+/**
+ * How a notice looks: "info" for good-to-know, "warning" for something the
+ * customer can lose, such as data or a password that cannot be recovered.
+ */
+export const NOTICE_TONES = ["info", "warning"] as const;
+export type NoticeTone = (typeof NOTICE_TONES)[number];
+
+/** One rule or disclaimer shown to buyers and on the customer's service. */
+export interface ProductNotice {
+  tone: NoticeTone;
+  /** Markdown, so it can link to a contact form. */
+  text: string;
+}
+
 /** Something a user can have: a subscription or a one-time purchase. */
 export interface ProductInterface {
   name: string;
@@ -73,6 +87,8 @@ export interface ProductInterface {
   pricingText: string;
   /** Public, multi-line text shown on the card and the product page. */
   description: string;
+  /** Public notices, in order: on the product page and the service page. */
+  notices: ProductNotice[];
   /** Amount charged per checkout, in whole rupiah. */
   priceIdr: number;
   /** Subscription only: how long one checkout keeps it active. */

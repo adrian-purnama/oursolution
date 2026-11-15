@@ -1,4 +1,4 @@
-import { BrevoClient } from "@getbrevo/brevo";
+import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
 import { env } from "../../environment/env";
 import { logger } from "../../logger/logger";
 import { appConfigService } from "../appConfig/appConfig.service";
@@ -61,17 +61,51 @@ function layout(title: string, heading: string, innerHtml: string): string {
 }
 
 class MailService {
-  private readonly client = new BrevoClient({ apiKey: env.brevoApiKey });
-  private readonly senderEmail = env.brevoSenderEmail;
+  private readonly transporter: Transporter = nodemailer.createTransport({
+    host: env.smtpHost,
+    port: env.smtpPort,
+    secure: env.smtpSecure,
+    auth: { user: env.smtpUser, pass: env.smtpPassword },
+  });
   private readonly source = "modules/mail/mail.service.ts";
+
+  constructor() {
+    void this.transporter
+      .verify()
+      .then(() => {
+        logger.debug("SMTP connection is ready", this.source, "verify");
+      })
+      .catch((error: unknown) => {
+        logger.error(
+          error instanceof Error ? error.message : String(error),
+          this.source,
+          "verify",
+        );
+      });
+  }
+
+  /** Sent from MAIL_FROM under the app name the admin configured. */
+  private async sendMail(options: {
+    to: string | string[];
+    subject: string;
+    html: string;
+    attachments?: SendMailOptions["attachments"];
+  }): Promise<void> {
+    await this.transporter.sendMail({
+      from: { name: appConfigService.appName, address: env.mailFrom },
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      attachments: options.attachments,
+    });
+  }
 
   async sendOtp(to: string, otp: string): Promise<boolean> {
     try {
-      await this.client.transactionalEmails.sendTransacEmail({
+      await this.sendMail({
         subject: "Your verification code",
-        sender: { name: appConfigService.appName, email: this.senderEmail },
-        to: [{ email: to }],
-        htmlContent: layout(
+        to,
+        html: layout(
           "Verification code",
           "Verify your email",
           `
@@ -109,15 +143,10 @@ class MailService {
 
   async sendResetPasswordLink(to: string, resetUrl: string): Promise<boolean> {
     try {
-      await this.client.transactionalEmails.sendTransacEmail({
+      await this.sendMail({
         subject: "Reset your password",
-        headers: {
-          "X-Mailin-Track": "false",
-          "X-Mailin-Track-Clicks": "false",
-        },
-        sender: { name: appConfigService.appName, email: this.senderEmail },
-        to: [{ email: to }],
-        htmlContent: layout(
+        to,
+        html: layout(
           "Reset your password",
           "Reset your password",
           `
@@ -160,6 +189,50 @@ class MailService {
     }
   }
 
+  /** A notification sent by email; every value is escaped. */
+  async sendNotification(
+    to: string,
+    notification: { title: string; body: string; url: string | null },
+  ): Promise<boolean> {
+    const body = escapeHtml(notification.body).replace(/\n/g, "<br />");
+    const button = notification.url
+      ? `
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
+              <tr>
+                <td align="center">
+                  <a href="${escapeHtml(notification.url)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                    Open
+                  </a>
+                </td>
+              </tr>
+            </table>`
+      : "";
+    try {
+      await this.sendMail({
+        // A header, not HTML; the title is one line of plain text.
+        subject: notification.title,
+        to,
+        html: layout(
+          escapeHtml(notification.title),
+          escapeHtml(notification.title),
+          `
+            <p style="margin:0;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+              ${body}
+            </p>${button}
+          `,
+        ),
+      });
+      return true;
+    } catch (error) {
+      logger.error(
+        `Failed to send the notification email: ${error instanceof Error ? error.message : String(error)}`,
+        this.source,
+        "sendNotification",
+      );
+      return false;
+    }
+  }
+
   /** Tells admins which step of a customer's deployment failed and why. */
   async sendDeploymentFailure(
     to: string[],
@@ -179,11 +252,10 @@ class MailService {
         <td style="padding:6px 0;font-family:${sans};font-size:14px;color:#0f172a;word-break:break-word;">${escapeHtml(value)}</td>
       </tr>`;
     try {
-      await this.client.transactionalEmails.sendTransacEmail({
+      await this.sendMail({
         subject: `Deployment failed: ${failure.productName} for ${failure.customerEmail}`,
-        sender: { name: appConfigService.appName, email: this.senderEmail },
-        to: to.map((email) => ({ email })),
-        htmlContent: layout(
+        to,
+        html: layout(
           "Deployment failed",
           "A deployment failed",
           `
@@ -204,6 +276,143 @@ class MailService {
         `Failed to send the deployment failure email: ${error instanceof Error ? error.message : String(error)}`,
         this.source,
         "sendDeploymentFailure",
+      );
+      return false;
+    }
+  }
+
+  /** An invoice is waiting to be paid, with the invoice PDF attached. */
+  async sendInvoiceIssued(
+    to: string,
+    invoice: {
+      invoiceNumber: string;
+      items: { name: string; quantity: number; amount: string }[];
+      total: string;
+      dueAt: string;
+      invoiceUrl: string;
+      pdf: Buffer;
+    },
+  ): Promise<boolean> {
+    const rows = invoice.items
+      .map(
+        (item) => `
+      <tr>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.name)}${item.quantity > 1 ? ` &times; ${item.quantity}` : ""}</td>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;text-align:right;white-space:nowrap;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.amount)}</td>
+      </tr>`,
+      )
+      .join("");
+    try {
+      await this.sendMail({
+        subject: `Invoice ${invoice.invoiceNumber}: ${invoice.total}`,
+        to,
+        html: layout(
+          "New invoice",
+          "You have a new invoice",
+          `
+            <p style="margin:0 0 20px;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+              Invoice <strong>${escapeHtml(invoice.invoiceNumber)}</strong> is ready. Please pay it by <strong>${escapeHtml(invoice.dueAt)}</strong>. The invoice is attached.
+            </p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">
+              ${rows}
+              <tr>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f172a;">Total due</td>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f766e;text-align:right;white-space:nowrap;">${escapeHtml(invoice.total)}</td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">
+              <tr>
+                <td align="center">
+                  <a href="${escapeHtml(invoice.invoiceUrl)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                    View and pay
+                  </a>
+                </td>
+              </tr>
+            </table>
+          `,
+        ),
+        attachments: [
+          {
+            filename: `${invoice.invoiceNumber}.pdf`,
+            content: invoice.pdf,
+            contentType: "application/pdf",
+          },
+        ],
+      });
+      return true;
+    } catch (error) {
+      logger.error(
+        `Failed to send the new invoice email: ${error instanceof Error ? error.message : String(error)}`,
+        this.source,
+        "sendInvoiceIssued",
+      );
+      return false;
+    }
+  }
+
+  /** Receipt for a paid invoice, with the invoice PDF attached. */
+  async sendInvoicePaid(
+    to: string,
+    invoice: {
+      invoiceNumber: string;
+      items: { name: string; quantity: number; amount: string }[];
+      total: string;
+      invoiceUrl: string;
+      pdf: Buffer;
+    },
+  ): Promise<boolean> {
+    const rows = invoice.items
+      .map(
+        (item) => `
+      <tr>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.name)}${item.quantity > 1 ? ` &times; ${item.quantity}` : ""}</td>
+        <td style="padding:8px 0;font-family:${sans};font-size:14px;color:#0f172a;text-align:right;white-space:nowrap;border-bottom:1px solid #e2e8f0;">${escapeHtml(item.amount)}</td>
+      </tr>`,
+      )
+      .join("");
+    try {
+      await this.sendMail({
+        subject: `Payment received: ${invoice.invoiceNumber}`,
+        to,
+        html: layout(
+          "Payment received",
+          "Thank you for your payment",
+          `
+            <p style="margin:0 0 20px;font-family:${sans};font-size:15px;line-height:1.6;color:#334155;">
+              We received your payment for invoice <strong>${escapeHtml(invoice.invoiceNumber)}</strong>. Anything you bought from the store is now active on your account. The invoice is attached.
+            </p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">
+              ${rows}
+              <tr>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f172a;">Total paid</td>
+                <td style="padding:10px 0;font-family:${sans};font-size:14px;font-weight:700;color:#0f766e;text-align:right;white-space:nowrap;">${escapeHtml(invoice.total)}</td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">
+              <tr>
+                <td align="center">
+                  <a href="${escapeHtml(invoice.invoiceUrl)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                    View invoice
+                  </a>
+                </td>
+              </tr>
+            </table>
+          `,
+        ),
+        attachments: [
+          {
+            filename: `${invoice.invoiceNumber}.pdf`,
+            content: invoice.pdf,
+            contentType: "application/pdf",
+          },
+        ],
+      });
+      return true;
+    } catch (error) {
+      logger.error(
+        `Failed to send the invoice email: ${error instanceof Error ? error.message : String(error)}`,
+        this.source,
+        "sendInvoicePaid",
       );
       return false;
     }

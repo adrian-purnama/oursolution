@@ -5,17 +5,17 @@ import {
   redirect,
   useRouterState,
 } from '@tanstack/react-router'
-import { Package, Server, Settings, Users } from 'lucide-react'
+import { LifeBuoy, Package, Server, Settings, Users } from 'lucide-react'
 import { bootstrapAuth, isAdminUser } from '#/context/authContext'
 import { cn } from '#/lib/utils'
 
 // This guard covers every page under /admin.
 export const Route = createFileRoute('/admin')({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const user = await bootstrapAuth()
     if (!user) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
     if (!isAdminUser(user)) {
       throw redirect({ to: '/dashboard' })
@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/admin/users' as const, label: 'Users', icon: Users },
   { to: '/admin/products' as const, label: 'Products', icon: Package },
   { to: '/admin/deployments' as const, label: 'Deployments', icon: Server },
+  { to: '/admin/tickets' as const, label: 'Tickets', icon: LifeBuoy },
 ]
 
 function breadcrumbFor(pathname: string): string[] {
@@ -44,6 +45,10 @@ function breadcrumbFor(pathname: string): string[] {
   if (pathname.startsWith('/admin/deployments')) {
     return ['Admin', 'Deployments']
   }
+  if (pathname.startsWith('/admin/tickets/')) {
+    return ['Admin', 'Tickets', 'Ticket']
+  }
+  if (pathname.startsWith('/admin/tickets')) return ['Admin', 'Tickets']
   if (pathname.startsWith('/admin/users/')) return ['Admin', 'Users', 'Edit']
   if (pathname.startsWith('/admin/users')) return ['Admin', 'Users']
   return ['Admin']

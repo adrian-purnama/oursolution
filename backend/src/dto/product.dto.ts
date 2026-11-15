@@ -1,6 +1,7 @@
 import type {
   ProductDeployment,
   ProductKind,
+  ProductNotice,
 } from "../models/product/product.interface";
 import type {
   DeploymentCheckResult,
@@ -20,6 +21,7 @@ export interface ProductOutDto {
   imageUrl: string | null;
   pricingText: string;
   description: string;
+  notices: ProductNotice[];
   priceIdr: number;
   /** Subscription only. */
   durationDays: number | null;
@@ -41,6 +43,7 @@ export interface PricingProductOutDto {
   imageUrl: string | null;
   pricingText: string;
   description: string;
+  notices: ProductNotice[];
   durationDays: number | null;
 }
 
@@ -59,6 +62,7 @@ export interface CreateProductDto {
   color: string;
   pricingText: string;
   description: string;
+  notices: ProductNotice[];
   priceIdr: number;
   durationDays: number | null;
   deployment: ProductDeployment | null;

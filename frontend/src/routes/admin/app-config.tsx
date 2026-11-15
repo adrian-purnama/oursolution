@@ -12,7 +12,7 @@ function AdminAppConfigPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-medium tracking-tight">App config</h1>
         <p className={`mt-2 ${hintClassName}`}>
-          Update branding and whether login or registration stays open.
+          Branding and account access.
         </p>
       </div>
 

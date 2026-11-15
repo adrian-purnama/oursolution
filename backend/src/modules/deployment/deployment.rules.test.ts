@@ -2,11 +2,74 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   allowedActions,
+  domainIssue,
   nextAllowedStart,
   mayBeRunning,
   shouldAutoTurnOff,
+  syncedState,
   wipeBlocker,
 } from "./deployment.rules";
+
+describe("syncedState", () => {
+  it("follows containers that run, whatever we had stored", () => {
+    assert.equal(syncedState("stopped", "running"), "running");
+    assert.equal(syncedState("failed", "running"), "running");
+    assert.equal(syncedState("running", "running"), "running");
+  });
+
+  it("turns a service we thought was up off when nothing runs", () => {
+    assert.equal(syncedState("running", "stopped"), "stopped");
+    assert.equal(syncedState("running", "missing"), "stopped");
+  });
+
+  it("flags a half-running service", () => {
+    assert.equal(syncedState("running", "degraded"), "failed");
+    assert.equal(syncedState("stopped", "degraded"), "failed");
+  });
+
+  it("keeps failed and stopped when nothing runs, and never a busy state", () => {
+    assert.equal(syncedState("failed", "stopped"), "failed");
+    assert.equal(syncedState("stopped", "missing"), "stopped");
+    assert.equal(syncedState("deploying", "running"), "deploying");
+    assert.equal(syncedState("stopping", "stopped"), "stopping");
+    assert.equal(syncedState("notDeployed", "missing"), "notDeployed");
+  });
+});
+
+describe("domainIssue", () => {
+  it("wants a running service's host registered and on", () => {
+    assert.equal(domainIssue("running", { registered: true, on: true }), null);
+    assert.match(
+      domainIssue("running", { registered: false, on: true }) ?? "",
+      /Dokploy/,
+    );
+    assert.match(
+      domainIssue("running", { registered: true, on: false }) ?? "",
+      /Cloudflare/,
+    );
+  });
+
+  it("wants an off service's host off, registered or not", () => {
+    assert.equal(domainIssue("stopped", { registered: true, on: false }), null);
+    assert.match(
+      domainIssue("stopped", { registered: true, on: true }) ?? "",
+      /off/,
+    );
+    assert.match(
+      domainIssue("notDeployed", { registered: null, on: true }) ?? "",
+      /off/,
+    );
+  });
+
+  it("says nothing about what could not be checked, or is failed or busy", () => {
+    assert.equal(domainIssue("running", { registered: null, on: null }), null);
+    assert.equal(domainIssue("failed", { registered: false, on: true }), null);
+    assert.equal(
+      domainIssue("deploying", { registered: false, on: false }),
+      null,
+    );
+  });
+});
 
 describe("shouldAutoTurnOff", () => {
   const ok = { action: "deploy" as const, automatic: false, failed: false };

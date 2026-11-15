@@ -5,6 +5,7 @@ import type {
   AdminUserOutDto,
   UpdateAdminUserDto,
 } from "../../dto/adminUser.dto";
+import type { ContactDetails } from "../../models/appconfig/appconfig.interface";
 import type { UserRole } from "../../models/user/user.interface";
 import { UserModel } from "../../models/user/user.model";
 import { normalizeImage } from "../../utils/image";
@@ -15,6 +16,7 @@ import {
 } from "../appConfig/appConfig.service";
 
 export type UpdateAppConfigInput = {
+  contact?: ContactDetails;
   appName?: string;
   openLogin?: boolean;
   openRegister?: boolean;
@@ -48,6 +50,9 @@ export class AdminService {
     }
     if (input.openRegister !== undefined) {
       await appConfigService.changeOpenRegister(input.openRegister);
+    }
+    if (input.contact !== undefined) {
+      await appConfigService.changeContact(input.contact);
     }
     return appConfigService.getAppConfig();
   }

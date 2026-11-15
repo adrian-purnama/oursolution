@@ -199,6 +199,21 @@ export class CloudflareService {
     return ingress.some((rule) => rule.hostname === host) || records.length > 0;
   }
 
+  /** The hostnames the tunnel routes right now. */
+  async routedHostnames(): Promise<Set<string>> {
+    const { ingress } = await this.getIngress();
+    return new Set(ingress.flatMap((rule) => rule.hostname ?? []));
+  }
+
+  /** Whether `host` has the DNS record that points it to the tunnel. */
+  async pointsToTunnel(host: string): Promise<boolean> {
+    const target = this.tunnelTarget();
+    const records = await this.dnsRecords(host);
+    return records.some(
+      (record) => record.type === "CNAME" && record.content === target,
+    );
+  }
+
   /** Routes `host` through the tunnel to Dokploy's Traefik. Idempotent. */
   async addRoute(host: string): Promise<void> {
     const zoneId = await this.getZoneId();

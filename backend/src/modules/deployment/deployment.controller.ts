@@ -3,6 +3,7 @@ import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   AdminDeploymentRowOutDto,
   DeploymentOutDto,
+  DeploymentSyncOutDto,
 } from "../../dto/deployment.dto";
 import {
   parseDeploymentActionInDto,
@@ -69,6 +70,16 @@ export class DeploymentController {
       );
     } catch (error) {
       return fail(res, error, "Failed to load deployments");
+    }
+  };
+
+  /** Admin: bring every deployment in step with Dokploy and Cloudflare. */
+  syncAll = async (_req: Request, res: Response) => {
+    try {
+      const data = await deploymentService.syncAll();
+      return ok<DeploymentSyncOutDto>(res, 200, "Deployments synced", data);
+    } catch (error) {
+      return fail(res, error, "Failed to sync deployments");
     }
   };
 
