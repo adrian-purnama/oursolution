@@ -5,10 +5,12 @@ import UserPaymentsForm from '#/components/forms/admin/UserPaymentsForm'
 import UserProductsForm from '#/components/forms/admin/UserProductsForm'
 import UserPurchasesForm from '#/components/forms/admin/UserPurchasesForm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
+import { privatePage } from '#/lib/seo'
 
 type UserTab = 'account' | 'deployments' | 'payments'
 
 export const Route = createFileRoute('/admin/users/$userId')({
+  head: () => privatePage('User · Admin'),
   validateSearch: (search: Record<string, unknown>): { tab?: UserTab } =>
     search.tab === 'deployments' || search.tab === 'payments'
       ? { tab: search.tab }

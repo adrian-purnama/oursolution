@@ -12,25 +12,57 @@ import Header from '../components/Header'
 import { AuthProvider } from '../context/authContext'
 import { BrandingProvider } from '../context/brandingContext'
 
-import { DEFAULT_APP_NAME } from '../lib/config'
+import {
+  ORGANIZATION_LD,
+  THEME_COLOR,
+  WEBSITE_LD,
+  jsonLd,
+  seo,
+} from '../lib/seo'
 
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: DEFAULT_APP_NAME,
-      },
-    ],
-  }),
+  head: () => {
+    const defaults = seo()
+    return {
+      meta: [
+        { charSet: 'utf-8' },
+        {
+          name: 'viewport',
+          content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
+        { name: 'theme-color', content: THEME_COLOR },
+        { name: 'application-name', content: 'Our Solution' },
+        { name: 'apple-mobile-web-app-title', content: 'Our Solution' },
+        { name: 'format-detection', content: 'telephone=no' },
+        ...defaults.meta,
+      ],
+      links: [
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        {
+          rel: 'icon',
+          type: 'image/png',
+          sizes: '32x32',
+          href: '/favicon-32x32.png',
+        },
+        {
+          rel: 'icon',
+          type: 'image/png',
+          sizes: '16x16',
+          href: '/favicon-16x16.png',
+        },
+        {
+          rel: 'apple-touch-icon',
+          sizes: '180x180',
+          href: '/apple-touch-icon.png',
+        },
+        { rel: 'manifest', href: '/manifest.json' },
+        ...defaults.links,
+      ],
+      scripts: [jsonLd(ORGANIZATION_LD), jsonLd(WEBSITE_LD)],
+    }
+  },
   shellComponent: RootDocument,
 })
 
@@ -42,7 +74,10 @@ function AppThemeShell({ children }: { children: React.ReactNode }) {
     pathname === '/' || pathname.startsWith('/services') ? 'home' : 'app'
 
   return (
-    <div data-theme={theme} className="min-w-0 bg-[var(--surface)] text-[var(--ink)]">
+    <div
+      data-theme={theme}
+      className="min-w-0 bg-[var(--surface)] text-[var(--ink)]"
+    >
       {children}
     </div>
   )

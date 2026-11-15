@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import ResetPasswordForm from '#/components/forms/auth/ResetPasswordForm'
+import { privatePage } from '#/lib/seo'
 
 type ResetPasswordSearch = {
   token: string
@@ -8,6 +9,7 @@ type ResetPasswordSearch = {
 }
 
 export const Route = createFileRoute('/_auth/reset-password')({
+  head: () => privatePage('Reset password'),
   validateSearch: (search: Record<string, unknown>): ResetPasswordSearch => ({
     token: typeof search.token === 'string' ? search.token : '',
     email: typeof search.email === 'string' ? search.email : '',

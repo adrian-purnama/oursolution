@@ -10,7 +10,7 @@ import { updatePublicFile } from "../../buckets/publicBucket";
 
 const logSource: string = "modules/appConfig/appConfig.service.ts";
 
-const DEFAULT_APP_NAME = "Adrian Template";
+const DEFAULT_APP_NAME = "Our Solution";
 const DEFAULT_OPEN_LOGIN = true;
 const DEFAULT_OPEN_REGISTER = true;
 

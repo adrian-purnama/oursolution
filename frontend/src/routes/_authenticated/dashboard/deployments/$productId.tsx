@@ -2,10 +2,12 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import DeploymentPanel from '#/components/forms/deployment/DeploymentPanel'
 import { hintClassName } from '#/lib/ui-classes'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute(
   '/_authenticated/dashboard/deployments/$productId',
 )({
+  head: () => privatePage('Deployment'),
   component: DeploymentPage,
 })
 

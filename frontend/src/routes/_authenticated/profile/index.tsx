@@ -4,10 +4,12 @@ import UnpaidNotice from '#/components/forms/billing/UnpaidNotice'
 import ProductsPlansForm from '#/components/forms/profile/ProductsPlansForm'
 import ProfileForm from '#/components/forms/profile/ProfileForm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
+import { privatePage } from '#/lib/seo'
 
 type ProfileTab = 'account' | 'products' | 'billing'
 
 export const Route = createFileRoute('/_authenticated/profile/')({
+  head: () => privatePage('Profile'),
   validateSearch: (search: Record<string, unknown>): { tab?: ProfileTab } =>
     search.tab === 'products' || search.tab === 'billing'
       ? { tab: search.tab }

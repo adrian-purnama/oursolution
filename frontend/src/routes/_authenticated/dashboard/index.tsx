@@ -11,8 +11,10 @@ import { apiFetch } from '#/lib/api'
 import type { Deployment } from '#/lib/deployment'
 import type { ProductSummary } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
+  head: () => privatePage('Dashboard'),
   component: DashboardPage,
 })
 

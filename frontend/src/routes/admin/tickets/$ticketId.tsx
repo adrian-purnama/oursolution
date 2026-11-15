@@ -2,8 +2,10 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import TicketDetail from '#/components/forms/ticket/TicketDetail'
 import { hintClassName } from '#/lib/ui-classes'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/admin/tickets/$ticketId')({
+  head: () => privatePage('Ticket · Admin'),
   component: AdminTicketPage,
 })
 

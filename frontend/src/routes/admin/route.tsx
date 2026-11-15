@@ -8,9 +8,11 @@ import {
 import { LifeBuoy, Package, Server, Settings, Users } from 'lucide-react'
 import { bootstrapAuth, isAdminUser } from '#/context/authContext'
 import { cn } from '#/lib/utils'
+import { privatePage } from '#/lib/seo'
 
 // This guard covers every page under /admin.
 export const Route = createFileRoute('/admin')({
+  head: () => privatePage('Admin'),
   ssr: false,
   beforeLoad: async ({ location }) => {
     const user = await bootstrapAuth()

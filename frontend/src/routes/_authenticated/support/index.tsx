@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import SupportForm from '#/components/forms/ticket/SupportForm'
 import { hintClassName } from '#/lib/ui-classes'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/_authenticated/support/')({
+  head: () => privatePage('Support'),
   component: SupportPage,
 })
 

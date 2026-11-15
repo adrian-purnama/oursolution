@@ -1,7 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import InvoiceDetail from '#/components/forms/billing/InvoiceDetail'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/_authenticated/billing/$paymentId')({
+  head: () => privatePage('Invoice'),
   component: InvoicePage,
 })
 

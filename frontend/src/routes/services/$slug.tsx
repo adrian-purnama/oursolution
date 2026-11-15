@@ -2,10 +2,30 @@ import { Link, createFileRoute, notFound } from '@tanstack/react-router'
 import ServiceDetail from '#/components/services/ServiceDetail'
 import { Button } from '#/components/ui/button'
 import { getService } from '#/lib/services'
+import { absoluteUrl, jsonLd, seo } from '#/lib/seo'
 
 export const Route = createFileRoute('/services/$slug')({
   beforeLoad: ({ params }) => {
     if (!getService(params.slug)) throw notFound()
+  },
+  head: ({ params }) => {
+    const service = getService(params.slug)
+    if (!service) return seo({ title: 'Service not found', noindex: true })
+    const path = `/services/${service.slug}`
+    const description = `${service.tagline} ${service.summary}`
+    return {
+      ...seo({ title: service.name, description, path }),
+      scripts: [
+        jsonLd({
+          '@context': 'https://schema.org',
+          '@type': 'Service',
+          name: service.name,
+          description,
+          url: absoluteUrl(path),
+          provider: { '@type': 'Organization', name: 'Our Solution' },
+        }),
+      ],
+    }
   },
   component: ServicePage,
   notFoundComponent: ServiceNotFound,

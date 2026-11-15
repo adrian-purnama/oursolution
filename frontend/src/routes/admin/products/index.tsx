@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import ProductsAdminForm from '#/components/forms/admin/ProductsAdminForm'
 import { hintClassName } from '#/lib/ui-classes'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/admin/products/')({
+  head: () => privatePage('Products · Admin'),
   component: AdminProductsPage,
 })
 

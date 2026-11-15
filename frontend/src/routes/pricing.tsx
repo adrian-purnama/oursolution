@@ -3,8 +3,22 @@ import { ArrowLeft } from 'lucide-react'
 import PricingGrid from '#/components/home/PricingGrid'
 import { useAuth } from '#/context/authContext'
 import { hintClassName } from '#/lib/ui-classes'
+import { seo } from '#/lib/seo'
 
 export const Route = createFileRoute('/pricing')({
+  head: () =>
+    seo({
+      title: 'Pricing',
+      description:
+        'Plans for managed hosting and ready-made workflows. Hosting runs by the period; workflows are yours after one purchase.',
+      path: '/pricing',
+      keywords: [
+        'managed hosting pricing',
+        'hosting plans',
+        'business workflows',
+        'Our Solution pricing',
+      ],
+    }),
   component: PricingPage,
 })
 

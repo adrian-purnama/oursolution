@@ -1,7 +1,9 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { bootstrapAuth } from '#/context/authContext'
+import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/_authenticated')({
+  head: () => privatePage('Your account'),
   ssr: false,
   beforeLoad: async ({ location }) => {
     const user = await bootstrapAuth()
