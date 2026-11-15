@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Check, ChevronsUpDown, LoaderCircle } from 'lucide-react'
+import { Check, ChevronsUpDown, LoaderCircle, Sparkles } from 'lucide-react'
 import { CharCount } from '#/components/forms/ticket/TicketParts'
 import { Button } from '#/components/ui/button'
 import {
@@ -126,7 +126,7 @@ export default function CloseTicketDialog({
       }}
     >
       <DialogContent
-        className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
         showCloseButton={!busy}
         onEscapeKeyDown={(event) => {
           if (busy) event.preventDefault()
@@ -191,45 +191,48 @@ export default function CloseTicketDialog({
           </p>
         ) : null}
 
-        <DialogFooter className="sm:items-start">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => void submit(false)}
-          >
-            {running === 'plain' ? (
-              <LoaderCircle className="animate-spin" aria-hidden />
-            ) : null}
-            Close ticket
-          </Button>
-          <div className="flex flex-col gap-1.5 sm:max-w-56">
+        <div className="space-y-2 border-t border-[var(--line)] pt-4">
+          <DialogFooter>
             <Button
               type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void submit(false)}
+            >
+              {running === 'plain' ? (
+                <LoaderCircle className="animate-spin" aria-hidden />
+              ) : null}
+              Close ticket
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               disabled={busy}
               onClick={() => void submit(true)}
             >
               {running === 'summary' ? (
                 <LoaderCircle className="animate-spin" aria-hidden />
-              ) : null}
+              ) : (
+                <Sparkles aria-hidden />
+              )}
               {running === 'summary'
                 ? 'Summarizing…'
                 : 'Close and replace thread with summary'}
             </Button>
-            <p className={`text-xs ${hintClassName}`}>
-              Permanently deletes all messages, photos and the resolution. Keeps
-              an AI-written summary.
-            </p>
-          </div>
-        </DialogFooter>
+          </DialogFooter>
+          <p className={`text-xs sm:text-right ${hintClassName}`}>
+            {running === 'summary'
+              ? 'Waiting for the AI summary. This can take up to half a minute.'
+              : 'Permanently deletes all messages, photos and the resolution. Keeps an AI-written summary.'}
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   )
