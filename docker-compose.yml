@@ -1,0 +1,37 @@
+# Dokploy: create a "Compose" service pointing at this repo (compose path
+# ./docker-compose.yml). Put the backend's variables (see backend/.env.example)
+# plus VITE_API_URL in the service's Environment tab; Dokploy writes them to
+# .env next to this file. Then add a domain per service under Domains:
+#   frontend -> port 3000, backend -> port 8000.
+# Nothing is published on the host; Traefik reaches the containers over
+# dokploy-network.
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 8000
+    expose:
+      - "8000"
+    networks:
+      - dokploy-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The backend's public URL, e.g. https://api.example.com
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
