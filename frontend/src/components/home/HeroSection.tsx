@@ -16,8 +16,9 @@ const ASSURANCES = [
 
 /**
  * Centered hero: the promise, two ways in, the three services by name, and
- * an example of the kind of system we deliver. Lines and blocks ease in once on load; with reduced
- * motion everything is simply there.
+ * a moving example of what we deliver. Lines and blocks ease in once on load
+ * and the backdrop keeps breathing; with reduced motion everything is simply
+ * there.
  */
 export default function HeroSection() {
   const root = useRef<HTMLElement>(null)
@@ -41,6 +42,25 @@ export default function HeroSection() {
             { opacity: 1, y: 0, duration: 0.8, stagger: 0.09 },
             '-=0.65',
           )
+
+        // The backdrop breathes: the accent grid glows and dims, and the
+        // light behind it swells and drifts a little.
+        gsap.to('[data-hero-grid-glow]', {
+          opacity: 1,
+          duration: 3.6,
+          ease: 'sine.inOut',
+          yoyo: true,
+          repeat: -1,
+        })
+        gsap.to('[data-hero-light]', {
+          x: 70,
+          scale: 1.12,
+          opacity: 0.6,
+          duration: 7,
+          ease: 'sine.inOut',
+          yoyo: true,
+          repeat: -1,
+        })
       })
     },
     { scope: root },
@@ -51,27 +71,25 @@ export default function HeroSection() {
       ref={root}
       className="relative overflow-hidden border-b border-[var(--line)] bg-white text-[var(--ink)]"
     >
-      {/* Backdrop: a faint grid that fades out, under a soft green light. */}
+      {/* Backdrop: a faint grid that fades out, under a soft accent light.
+          A second grid in the accent color sits on top and slowly glows and
+          dims, while the light behind it drifts. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_75%_65%_at_50%_0%,black,transparent)] bg-[linear-gradient(to_right,rgba(12,12,11,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(12,12,11,0.06)_1px,transparent_1px)] bg-[size:56px_56px]"
       />
       <div
         aria-hidden
+        data-hero-grid-glow
+        className="pointer-events-none absolute inset-0 opacity-30 [mask-image:radial-gradient(ellipse_55%_50%_at_50%_0%,black,transparent)] bg-[linear-gradient(to_right,color-mix(in_srgb,var(--accent)_32%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--accent)_32%,transparent)_1px,transparent_1px)] bg-[size:56px_56px]"
+      />
+      <div
+        aria-hidden
+        data-hero-light
         className="pointer-events-none absolute -top-56 left-1/2 h-[30rem] w-[56rem] max-w-none -translate-x-1/2 rounded-full bg-[var(--accent)]/15 blur-3xl"
       />
 
       <div className="relative mx-auto flex max-w-6xl flex-col items-center px-6 pt-16 text-center sm:pt-24">
-        <p
-          data-hero-fade
-          className="mb-7 inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/80 py-1 pr-3.5 pl-1.5 text-xs font-medium text-[var(--muted)] shadow-[0_1px_2px_rgba(12,12,11,0.04)] backdrop-blur-sm"
-        >
-          <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[11px] font-semibold text-white">
-            {BRAND_NAME}
-          </span>
-          Software, hosting and an AI chatbot
-        </p>
-
         <h1 className="font-display mb-6 max-w-4xl text-[clamp(2.5rem,6.6vw,5.25rem)] leading-[1.02]">
           <span className={lineMask}>
             <span data-hero-line className="block">
