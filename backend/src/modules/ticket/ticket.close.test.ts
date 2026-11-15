@@ -117,6 +117,7 @@ beforeEach(async () => {
   service = new TicketService({
     llm: new LlmService({
       baseUrl: llmBase,
+      apiKey: "test-key",
       model: "bonsai2",
       timeoutMs: 1_000,
       maxTokens: 512,

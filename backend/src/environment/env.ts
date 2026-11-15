@@ -232,8 +232,10 @@ export const env = {
   paymentTtlMinutes: Number(process.env.PAYMENT_TTL_MINUTES) || 60,
   // An OpenAI-compatible chat endpoint (base only; /v1/chat/completions is
   // appended). Optional: without it, tickets close without a summary.
-  llmBaseUrl: backendUrl(process.env.LLM_BASE_URL),
-  llmModel: process.env.LLM_MODEL?.trim() || "bonsai2",
+  llmBaseUrl:
+    backendUrl(process.env.LLM_BASE_URL) ?? "https://api.deepseek.com",
+  llmApiKey: process.env.DEEPSEEK_API_KEY?.trim() || null,
+  llmModel: process.env.LLM_MODEL?.trim() || "deepseek-chat",
   llmTimeoutMs: positiveInt(process.env.LLM_TIMEOUT_MS) ?? 30_000,
   llmMaxTokens: positiveInt(process.env.LLM_MAX_TOKENS) ?? 512,
 };

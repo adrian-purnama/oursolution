@@ -39,6 +39,8 @@ export class LlmError extends Error {
 export interface LlmServiceConfig {
   /** Without a trailing slash; null turns the service off (UNAVAILABLE). */
   baseUrl: string | null;
+  /** Sent as a Bearer token; null turns the service off (UNAVAILABLE). */
+  apiKey: string | null;
   model: string;
   timeoutMs: number;
   maxTokens: number;
@@ -61,8 +63,8 @@ function contentOf(body: unknown): string | null {
 }
 
 /**
- * One OpenAI-compatible chat completion: no streaming, no retries. Knows
- * nothing about what it is used for.
+ * One chat completion from DeepSeek (or any OpenAI-compatible API): no
+ * streaming, no retries. Knows nothing about what it is used for.
  */
 export class LlmService implements LlmClient {
   constructor(private readonly config: LlmServiceConfig) {}
@@ -84,9 +86,12 @@ export class LlmService implements LlmClient {
   }
 
   private async request(input: LlmChatInput): Promise<string> {
-    const { baseUrl, model } = this.config;
+    const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl) {
       throw new LlmError("UNAVAILABLE", "LLM_BASE_URL is not set");
+    }
+    if (!apiKey) {
+      throw new LlmError("UNAVAILABLE", "DEEPSEEK_API_KEY is not set");
     }
     const timeoutMs = input.timeoutMs ?? this.config.timeoutMs;
     const controller = new AbortController();
@@ -96,7 +101,10 @@ export class LlmService implements LlmClient {
       try {
         response = await fetch(`${baseUrl}${CHAT_PATH}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
           body: JSON.stringify({
             model,
             messages: input.messages,
@@ -112,6 +120,7 @@ export class LlmService implements LlmClient {
       }
       if (!response.ok) {
         // Drain so the connection can be reused; the body is not logged.
+        // 401 is a wrong key, 402 an empty DeepSeek balance.
         await response.body?.cancel().catch(() => undefined);
         throw new LlmError(
           "HTTP_ERROR",
@@ -149,6 +158,7 @@ export class LlmService implements LlmClient {
 
 export const llmService = new LlmService({
   baseUrl: env.llmBaseUrl,
+  apiKey: env.llmApiKey,
   model: env.llmModel,
   timeoutMs: env.llmTimeoutMs,
   maxTokens: env.llmMaxTokens,

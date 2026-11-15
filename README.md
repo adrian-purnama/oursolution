@@ -256,22 +256,24 @@ the status menu opens it), which calls
   thread where the ticket was closed (product for admins only), rendered
   as text only.
 
-LLM environment (backend `.env`), an OpenAI-compatible chat endpoint:
+LLM environment (backend `.env`). Summaries come from DeepSeek, so the
+ticket's messages are sent to DeepSeek's API:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `LLM_BASE_URL` | unset | Base URL, e.g. `http://localhost:8080`; `/v1/chat/completions` is appended. Unset: summaries are off and tickets close without one. |
-| `LLM_MODEL` | `bonsai2` | The `model` sent with each request. |
+| `DEEPSEEK_API_KEY` | unset | Sent as `Authorization: Bearer`. Unset: summaries are off and tickets close without one. |
+| `LLM_BASE_URL` | `https://api.deepseek.com` | Any OpenAI-compatible API; `/v1/chat/completions` is appended. |
+| `LLM_MODEL` | `deepseek-chat` | The `model` sent with each request. |
 | `LLM_TIMEOUT_MS` | `30000` | The request is aborted after this. |
 | `LLM_MAX_TOKENS` | `512` | Sent as `max_tokens`. |
 
-No API key is sent. `modules/llm/llm.service.ts` (`llmService.chat`) is
-generic: one request, no retries, a typed `LlmError` (`UNAVAILABLE`,
-`TIMEOUT`, `HTTP_ERROR`, `BAD_RESPONSE`, `EMPTY`), and logs only the outcome
-and duration, never text.
+`modules/llm/llm.service.ts` (`llmService.chat`) is generic: one request,
+no retries, a typed `LlmError` (`UNAVAILABLE`, `TIMEOUT`, `HTTP_ERROR`,
+`BAD_RESPONSE`, `EMPTY`), and logs only the outcome and duration, never
+text or the key. A wrong key is HTTP 401, an empty DeepSeek balance 402.
 
-To try it: set `LLM_BASE_URL` to a running server, check it with
-`curl $LLM_BASE_URL/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"bonsai2","messages":[{"role":"user","content":"hi"}],"max_tokens":16}'`,
+To try it: set `DEEPSEEK_API_KEY`, check it with
+`curl https://api.deepseek.com/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $DEEPSEEK_API_KEY" -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"hi"}],"max_tokens":16}'`,
 restart the backend, open a ticket with a photo and a few messages, then
 close it from `/admin/tickets/<id>` with **Close and replace thread with
 summary**. `npm test` covers it in `modules/llm/llm.service.test.ts` (a

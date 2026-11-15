@@ -12,7 +12,13 @@ type Handler = (
 let server: Server;
 let base: string;
 let handler: Handler;
-let seen: { method?: string; url?: string; type?: string; body: string }[];
+let seen: {
+  method?: string;
+  url?: string;
+  type?: string;
+  auth?: string;
+  body: string;
+}[];
 
 before(async () => {
   server = createServer((req, res) => {
@@ -23,6 +29,7 @@ before(async () => {
         method: req.method,
         url: req.url,
         type: req.headers["content-type"],
+        auth: req.headers.authorization,
         body: raw,
       });
       const reply = handler(req, raw);
@@ -59,11 +66,16 @@ function completion(content: unknown): string {
 }
 
 function service(
-  overrides: Partial<{ baseUrl: string | null; timeoutMs: number }> = {},
+  overrides: Partial<{
+    baseUrl: string | null;
+    apiKey: string | null;
+    timeoutMs: number;
+  }> = {},
 ) {
   return new LlmService({
     baseUrl: base,
-    model: "bonsai2",
+    apiKey: "test-key",
+    model: "deepseek-chat",
     timeoutMs: 2_000,
     maxTokens: 512,
     ...overrides,
@@ -88,8 +100,9 @@ describe("llmService.chat", () => {
     assert.equal(seen[0]!.method, "POST");
     assert.equal(seen[0]!.url, "/v1/chat/completions");
     assert.match(seen[0]!.type ?? "", /application\/json/);
+    assert.equal(seen[0]!.auth, "Bearer test-key");
     assert.deepEqual(JSON.parse(seen[0]!.body), {
-      model: "bonsai2",
+      model: "deepseek-chat",
       messages,
       max_tokens: 64,
     });
@@ -132,6 +145,25 @@ describe("llmService.chat", () => {
       "UNAVAILABLE",
     );
     assert.equal(seen.length, 0);
+  });
+
+  it("is unavailable without an API key, without calling anything", async () => {
+    await failsWith(
+      service({ apiKey: null }).chat({ messages }),
+      "UNAVAILABLE",
+    );
+    assert.equal(seen.length, 0);
+  });
+
+  it("never puts the API key in the error", async () => {
+    handler = () => ({
+      status: 401,
+      body: JSON.stringify({ key: "test-key" }),
+    });
+    await assert.rejects(service().chat({ messages }), (error: Error) => {
+      assert.doesNotMatch(error.message, /test-key/);
+      return true;
+    });
   });
 
   it("is unavailable when nothing listens", async () => {
