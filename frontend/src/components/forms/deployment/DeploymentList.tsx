@@ -9,6 +9,7 @@ import {
   StateBadge,
 } from '#/components/forms/deployment/ServiceStatus'
 import { Button } from '#/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { apiFetch } from '#/lib/api'
 import ExpiryNotice from '#/components/forms/deployment/ExpiryNotice'
 import {
@@ -241,6 +242,80 @@ export default function DeploymentList({
     )
   }
 
+  const expired = admin
+    ? []
+    : deployments.filter((item) => expiryOf(item)?.kind === 'expired')
+  if (expired.length === 0) {
+    return (
+      <Overview deployments={deployments} onSelect={onSelect} admin={admin} />
+    )
+  }
+  const active = deployments.filter((item) => !expired.includes(item))
+
+  return (
+    <Tabs defaultValue="active">
+      <TabsList className="mb-4">
+        <TabsTrigger value="active">
+          Active
+          <span className="text-[var(--muted)]">{active.length}</span>
+        </TabsTrigger>
+        <TabsTrigger value="expired">
+          Expired
+          <span className="text-[var(--muted)]">{expired.length}</span>
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="active">
+        {active.length > 0 ? (
+          <Overview deployments={active} onSelect={onSelect} admin={admin} />
+        ) : (
+          <div className={`${cardClassName} px-5 py-10 text-center`}>
+            <p className="font-medium">No active services</p>
+            <p className={`mt-1 ${hintClassName}`}>
+              Your expired services are in the Expired tab. Extend one to turn
+              it back on.
+            </p>
+          </div>
+        )}
+      </TabsContent>
+      <TabsContent value="expired" className="space-y-3">
+        <p className={`text-sm ${hintClassName}`}>
+          These are off. Your data is kept; extend a subscription to turn its
+          service back on.
+        </p>
+        <ServiceGrid deployments={expired} onSelect={onSelect} />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function ServiceGrid({
+  deployments,
+  onSelect,
+}: {
+  deployments: Deployment[]
+  onSelect?: (productId: string) => void
+}) {
+  return (
+    <ul className="grid gap-4 sm:grid-cols-2">
+      {deployments.map((deployment) => (
+        <li key={deployment.product.id}>
+          <ServiceCard deployment={deployment} onSelect={onSelect} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Stats, the ending-soon reminder, and the cards. */
+function Overview({
+  deployments,
+  onSelect,
+  admin,
+}: {
+  deployments: Deployment[]
+  onSelect?: (productId: string) => void
+  admin: boolean
+}) {
   const running = deployments.filter((item) => item.state === 'running').length
   const uptimes = deployments
     .flatMap((item) => item.status)
@@ -283,13 +358,7 @@ export default function DeploymentList({
         </Stat>
       </dl>
 
-      <ul className="grid gap-4 sm:grid-cols-2">
-        {deployments.map((deployment) => (
-          <li key={deployment.product.id}>
-            <ServiceCard deployment={deployment} onSelect={onSelect} />
-          </li>
-        ))}
-      </ul>
+      <ServiceGrid deployments={deployments} onSelect={onSelect} />
     </div>
   )
 }
