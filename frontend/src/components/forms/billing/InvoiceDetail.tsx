@@ -197,7 +197,7 @@ export default function InvoiceDetail({
   const payHere = !admin && payment.status === 'pending'
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       {admin ? null : (
         <Link
           to="/profile"
@@ -209,10 +209,10 @@ export default function InvoiceDetail({
         </Link>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-2xl text-[var(--ink)]">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="font-display text-xl text-[var(--ink)] sm:text-2xl">
               {payment.invoiceNumber}
             </h2>
             <PaymentStatusBadge status={payment.status} />
@@ -221,7 +221,7 @@ export default function InvoiceDetail({
             {metaLine(payment)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
           {admin ? (
             <Button
               type="button"
@@ -240,6 +240,8 @@ export default function InvoiceDetail({
             type="button"
             variant="outline"
             disabled={downloading}
+            aria-label="Download invoice PDF"
+            className="size-9 px-0 sm:size-auto sm:px-4"
             onClick={() => void download(payment)}
           >
             {downloading ? (
@@ -247,7 +249,7 @@ export default function InvoiceDetail({
             ) : (
               <Download className="size-4" aria-hidden />
             )}
-            Invoice PDF
+            <span className="hidden sm:inline">Invoice PDF</span>
           </Button>
         </div>
       </div>
@@ -263,33 +265,24 @@ export default function InvoiceDetail({
 
       <div
         className={cn(
-          'grid gap-8',
+          'grid gap-5 sm:gap-8',
           payHere && 'lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start',
         )}
       >
-        <div className="space-y-5">
-          {payHere ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="flex items-center gap-2 text-sm text-[var(--ink)]">
-                <LoaderCircle
-                  className="size-4 animate-spin text-amber-600"
-                  aria-hidden
-                />
-                Waiting for your payment
-              </p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-[var(--muted)]"
-                onClick={() => setConfirmCancel(true)}
-              >
-                Cancel invoice
-              </Button>
-            </div>
-          ) : null}
-
+        <div className="space-y-4 sm:space-y-5">
           <ItemsTable payment={payment} />
+
+          {payHere ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-3 text-[var(--muted)]"
+              onClick={() => setConfirmCancel(true)}
+            >
+              Cancel invoice
+            </Button>
+          ) : null}
 
           {!admin && payment.status === 'paid' ? (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--muted)]">
@@ -327,8 +320,17 @@ export default function InvoiceDetail({
         {payHere ? (
           <section
             aria-label="Pay"
-            className="overflow-hidden rounded-xl border border-[var(--line)] bg-white"
+            className="order-first overflow-hidden rounded-xl border border-[var(--line)] bg-white lg:order-none"
           >
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
+              <p className="text-sm font-medium text-[var(--ink)]">
+                Pay {formatIdr(payment.amountIdr)}
+              </p>
+              <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                Waiting for payment
+              </p>
+            </div>
             {payment.snapToken || payment.redirectUrl ? (
               <SnapEmbed
                 token={payment.snapToken}
@@ -383,8 +385,12 @@ function ItemsTable({ payment }: { payment: Payment }) {
         <TableHeader>
           <TableRow>
             <TableHead>Item</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Unit price</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">
+              Qty
+            </TableHead>
+            <TableHead className="hidden text-right sm:table-cell">
+              Unit price
+            </TableHead>
             <TableHead className="text-right">Amount</TableHead>
           </TableRow>
         </TableHeader>
@@ -400,19 +406,24 @@ function ItemsTable({ payment }: { payment: Payment }) {
                       : periodLabel(item.quantity, item.durationDays)}
                   </p>
                 )}
+                {item.quantity > 1 ? (
+                  <p className="text-xs text-[var(--muted)] tabular-nums sm:hidden">
+                    {item.quantity} × {formatIdr(item.unitPriceIdr)}
+                  </p>
+                ) : null}
                 {item.description ? (
                   <p className="mt-0.5 max-w-md text-xs whitespace-pre-line text-[var(--muted)]">
                     {item.description}
                   </p>
                 ) : null}
               </TableCell>
-              <TableCell className="text-right tabular-nums">
+              <TableCell className="hidden text-right tabular-nums sm:table-cell">
                 {item.quantity}
               </TableCell>
-              <TableCell className="text-right tabular-nums">
+              <TableCell className="hidden text-right tabular-nums sm:table-cell">
                 {formatIdr(item.unitPriceIdr)}
               </TableCell>
-              <TableCell className="text-right tabular-nums">
+              <TableCell className="text-right align-top tabular-nums">
                 {formatIdr(item.amountIdr)}
               </TableCell>
             </TableRow>
@@ -420,9 +431,8 @@ function ItemsTable({ payment }: { payment: Payment }) {
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={3} className="text-right font-medium">
-              Total
-            </TableCell>
+            <TableCell colSpan={2} className="hidden sm:table-cell" />
+            <TableCell className="text-right font-medium">Total</TableCell>
             <TableCell className="text-right font-semibold tabular-nums">
               {formatIdr(payment.amountIdr)}
             </TableCell>
