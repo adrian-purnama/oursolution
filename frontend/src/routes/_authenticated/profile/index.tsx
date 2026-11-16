@@ -22,7 +22,7 @@ function ProfilePage() {
   const navigate = useNavigate({ from: Route.fullPath })
 
   return (
-    <main className="mx-auto mt-8 mb-12 w-full max-w-4xl px-6 py-10 text-[var(--ink)] sm:mt-12">
+    <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-4xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
       <h1 className="mb-6 text-2xl font-medium">Profile</h1>
       <UnpaidNotice className="mb-6" />
       <Tabs

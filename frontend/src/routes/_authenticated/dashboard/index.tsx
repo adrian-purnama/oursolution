@@ -72,8 +72,8 @@ function DashboardPage() {
   const deployableIds = useDeployableIds()
 
   return (
-    <main className="mx-auto mt-8 mb-12 w-full max-w-4xl px-6 py-10 text-[var(--ink)] sm:mt-12">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-4xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
         <div className="min-w-0">
           <h1 className="text-2xl font-medium tracking-tight">Dashboard</h1>
           {user ? (
@@ -103,7 +103,7 @@ function DashboardPage() {
           <h2 className="text-sm font-medium">Everything you have</h2>
           <ul className="flex flex-wrap gap-1.5">
             {user.products.map((product) => (
-              <li key={product.id}>
+              <li key={product.id} className="max-w-full min-w-0">
                 <OwnedProductLink
                   product={product}
                   deployable={deployableIds.has(product.id)}

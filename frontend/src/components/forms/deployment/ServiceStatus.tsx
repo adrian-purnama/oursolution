@@ -87,9 +87,13 @@ export function Stat({
   className?: string
 }) {
   return (
-    <div className={cn('bg-white px-5 py-4', className)}>
-      <dt className="text-xs text-[var(--muted)]">{label}</dt>
-      <dd className="mt-1 truncate text-lg font-medium tracking-tight tabular-nums">
+    <div
+      className={cn('min-w-0 bg-white px-3 py-3 sm:px-5 sm:py-4', className)}
+    >
+      <dt className="text-[11px] leading-tight text-[var(--muted)] sm:text-xs">
+        {label}
+      </dt>
+      <dd className="mt-1 truncate text-base font-medium tracking-tight tabular-nums sm:text-lg">
         {children}
       </dd>
     </div>

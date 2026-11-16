@@ -50,7 +50,7 @@ function quietLine(deployment: Deployment): string {
   }
 }
 
-const CARD_CLASS = `${cardClassName} group flex h-full w-full flex-col gap-4 p-5 text-left text-[var(--ink)] no-underline transition hover:border-[var(--ink)]`
+const CARD_CLASS = `${cardClassName} group flex h-full w-full flex-col gap-4 p-4 text-left sm:p-5 text-[var(--ink)] no-underline transition hover:border-[var(--ink)]`
 
 /** The customer's own page, or (admin) a click that opens it in place. */
 function CardShell({
@@ -296,9 +296,9 @@ function ServiceGrid({
   onSelect?: (productId: string) => void
 }) {
   return (
-    <ul className="grid gap-4 sm:grid-cols-2">
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
       {deployments.map((deployment) => (
-        <li key={deployment.product.id}>
+        <li key={deployment.product.id} className="min-w-0">
           <ServiceCard deployment={deployment} onSelect={onSelect} />
         </li>
       ))}
@@ -326,7 +326,7 @@ function Overview({
     <div className="space-y-4">
       {admin ? null : <ExpiryNotice deployments={deployments} />}
       <dl
-        className={`${cardClassName} grid grid-cols-1 gap-px overflow-hidden bg-[var(--line)] sm:grid-cols-3`}
+        className={`${cardClassName} grid grid-cols-3 gap-px overflow-hidden bg-[var(--line)]`}
       >
         <Stat label="Running">
           {running}
@@ -349,7 +349,7 @@ function Overview({
           ) : (
             <span>
               0
-              <span className="text-sm font-normal text-[var(--muted)]">
+              <span className="hidden text-sm font-normal text-[var(--muted)] sm:inline">
                 {' '}
                 all good
               </span>

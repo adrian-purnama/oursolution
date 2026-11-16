@@ -12,7 +12,7 @@ export const Route = createFileRoute('/_authenticated/support/$ticketId')({
 function SupportTicketPage() {
   const { ticketId } = Route.useParams()
   return (
-    <main className="mx-auto mt-8 mb-12 w-full max-w-3xl px-6 py-10 text-[var(--ink)] sm:mt-12">
+    <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-3xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
       <Link
         to="/support"
         className={`mb-6 inline-flex items-center gap-1.5 no-underline hover:text-[var(--ink)] ${hintClassName}`}
