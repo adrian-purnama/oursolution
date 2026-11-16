@@ -20,9 +20,9 @@ type State =
   | { status: 'error' }
   | { status: 'ready'; products: PricingProduct[] }
 
-/** Compact cards, up to four a row, so most of the shop fits on one screen. */
+/** Compact cards, two a row on phones and up to four on wide screens. */
 const gridClassName =
-  'grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+  'grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4'
 
 const GROUPS = [
   {
@@ -156,7 +156,7 @@ function ProductCard({ product }: { product: PricingProduct }) {
   return (
     <li
       className={cn(
-        'group flex flex-col overflow-hidden rounded-lg border bg-white transition',
+        'group flex min-w-0 flex-col overflow-hidden rounded-lg border bg-white transition',
         isActive
           ? 'border-[var(--ink)]/25 shadow-[0_1px_2px_rgba(12,12,11,0.05)]'
           : 'border-[var(--line)] hover:border-[var(--ink)]/20 hover:shadow-[0_8px_24px_-12px_rgba(12,12,11,0.15)]',
@@ -174,7 +174,7 @@ function ProductCard({ product }: { product: PricingProduct }) {
         />
       </Link>
 
-      <div className="flex flex-1 flex-col p-3.5">
+      <div className="flex flex-1 flex-col p-3 sm:p-3.5">
         <h3 className="text-sm leading-snug font-semibold text-[var(--ink)]">
           <Link {...page} className="text-inherit no-underline hover:underline">
             {product.name}
@@ -187,7 +187,7 @@ function ProductCard({ product }: { product: PricingProduct }) {
         ) : null}
 
         <div className="mt-3 mb-3 flex flex-wrap items-baseline gap-x-1.5">
-          <p className="font-display text-lg leading-tight text-[var(--ink)]">
+          <p className="font-display text-base leading-tight sm:text-lg text-[var(--ink)]">
             {product.pricingText || 'Contact us'}
           </p>
           <p className="text-xs text-[var(--muted)]">
@@ -197,9 +197,18 @@ function ProductCard({ product }: { product: PricingProduct }) {
           </p>
         </div>
 
-        <div className="mt-auto flex gap-1.5">
-          <CheckoutButton product={product} size="sm" className="flex-1" />
-          <Button asChild variant="ghost" size="sm">
+        <div className="mt-auto flex flex-wrap gap-1.5 min-[400px]:flex-nowrap">
+          <CheckoutButton
+            product={product}
+            size="sm"
+            className="flex-1 basis-full min-[400px]:basis-0"
+          />
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="flex-1 min-[400px]:flex-none"
+          >
             <Link {...page}>Details</Link>
           </Button>
         </div>

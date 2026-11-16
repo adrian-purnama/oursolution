@@ -26,7 +26,7 @@ function PricingPage() {
     <main className="text-[var(--ink)]">
       <PricingHero />
 
-      <div className="mx-auto max-w-6xl px-6 py-14 sm:py-16">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
         <PricingGrid />
       </div>
     </main>
