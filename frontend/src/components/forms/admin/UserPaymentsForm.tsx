@@ -57,9 +57,7 @@ export default function UserPaymentsForm({ userId }: { userId: string }) {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium">Payments</h2>
-          <p className={hintClassName}>
-            Checkouts and invoices.
-          </p>
+          <p className={hintClassName}>Checkouts and invoices.</p>
         </div>
         <Button type="button" onClick={() => setCreating(true)}>
           <Plus className="size-4" aria-hidden />

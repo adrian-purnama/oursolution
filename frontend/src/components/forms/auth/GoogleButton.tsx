@@ -37,12 +37,14 @@ export default function GoogleButton({
   rememberMe = false,
   redirect,
   className = 'w-full',
+  disabled = false,
 }: {
   label: string
   mode: GoogleIntent['mode']
   rememberMe?: boolean
   redirect?: string
   className?: string
+  disabled?: boolean
 }) {
   const [starting, setStarting] = useState(false)
 
@@ -59,7 +61,7 @@ export default function GoogleButton({
     <Button
       type="button"
       variant="outline"
-      disabled={starting}
+      disabled={starting || disabled}
       onClick={() => void handleClick()}
       className={cn('border-[var(--line)]', className)}
     >

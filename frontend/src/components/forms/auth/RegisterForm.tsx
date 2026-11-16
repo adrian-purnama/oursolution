@@ -4,9 +4,11 @@ import type { FormEvent } from 'react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import GoogleButton from '#/components/forms/auth/GoogleButton'
+import PasswordChecklist from '#/components/forms/shared/PasswordChecklist'
 import PasswordInput from '#/components/forms/shared/PasswordInput'
+import { Checkbox } from '#/components/ui/checkbox'
 import { apiFetch } from '#/lib/api'
-import { MIN_PASSWORD_LENGTH } from '#/lib/password'
+import { passwordProblem } from '#/lib/password'
 import { useAuth } from '#/context/authContext'
 import { safeRedirect } from '#/lib/redirect'
 import {
@@ -34,6 +36,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
   const [otpSent, setOtpSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sendingOtp, setSendingOtp] = useState(false)
+  const [agreed, setAgreed] = useState(false)
 
   async function sendOtp() {
     if (!email.trim()) {
@@ -76,13 +79,19 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
       return
     }
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    const problem = passwordProblem(password)
+    if (problem) {
+      toast.error(problem)
       return
     }
 
     if (password !== confirmPassword) {
       toast.error('Passwords do not match')
+      return
+    }
+
+    if (!agreed) {
+      toast.error('Please agree to the terms of service and privacy policy')
       return
     }
 
@@ -191,6 +200,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
             value={password}
             onChange={setPassword}
           />
+          <PasswordChecklist id="register-password-rules" password={password} />
         </div>
 
         <div className="w-full">
@@ -206,12 +216,48 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
             value={confirmPassword}
             onChange={setConfirmPassword}
           />
+          {confirmPassword && confirmPassword !== password ? (
+            <p className="mt-1 text-xs text-[var(--destructive)]">
+              Passwords do not match
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex items-start gap-2.5">
+          <Checkbox
+            id="register-terms"
+            checked={agreed}
+            onCheckedChange={(checked) => setAgreed(checked === true)}
+            className="mt-0.5"
+          />
+          <label
+            htmlFor="register-terms"
+            className="text-sm leading-snug text-[var(--muted)]"
+          >
+            I agree to the{' '}
+            <Link
+              to="/terms"
+              target="_blank"
+              className="text-[var(--ink)] underline"
+            >
+              terms of service
+            </Link>{' '}
+            and{' '}
+            <Link
+              to="/privacy"
+              target="_blank"
+              className="text-[var(--ink)] underline"
+            >
+              privacy policy
+            </Link>
+            .
+          </label>
         </div>
 
         <button
           type="submit"
-          disabled={loading}
-          className={buttonClassNameFull}
+          disabled={loading || !agreed}
+          className={`${buttonClassNameFull} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           {loading ? 'Creating account…' : 'Register'}
         </button>
@@ -226,7 +272,13 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
         label="Sign up with Google"
         mode="signin"
         redirect={redirect}
+        disabled={!agreed}
       />
+      {!agreed ? (
+        <p className={`mt-2 text-center text-xs ${hintClassName}`}>
+          Tick the box above to agree to the terms first.
+        </p>
+      ) : null}
 
       <p className={`mt-6 ${hintClassName}`}>
         Already have an account?{' '}

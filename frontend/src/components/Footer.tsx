@@ -7,7 +7,15 @@ import type { ServiceSlug } from '#/lib/services'
 type FooterLink =
   | {
       label: string
-      to: '/' | '/services' | '/pricing' | '/contact' | '/login' | '/register'
+      to:
+        | '/'
+        | '/services'
+        | '/pricing'
+        | '/contact'
+        | '/login'
+        | '/register'
+        | '/privacy'
+        | '/terms'
     }
   | { label: string; slug: ServiceSlug }
   | { label: string; href: string }
@@ -27,6 +35,8 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: 'All services', to: '/services' },
       { label: 'Shop', to: '/pricing' },
       { label: 'Contact', to: '/contact' },
+      { label: 'Privacy policy', to: '/privacy' },
+      { label: 'Terms of service', to: '/terms' },
     ],
   },
   {

@@ -9,7 +9,7 @@ import { mailer } from "../mail/mail.service";
 import { OtpService } from "../otp/otp.service";
 import { AuthService } from "./auth.service";
 
-const PASSWORD = "correct-horse-battery";
+const PASSWORD = "Correct-horse-9";
 const HASH = bcrypt.hashSync(PASSWORD, 4);
 
 function otpStub(valid = true): OtpService {
@@ -117,7 +117,7 @@ describe("AuthService.register", () => {
           otp: "123456",
           password: "short",
         }),
-      /at least 8/,
+      /at least 8 characters/,
     );
     assert.equal(consume.mock.callCount(), 0);
   });

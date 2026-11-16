@@ -4,7 +4,8 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import PasswordInput from '#/components/forms/shared/PasswordInput'
 import { apiFetch } from '#/lib/api'
-import { MIN_PASSWORD_LENGTH } from '#/lib/password'
+import PasswordChecklist from '#/components/forms/shared/PasswordChecklist'
+import { passwordProblem } from '#/lib/password'
 import { decodeResetToken } from '#/lib/reset-token'
 import {
   buttonClassNameFull,
@@ -39,13 +40,9 @@ export default function ResetPasswordForm() {
       return
     }
 
-    if (!password) {
-      toast.error('Password is required')
-      return
-    }
-
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    const problem = passwordProblem(password)
+    if (problem) {
+      toast.error(problem)
       return
     }
 
@@ -151,6 +148,7 @@ export default function ResetPasswordForm() {
             value={password}
             onChange={setPassword}
           />
+          <PasswordChecklist password={password} />
         </div>
 
         <div className="w-full">

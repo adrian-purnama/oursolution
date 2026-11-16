@@ -23,8 +23,8 @@ import {
 import { USER_ROLE_LABELS } from '#/lib/adminUser'
 import type { AdminUser, UserRole } from '#/lib/adminUser'
 import { apiFetch } from '#/lib/api'
-import { MIN_PASSWORD_LENGTH } from '#/lib/password'
-import { hintClassName } from '#/lib/ui-classes'
+import PasswordChecklist from '#/components/forms/shared/PasswordChecklist'
+import { passwordProblem } from '#/lib/password'
 
 /**
  * Admin: make an account directly, without the sign-up email code. Works
@@ -57,8 +57,9 @@ export default function CreateUserDialog({
       toast.error('Enter an email')
       return
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    const problem = passwordProblem(password)
+    if (problem) {
+      toast.error(problem)
       return
     }
     setSaving(true)
@@ -114,9 +115,7 @@ export default function CreateUserDialog({
               onChange={setPassword}
               autoComplete="new-password"
             />
-            <p className={`text-xs ${hintClassName}`}>
-              At least {MIN_PASSWORD_LENGTH} characters.
-            </p>
+            <PasswordChecklist password={password} className="mt-0" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-user-role">Role</Label>

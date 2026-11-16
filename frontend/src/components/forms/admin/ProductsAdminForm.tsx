@@ -314,7 +314,8 @@ export default function ProductsAdminForm() {
           <DialogHeader>
             <DialogTitle>Remove {purging?.name} for good?</DialogTitle>
             <DialogDescription>
-              This cannot be undone. Products with payment history stay deleted instead.
+              This cannot be undone. Products with payment history stay deleted
+              instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   ArrowRight,
   ChevronDown,
+  FileText,
   House,
   LayoutDashboard,
   LifeBuoy,
@@ -361,6 +362,28 @@ export default function Header() {
                         </span>
                       ) : null}
                     </Link>
+                    <Link
+                      to="/privacy"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <ShieldCheck className="size-5" aria-hidden />
+                      Privacy policy
+                    </Link>
+                    <Link
+                      to="/terms"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <FileText className="size-5" aria-hidden />
+                      Terms of service
+                    </Link>
                   </>
                 ) : null}
                 <Link
@@ -522,6 +545,10 @@ function DashboardMenu({
       unread: unreadTickets,
     },
   ]
+  const legal = [
+    { to: '/privacy' as const, label: 'Privacy policy', icon: ShieldCheck },
+    { to: '/terms' as const, label: 'Terms of service', icon: FileText },
+  ]
   const current = items.find((item) =>
     item.to === '/' ? pathname === '/' : pathname.startsWith(item.to),
   )
@@ -593,6 +620,22 @@ function DashboardMenu({
                   {hint}
                 </span>
               </span>
+            </Link>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator className="my-2" />
+        {legal.map(({ to, label, icon: Icon }) => (
+          <DropdownMenuItem
+            key={to}
+            asChild
+            className="cursor-pointer rounded-xl p-0"
+          >
+            <Link
+              to={to}
+              className="flex items-center gap-3 px-3 py-2 text-sm text-[var(--muted)] no-underline hover:text-[var(--ink)]"
+            >
+              <Icon className="size-4 shrink-0" aria-hidden />
+              {label}
             </Link>
           </DropdownMenuItem>
         ))}

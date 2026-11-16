@@ -14,7 +14,8 @@ import { useAuth } from '#/context/authContext'
 import type { AdminUser, AdminUserDetail, UserRole } from '#/lib/adminUser'
 import { USER_ROLE_LABELS } from '#/lib/adminUser'
 import { apiFetch } from '#/lib/api'
-import { MIN_PASSWORD_LENGTH } from '#/lib/password'
+import PasswordChecklist from '#/components/forms/shared/PasswordChecklist'
+import { passwordProblem } from '#/lib/password'
 import { buttonClassName, hintClassName } from '#/lib/ui-classes'
 
 type UserPatch = {
@@ -66,8 +67,9 @@ export default function UserDetailForm({ userId }: { userId: string }) {
     event.preventDefault()
     if (!detail) return
 
-    if (password && password.length < MIN_PASSWORD_LENGTH) {
-      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    const problem = password ? passwordProblem(password) : null
+    if (problem) {
+      toast.error(problem)
       return
     }
 
@@ -184,9 +186,9 @@ export default function UserDetailForm({ userId }: { userId: string }) {
               placeholder="Leave blank to keep the current password"
               autoComplete="new-password"
             />
+            {password ? <PasswordChecklist password={password} /> : null}
             <p className={`mt-1.5 text-xs ${hintClassName}`}>
-              At least {MIN_PASSWORD_LENGTH} characters. Setting one signs the
-              user out everywhere.
+              Setting one signs the user out everywhere.
             </p>
           </div>
 

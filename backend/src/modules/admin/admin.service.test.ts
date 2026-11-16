@@ -76,7 +76,7 @@ describe("AdminService.updateUser", () => {
 
     const changed = fakeUser({ role: "user" });
     mockUser(changed, 1);
-    await new AdminService().updateUser(ID, { password: "a-new-password" });
+    await new AdminService().updateUser(ID, { password: "A-new-password1" });
     assert.equal(changed.tokenVersion, 1);
   });
 });
@@ -92,7 +92,7 @@ describe("AdminService.createUser", () => {
     });
     const out = await new AdminService().createUser({
       email: "new@b.com",
-      password: "password123",
+      password: "Password-123",
       role: "user",
     });
     assert.deepEqual(out, {
@@ -101,7 +101,7 @@ describe("AdminService.createUser", () => {
       isBlocked: false,
       role: "user",
     });
-    assert.notEqual(created[0]?.hashedPassword, "password123");
+    assert.notEqual(created[0]?.hashedPassword, "Password-123");
   });
 
   it("reports an email that is already taken", async () => {
@@ -111,7 +111,7 @@ describe("AdminService.createUser", () => {
     await assert.rejects(
       new AdminService().createUser({
         email: "a@b.com",
-        password: "password123",
+        password: "Password-123",
         role: "user",
       }),
       /Email already registered/,
