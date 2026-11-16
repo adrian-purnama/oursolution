@@ -73,11 +73,11 @@ export const SERVICES: Service[] = [
         title: 'Custom web apps',
         body: 'Dashboards, portals and internal tools built around how you work.',
       },
-      {
-        icon: Smartphone,
-        title: 'Mobile apps',
-        body: 'Apps for your customers or your field team, on iOS and Android.',
-      },
+      // {
+      //   icon: Smartphone,
+      //   title: 'Mobile apps',
+      //   body: 'Apps for your customers or your field team, on iOS and Android.',
+      // },
       {
         icon: Workflow,
         title: 'Process digitalization',
@@ -203,8 +203,8 @@ export const SERVICES: Service[] = [
     summary:
       'An AI assistant you embed on your site with one script tag. It answers visitors from your own knowledge.',
     icon: MessageCircle,
-    logo: '/answr-logo-dark.svg',
-    wordmark: 'answr',
+    logo: '/answr-full.png',
+    wordmark: '',
     points: [
       'Answers from your own knowledge',
       'Added to your site with one script tag',

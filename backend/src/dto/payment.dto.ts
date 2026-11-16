@@ -126,6 +126,17 @@ export interface PaymentListOutDto {
   total: number;
 }
 
+/** Admin: every payment, with how many fall in each status group. */
+export interface AdminPaymentListOutDto extends PaymentListOutDto {
+  counts: {
+    all: number;
+    paid: number;
+    pending: number;
+    closed: number;
+    refunded: number;
+  };
+}
+
 /** What the browser needs to show the payment form inline. */
 export interface PaymentConfigOutDto {
   provider: string | null;

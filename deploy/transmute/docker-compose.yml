@@ -1,0 +1,52 @@
+# Transmute (file converter) hosting — one stack per customer, deployed by
+# Dokploy.
+#
+# Product settings: deploy/transmute/product.json
+# Data: /mnt/nas-sda/transmute/<username>/ (accounts, settings and the
+# converted files the customer keeps).
+
+services:
+  transmute:
+    image: ghcr.io/transmute-app/transmute:v2.1.1
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      - APP_URL=https://convert-${USERNAME}.${DOMAIN}
+      # AUTH_SECRET_KEY is left unset on purpose: Transmute makes a random
+      # one at each start (customers sign in again after a restart).
+      - AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=720
+      # Nobody converts without an account.
+      - ALLOW_UNAUTHENTICATED=false
+      # Uploads above 50 MB go in pieces, under Cloudflare's 100 MB limit.
+      - MAX_CHUNK_SIZE=52428800
+      # Fewer parallel jobs, to stay inside the CPU and memory limits.
+      - CONVERSION_WORKER_CONCURRENCY=2
+      - COMPRESSION_WORKER_CONCURRENCY=2
+    expose:
+      - "3313"
+    volumes:
+      - /mnt/nas-sda/transmute/${USERNAME}/data:/app/data
+      # Work files of running conversions, on the NAS rather than in memory.
+      - /mnt/nas-sda/transmute/${USERNAME}/tmp:/tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--tries=1", "http://127.0.0.1:3313/api/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+          pids: 512
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

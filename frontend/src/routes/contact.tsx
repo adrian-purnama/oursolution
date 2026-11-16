@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import HostingSignup from '#/components/home/HostingSignup'
 import ContactDetailsView from '#/components/forms/contact/ContactDetailsView'
 import { seo } from '#/lib/seo'
 
@@ -21,10 +22,13 @@ function ContactPage() {
       </p>
       <h1 className="font-display mb-3 text-4xl sm:text-5xl">Get in touch</h1>
       <p className="mb-10 max-w-xl text-[var(--muted)]">
-        Questions about a project, a quote, or our services. Reach us any way
+        Tell us about your software project or ask for a quote. Reach us any way
         below.
       </p>
       <ContactDetailsView />
+      <div className="mt-12">
+        <HostingSignup />
+      </div>
     </main>
   )
 }

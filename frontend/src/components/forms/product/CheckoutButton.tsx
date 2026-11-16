@@ -99,10 +99,7 @@ export default function CheckoutButton({
   if (!isAuthenticated) {
     return (
       <Button asChild size={size} className={primary}>
-        <Link
-          to="/register"
-          search={{ redirect: checkoutPath(product.id) }}
-        >
+        <Link to="/register" search={{ redirect: checkoutPath(product.id) }}>
           {label}
         </Link>
       </Button>
@@ -111,18 +108,14 @@ export default function CheckoutButton({
 
   return (
     <>
-      <Button
-        asChild
-        size={size}
-        className={primary}
-      >
+      <Button asChild size={size} className={primary}>
         <Link to="/checkout" search={{ productId: product.id }}>
           {label}
         </Link>
       </Button>
       <Button
         type="button"
-        size={size === 'lg' ? 'icon-lg' : 'icon'}
+        size={size === 'lg' ? 'icon-lg' : size === 'sm' ? 'icon-sm' : 'icon'}
         variant="outline"
         disabled={adding}
         onClick={() => void add()}

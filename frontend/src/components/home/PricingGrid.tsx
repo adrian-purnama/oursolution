@@ -20,6 +20,10 @@ type State =
   | { status: 'error' }
   | { status: 'ready'; products: PricingProduct[] }
 
+/** Compact cards, up to four a row, so most of the shop fits on one screen. */
+const gridClassName =
+  'grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+
 const GROUPS = [
   {
     kind: 'subscription',
@@ -114,30 +118,27 @@ export default function PricingGrid({
   )
 
   if (!grouped) {
-    const grid = (
-      <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map(card)}
-      </ul>
-    )
+    const grid = <ul className={gridClassName}>{products.map(card)}</ul>
     return preview ? preview(grid) : grid
   }
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-10">
       {GROUPS.map((group) => {
         const items = products.filter((product) => product.kind === group.kind)
         if (items.length === 0) return null
         return (
           <section key={group.kind}>
-            <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] pb-3">
-              <h2 className="text-lg font-semibold text-[var(--ink)]">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] pb-2.5">
+              <h2 className="text-base font-semibold text-[var(--ink)]">
                 {group.title}
+                <span className="ml-2 font-normal text-[var(--muted)] tabular-nums">
+                  {items.length}
+                </span>
               </h2>
               <p className={hintClassName}>{group.hint}</p>
             </div>
-            <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {items.map(card)}
-            </ul>
+            <ul className={gridClassName}>{items.map(card)}</ul>
           </section>
         )
       })}
@@ -155,7 +156,7 @@ function ProductCard({ product }: { product: PricingProduct }) {
   return (
     <li
       className={cn(
-        'group flex flex-col overflow-hidden rounded-xl border bg-white transition',
+        'group flex flex-col overflow-hidden rounded-lg border bg-white transition',
         isActive
           ? 'border-[var(--ink)]/25 shadow-[0_1px_2px_rgba(12,12,11,0.05)]'
           : 'border-[var(--line)] hover:border-[var(--ink)]/20 hover:shadow-[0_8px_24px_-12px_rgba(12,12,11,0.15)]',
@@ -164,43 +165,41 @@ function ProductCard({ product }: { product: PricingProduct }) {
       <Link {...page} className="relative block" tabIndex={-1} aria-hidden>
         <ProductImage
           product={product}
-          className="aspect-[16/10] w-full border-b border-[var(--line)]"
+          className="aspect-[16/9] w-full border-b border-[var(--line)]"
+          iconClassName="size-7"
         />
         <ProductStatusBadge
           product={product}
-          className="absolute top-3 right-3 shadow-sm"
+          className="absolute top-2 right-2 shadow-sm"
         />
       </Link>
 
-      <div className="flex flex-1 flex-col p-5">
-        <p className="mb-1 text-xs text-[var(--muted)]">
-          {product.kind === 'subscription' ? 'Hosting' : 'One-time'}
-        </p>
-        <h3 className="text-base font-semibold text-[var(--ink)]">
+      <div className="flex flex-1 flex-col p-3.5">
+        <h3 className="text-sm leading-snug font-semibold text-[var(--ink)]">
           <Link {...page} className="text-inherit no-underline hover:underline">
             {product.name}
           </Link>
         </h3>
         {product.description ? (
-          <p className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-[var(--muted)]">
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--muted)]">
             {markdownToPlainText(product.description)}
           </p>
         ) : null}
 
-        <div className="mt-5 mb-5">
-          <p className="font-display text-2xl text-[var(--ink)]">
+        <div className="mt-3 mb-3 flex flex-wrap items-baseline gap-x-1.5">
+          <p className="font-display text-lg leading-tight text-[var(--ink)]">
             {product.pricingText || 'Contact us'}
           </p>
-          <p className="mt-0.5 text-sm text-[var(--muted)]">
+          <p className="text-xs text-[var(--muted)]">
             {product.durationDays
               ? `per ${formatDays(product.durationDays)}`
-              : 'one-time, yours to keep'}
+              : 'one-time'}
           </p>
         </div>
 
-        <div className="mt-auto flex gap-2">
-          <CheckoutButton product={product} className="flex-1" />
-          <Button asChild variant="ghost">
+        <div className="mt-auto flex gap-1.5">
+          <CheckoutButton product={product} size="sm" className="flex-1" />
+          <Button asChild variant="ghost" size="sm">
             <Link {...page}>Details</Link>
           </Button>
         </div>

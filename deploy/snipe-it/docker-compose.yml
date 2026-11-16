@@ -1,0 +1,130 @@
+# Snipe-IT (asset management) hosting — one stack per customer, deployed by
+# Dokploy.
+#
+# Product settings: deploy/snipe-it/product.json
+# Data: /mnt/nas-sda/snipe-it/<username>/ (database, uploads, backups and
+# this customer's generated keys).
+
+services:
+  # Makes this customer's own random keys on the first start and keeps them.
+  # Nobody types or sees them; a reset deletes them with the data.
+  secrets-init:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        for name in app_key db_password db_root_password; do
+          [ -s "$$name" ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > "$$name"
+        done
+        chmod 444 app_key db_password db_root_password
+    volumes:
+      - /mnt/nas-sda/snipe-it/${USERNAME}/secrets:/secrets
+
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      - MARIADB_DATABASE=snipeit
+      - MARIADB_USER=snipeit
+      - MARIADB_PASSWORD_FILE=/secrets/db_password
+      - MARIADB_ROOT_PASSWORD_FILE=/secrets/db_root_password
+      - TZ=${TIMEZONE}
+    # Sized for the memory limit below.
+    command:
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=50
+      - --performance-schema=OFF
+    volumes:
+      - /mnt/nas-sda/snipe-it/${USERNAME}/mariadb:/var/lib/mysql
+      - /mnt/nas-sda/snipe-it/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  snipeit:
+    image: snipe/snipe-it:v8.8.3
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      # 32 random characters, which Laravel takes as an AES-256 key.
+      - APP_KEY_FILE=/secrets/app_key
+      - APP_URL=https://assets-${USERNAME}.${DOMAIN}
+      - APP_TIMEZONE=${TIMEZONE}
+      - APP_LOCALE=en-US
+      # Traefik and Docker networks sit in front of the app.
+      - APP_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - SECURE_COOKIES=true
+      - ENABLE_HSTS=true
+      - ALLOW_IFRAMING=false
+      - REFERRER_POLICY=same-origin
+      # Customers cannot wipe data or delete backups from the web UI.
+      - ALLOW_BACKUP_DELETE=false
+      - ALLOW_DATA_PURGE=false
+      - DB_CONNECTION=mysql
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_DATABASE=snipeit
+      - DB_USERNAME=snipeit
+      - DB_PASSWORD_FILE=/secrets/db_password
+      - DB_CHARSET=utf8mb4
+      - DB_COLLATION=utf8mb4_unicode_ci
+      # Optional mail, set by the customer.
+      - MAIL_MAILER=smtp
+      - MAIL_HOST=${SMTP_HOST}
+      - MAIL_PORT=${SMTP_PORT}
+      - MAIL_USERNAME=${SMTP_USERNAME}
+      - MAIL_PASSWORD=${SMTP_PASSWORD}
+      - MAIL_FROM_ADDR=${SMTP_FROM}
+      - MAIL_FROM_NAME=Snipe-IT
+      - MAIL_REPLYTO_ADDR=${SMTP_FROM}
+      - MAIL_REPLYTO_NAME=Snipe-IT
+    expose:
+      - "80"
+    volumes:
+      - /mnt/nas-sda/snipe-it/${USERNAME}/data:/var/lib/snipeit
+      - /mnt/nas-sda/snipe-it/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+      - mariadb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+          pids: 256
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

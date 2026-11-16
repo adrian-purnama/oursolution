@@ -1,0 +1,15 @@
+{
+  "deployment": {
+    "name": "calcom-${USERNAME}",
+    "variables": [
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" },
+      { "key": "SMTP_HOST", "value": "", "visibility": "editable" },
+      { "key": "SMTP_PORT", "value": "587", "visibility": "editable" },
+      { "key": "SMTP_USERNAME", "value": "", "visibility": "editable" },
+      { "key": "SMTP_PASSWORD", "value": "", "visibility": "editable" },
+      { "key": "SMTP_FROM", "value": "${EMAIL}", "visibility": "editable" },
+      { "key": "SMTP_FROM_NAME", "value": "Cal.com", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "calcom", "subdomain": "cal-${USERNAME}", "port": 3000 }]
+  }
+}

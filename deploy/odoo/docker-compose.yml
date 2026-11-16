@@ -1,0 +1,131 @@
+# Odoo Community hosting — one stack per customer, deployed by Dokploy.
+#
+# Product settings: deploy/odoo/product.json
+# Data: /mnt/nas-sda/odoo/<username>/ (database, filestore and this
+# customer's generated database password).
+
+services:
+  # Makes the database password on the first start and keeps it, and makes
+  # the Odoo folder writable by the odoo user (uid 101).
+  init:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        [ -s db_password ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > db_password
+        chmod 444 db_password
+        chown -R 101:101 /odoo
+    volumes:
+      - /mnt/nas-sda/odoo/${USERNAME}/secrets:/secrets
+      - /mnt/nas-sda/odoo/${USERNAME}/odoo:/odoo
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=odoo
+      - POSTGRES_PASSWORD_FILE=/secrets/db_password
+      - POSTGRES_DB=postgres
+      - TZ=${TIMEZONE}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - max_connections=50
+    volumes:
+      - /mnt/nas-sda/odoo/${USERNAME}/postgres:/var/lib/postgresql/data
+      - /mnt/nas-sda/odoo/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - init
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 128mb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  odoo:
+    image: odoo:19.0
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      - HOST=postgres
+      - USER=odoo
+      - PASSWORD_FILE=/secrets/db_password
+      # The customer's own master password, which guards the database
+      # manager (create, back up, restore, delete). Odoo refuses to start
+      # while it is empty, so there is never a default one.
+      - ODOO_MASTER_PASSWORD=${MASTER_PASSWORD}
+    # Writes the config into the container (not the NAS) and starts Odoo.
+    # One threaded process serves pages and the live-chat websocket on 8069.
+    command:
+      - sh
+      - -ec
+      - |
+        if [ -z "$$ODOO_MASTER_PASSWORD" ]; then
+          echo "Set MASTER_PASSWORD on your service page, then start again." >&2
+          exit 1
+        fi
+        cat > /tmp/odoo.conf <<EOF
+        [options]
+        admin_passwd = $$ODOO_MASTER_PASSWORD
+        data_dir = /var/lib/odoo
+        proxy_mode = True
+        list_db = True
+        without_demo = all
+        workers = 0
+        max_cron_threads = 1
+        limit_time_cpu = 120
+        limit_time_real = 240
+        log_level = warn
+        EOF
+        exec /entrypoint.sh odoo -c /tmp/odoo.conf
+    expose:
+      - "8069"
+    volumes:
+      - /mnt/nas-sda/odoo/${USERNAME}/odoo:/var/lib/odoo
+      - /mnt/nas-sda/odoo/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - init
+      - postgres
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+          pids: 512
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

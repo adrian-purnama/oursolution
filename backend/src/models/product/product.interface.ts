@@ -76,6 +76,9 @@ export interface ProductNotice {
   text: string;
 }
 
+/** How many images one product may have. */
+export const MAX_PRODUCT_IMAGES = 10;
+
 /** Something a user can have: a subscription or a one-time purchase. */
 export interface ProductInterface {
   name: string;
@@ -99,8 +102,11 @@ export interface ProductInterface {
   accessUrl: string | null;
   /** Listed on the public pricing page, and so open to checkout. */
   showOnPricingPage: boolean;
-  /** Public image in the "public" GridFS bucket, served from /media/:id. */
-  image: Types.ObjectId | null;
+  /**
+   * Public images in the "public" GridFS bucket, served from /media/:id, in
+   * display order: the first is the cover on cards and badges.
+   */
+  images: Types.ObjectId[];
   /**
    * Set when soft deleted: hidden from the pricing page, checkout and admin
    * assignment, but kept so owners keep access and it can be restored.

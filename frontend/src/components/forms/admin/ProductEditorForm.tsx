@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
+import type { FormEvent } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { ArrowLeft, ImagePlus, LoaderCircle, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, LoaderCircle, Plus, Trash2 } from 'lucide-react'
 import DeploymentFields, {
   EMPTY_DEPLOYMENT,
   checkDeployment,
@@ -10,6 +10,11 @@ import DeploymentFields, {
   toDeploymentDraft,
 } from '#/components/forms/admin/DeploymentFields'
 import type { DeploymentDraft } from '#/components/forms/admin/DeploymentFields'
+import ProductImagesField, {
+  saveProductImages,
+  toImageItems,
+} from '#/components/forms/admin/ProductImagesField'
+import type { ImageItem } from '#/components/forms/admin/ProductImagesField'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -21,7 +26,7 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
-import { apiFetch, apiUpload, toAbsoluteMediaUrl } from '#/lib/api'
+import { apiFetch } from '#/lib/api'
 import { PRODUCT_KIND_LABELS } from '#/lib/product'
 import type { Product, ProductKind, ProductNotice } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
@@ -181,8 +186,7 @@ export default function ProductEditorForm({
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(!isNew)
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [images, setImages] = useState<ImageItem[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -200,7 +204,7 @@ export default function ProductEditorForm({
         }
         setProduct(response.data)
         setDraft(toDraft(response.data))
-        setImagePreview(toAbsoluteMediaUrl(response.data.imageUrl))
+        setImages(toImageItems(response.data.images))
       } catch {
         if (!run.cancelled) toast.error('Unable to reach the server')
       } finally {
@@ -212,18 +216,6 @@ export default function ProductEditorForm({
       run.cancelled = true
     }
   }, [productId])
-
-  // A picked file previews from a blob URL, which must be released.
-  useEffect(() => {
-    if (!imageFile) return
-    const url = URL.createObjectURL(imageFile)
-    setImagePreview(url)
-    return () => URL.revokeObjectURL(url)
-  }, [imageFile])
-
-  function handleImagePick(event: ChangeEvent<HTMLInputElement>) {
-    setImageFile(event.target.files?.[0] ?? null)
-  }
 
   async function handleSave(event: FormEvent) {
     event.preventDefault()
@@ -312,18 +304,11 @@ export default function ProductEditorForm({
         return
       }
 
-      if (imageFile) {
-        const formData = new FormData()
-        formData.append('file', imageFile)
-        const upload = await apiUpload<Product>(
-          `/admin/products/${response.data.id}/image`,
-          formData,
-        )
-        if (!upload.success) {
-          toast.error(upload.message || 'Product saved, but the image failed')
-          await navigate({ to: '/admin/products' })
-          return
-        }
+      const imageError = await saveProductImages(response.data, images)
+      if (imageError) {
+        toast.error(`Product saved, but: ${imageError}`)
+        await navigate({ to: '/admin/products' })
+        return
       }
 
       toast.success(isNew ? 'Product created' : 'Product updated')
@@ -395,35 +380,7 @@ export default function ProductEditorForm({
               )}
             </fieldset>
 
-            <div className="flex items-center gap-4">
-              <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)]">
-                {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    alt="Product image preview"
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <ImagePlus
-                    className="size-5 text-[var(--muted)]"
-                    aria-hidden
-                  />
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="product-image">Image</Label>
-                <input
-                  id="product-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImagePick}
-                  className="block text-sm file:mr-3 file:rounded-md file:border file:border-[var(--line)] file:bg-white file:px-3 file:py-1.5 file:text-sm"
-                />
-                <p className={`text-xs ${hintClassName}`}>
-                  Public. Shown on the pricing page.
-                </p>
-              </div>
-            </div>
+            <ProductImagesField value={images} onChange={setImages} />
 
             <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
               <div className="space-y-1.5">

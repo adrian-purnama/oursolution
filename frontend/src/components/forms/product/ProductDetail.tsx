@@ -5,7 +5,7 @@ import CheckoutButton, {
   ProductStatusBadge,
   useProductAccess,
 } from '#/components/forms/product/CheckoutButton'
-import ProductImage from '#/components/forms/product/ProductImage'
+import ProductGallery from '#/components/forms/product/ProductGallery'
 import Markdown from '#/components/Markdown'
 import ProductNotices from '#/components/ProductNotices'
 import { Button } from '#/components/ui/button'
@@ -99,12 +99,7 @@ function Detail({ product }: { product: PricingProduct }) {
     <article>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-12">
         <ProductNotices notices={product.notices} className="self-start">
-          <ProductImage
-            product={product}
-            eager
-            className="aspect-[16/10] w-full rounded-xl border border-[var(--line)]"
-            iconClassName="size-16"
-          />
+          <ProductGallery product={product} />
         </ProductNotices>
 
         <div className="flex flex-col">

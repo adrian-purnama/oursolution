@@ -1,0 +1,124 @@
+# Cal.com (booking pages) hosting — one stack per customer, deployed by
+# Dokploy. AGPL-3.0 community edition, no enterprise license key.
+#
+# Product settings: deploy/calcom/product.json
+# Data: /mnt/nas-sda/calcom/<username>/ (database and this customer's
+# generated keys).
+
+services:
+  # Makes this customer's own random keys on the first start and keeps them.
+  # The encryption key protects saved calendar passwords: keep it with the
+  # database.
+  secrets-init:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        for name in db_password nextauth_secret encryption_key; do
+          [ -s "$$name" ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > "$$name"
+        done
+        chmod 444 db_password nextauth_secret encryption_key
+    volumes:
+      - /mnt/nas-sda/calcom/${USERNAME}/secrets:/secrets
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=calcom
+      - POSTGRES_PASSWORD_FILE=/secrets/db_password
+      - POSTGRES_DB=calcom
+      - TZ=${TIMEZONE}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=60
+    volumes:
+      - /mnt/nas-sda/calcom/${USERNAME}/postgres:/var/lib/postgresql/data
+      - /mnt/nas-sda/calcom/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calcom -d calcom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 128mb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  calcom:
+    image: calcom/cal.com:v6.2.0
+    restart: unless-stopped
+    # Keys come from the files made by secrets-init; the image's own start
+    # script then sets the public URL, migrates the database and starts.
+    command:
+      - sh
+      - -ec
+      - |
+        export NEXTAUTH_SECRET="$$(cat /secrets/nextauth_secret)"
+        export CALENDSO_ENCRYPTION_KEY="$$(cat /secrets/encryption_key)"
+        export DATABASE_URL="postgresql://calcom:$$(cat /secrets/db_password)@postgres:5432/calcom"
+        export DATABASE_DIRECT_URL="$$DATABASE_URL"
+        exec /calcom/scripts/start.sh
+    environment:
+      - TZ=${TIMEZONE}
+      - NODE_ENV=production
+      - NEXT_PUBLIC_WEBAPP_URL=https://cal-${USERNAME}.${DOMAIN}
+      - NEXTAUTH_URL=https://cal-${USERNAME}.${DOMAIN}/api/auth
+      - DATABASE_HOST=postgres:5432
+      # Accepts the AGPL-3.0 license of the community edition.
+      - NEXT_PUBLIC_LICENSE_CONSENT=agree
+      - CALCOM_TELEMETRY_DISABLED=1
+      # Optional mail, set by the customer (booking confirmations).
+      - EMAIL_FROM=${SMTP_FROM}
+      - EMAIL_FROM_NAME=${SMTP_FROM_NAME}
+      - EMAIL_SERVER_HOST=${SMTP_HOST}
+      - EMAIL_SERVER_PORT=${SMTP_PORT}
+      - EMAIL_SERVER_USER=${SMTP_USERNAME}
+      - EMAIL_SERVER_PASSWORD=${SMTP_PASSWORD}
+      # Below the memory limit, so Node collects garbage before it is killed.
+      - NODE_OPTIONS=--max-old-space-size=1536
+    expose:
+      - "3000"
+    volumes:
+      - /mnt/nas-sda/calcom/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+      - postgres
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
+          pids: 512
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

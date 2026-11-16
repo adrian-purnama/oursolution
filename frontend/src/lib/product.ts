@@ -14,8 +14,17 @@ export type ProductSummary = {
   name: string
   kind: ProductKind
   color: string
-  /** Relative to the API, e.g. /media/:id; pass through toAbsoluteMediaUrl. */
+  /**
+   * The cover image, relative to the API, e.g. /media/:id; pass through
+   * toAbsoluteMediaUrl.
+   */
   imageUrl: string | null
+}
+
+/** One product image; `url` is relative to the API like `imageUrl`. */
+export type ProductImage = {
+  id: string
+  url: string
 }
 
 /** How a subscription's service is deployed. Only Docker Compose for now. */
@@ -99,6 +108,8 @@ export type ProductNotice = {
 }
 
 export type Product = ProductSummary & {
+  /** In display order; the first is the cover. */
+  images: ProductImage[]
   pricingText: string
   description: string
   notices: ProductNotice[]
@@ -115,6 +126,8 @@ export type Product = ProductSummary & {
 }
 
 export type PricingProduct = ProductSummary & {
+  /** In display order; the first is the cover. */
+  images: ProductImage[]
   pricingText: string
   description: string
   notices: ProductNotice[]

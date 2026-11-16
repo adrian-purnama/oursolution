@@ -1,0 +1,228 @@
+# Invoice Ninja hosting — one stack per customer, deployed by Dokploy.
+# Elastic License 2.0: allowed for a host that installs it per client and
+# bills for hosting; do not remove its branding or resell it as your own app.
+#
+# Product settings: deploy/invoiceninja/product.json
+# Data: /mnt/nas-sda/invoiceninja/<username>/ (database, uploaded files,
+# queue and this customer's generated keys).
+
+configs:
+  nginx_site:
+    content: |
+      client_max_body_size 10M;
+      client_body_buffer_size 10M;
+      server_tokens off;
+      fastcgi_buffers 32 16K;
+      gzip on;
+      gzip_comp_level 2;
+      gzip_min_length 1M;
+      gzip_proxied any;
+      gzip_types *;
+      types { text/javascript mjs; }
+
+      server {
+          listen 80 default_server;
+          server_name _;
+          root /var/www/html/public;
+          index index.php;
+          charset utf-8;
+
+          add_header X-Frame-Options "SAMEORIGIN";
+          add_header X-Content-Type-Options "nosniff";
+
+          location / {
+              try_files $$uri $$uri/ /index.php?$$query_string;
+          }
+          location = /favicon.ico { access_log off; log_not_found off; }
+          location = /robots.txt  { access_log off; log_not_found off; }
+          error_page 404 /index.php;
+
+          location ~ \.php$$ {
+              fastcgi_pass app:9000;
+              fastcgi_param SCRIPT_FILENAME $$realpath_root$$fastcgi_script_name;
+              include fastcgi_params;
+          }
+          location ~ /\.(?!well-known).* {
+              deny all;
+          }
+      }
+
+services:
+  # Makes this customer's own random keys on the first start and keeps them.
+  secrets-init:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        [ -s app_key ] || printf 'base64:%s' "$$(head -c 32 /dev/urandom | base64)" > app_key
+        for name in db_password db_root_password; do
+          [ -s "$$name" ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > "$$name"
+        done
+        chmod 444 app_key db_password db_root_password
+    volumes:
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/secrets:/secrets
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=ninja
+      - MYSQL_USER=ninja
+      - MYSQL_PASSWORD_FILE=/secrets/db_password
+      - MYSQL_ROOT_PASSWORD_FILE=/secrets/db_root_password
+      - TZ=${TIMEZONE}
+    command:
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=50
+      - --performance-schema=OFF
+    volumes:
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/mysql:/var/lib/mysql
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 192M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # Only this stack can reach it, so it needs no password.
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/redis:/data
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+          pids: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  app:
+    image: invoiceninja/invoiceninja-debian:5.13.53
+    restart: unless-stopped
+    # Keys come from the files made by secrets-init; the image's own start
+    # script then migrates, makes the first account and runs the app.
+    command:
+      - sh
+      - -ec
+      - |
+        export APP_KEY="$$(cat /secrets/app_key)"
+        export DB_PASSWORD="$$(cat /secrets/db_password)"
+        exec /usr/local/bin/init.sh supervisord -c /etc/supervisor/supervisord.conf
+    environment:
+      - TZ=${TIMEZONE}
+      - APP_URL=https://invoice-${USERNAME}.${DOMAIN}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      # TLS ends at Cloudflare; the proxies say the request was HTTPS.
+      - REQUIRE_HTTPS=false
+      - TRUSTED_PROXIES=*
+      - IS_DOCKER=true
+      - NINJA_ENVIRONMENT=selfhost
+      - PDF_GENERATOR=snappdf
+      - FILESYSTEM_DISK=debian_docker
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=null
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=ninja
+      - DB_USERNAME=ninja
+      - SCOUT_DRIVER=null
+      # First account, made once on the first start. The customer sets
+      # their own password; while it is empty the first start stops with an
+      # error instead of using a default.
+      - IN_USER_EMAIL=${EMAIL}
+      - IN_PASSWORD=${ADMIN_PASSWORD}
+      # Optional mail, set by the customer (sending invoices).
+      - MAIL_MAILER=${MAIL_MAILER}
+      - MAIL_HOST=${SMTP_HOST}
+      - MAIL_PORT=${SMTP_PORT}
+      - MAIL_USERNAME=${SMTP_USERNAME}
+      - MAIL_PASSWORD=${SMTP_PASSWORD}
+      - MAIL_ENCRYPTION=tls
+      - MAIL_FROM_ADDRESS=${SMTP_FROM}
+      - MAIL_FROM_NAME=${SMTP_FROM_NAME}
+    volumes:
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/public:/var/www/html/public
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/storage:/var/www/html/storage
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+      - mysql
+      - redis
+    # Chrome makes the PDFs.
+    shm_size: 256mb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+          pids: 512
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    configs:
+      - source: nginx_site
+        target: /etc/nginx/conf.d/default.conf
+    expose:
+      - "80"
+    volumes:
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/public:/var/www/html/public:ro
+      - /mnt/nas-sda/invoiceninja/${USERNAME}/storage:/var/www/html/storage:ro
+    depends_on:
+      - app
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+          pids: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

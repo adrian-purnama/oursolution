@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import type {
   AdminInvoiceInDto,
+  AdminPaymentListOutDto,
   CheckoutInDto,
   CheckoutItemInDto,
   CheckoutLineOutDto,
@@ -22,6 +23,7 @@ import { PaymentModel } from "../../models/payment/payment.model";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
+import { escapeRegex } from "../../validation/adminUser";
 import { productService, toProductSummary } from "../product/product.service";
 import {
   AlreadyOwnedError,
@@ -1046,6 +1048,78 @@ export async function listPayments(
       ? { status: "pending" as const, expiresAt: { $gt: new Date() } }
       : {}),
   };
+  return pagePayments(query, page, pageSize, withUser);
+}
+
+/** Admin list groups: paid, unpaid, closed without paying, refunded. */
+export const PAYMENT_GROUPS = {
+  paid: ["paid"],
+  pending: ["pending"],
+  closed: ["failed", "expired", "cancelled"],
+  refunded: ["refunded"],
+} as const satisfies Record<string, readonly PaymentStatus[]>;
+export type PaymentGroup = keyof typeof PAYMENT_GROUPS;
+
+/**
+ * Admin: every payment, filtered by group and searched by email or invoice
+ * number. Each word of the search must appear somewhere in the email, so
+ * "adrian gmail" finds adrian.p@gmail.com. Counts per group follow the search.
+ */
+export async function listAllPayments(
+  filter: { group: PaymentGroup | null; search: string },
+  page: number,
+  pageSize: number,
+): Promise<AdminPaymentListOutDto> {
+  const base: Record<string, unknown> = {};
+  const words = filter.search.trim().split(/\s+/).filter(Boolean);
+  if (words.length > 0) {
+    const users = await UserModel.find({
+      $and: words.map((word) => ({
+        email: { $regex: escapeRegex(word), $options: "i" },
+      })),
+    })
+      .select("_id")
+      .limit(1000)
+      .lean()
+      .exec();
+    base.$or = [
+      { userId: { $in: users.map((user) => user._id) } },
+      {
+        invoiceNumber: {
+          $regex: escapeRegex(filter.search.trim()),
+          $options: "i",
+        },
+      },
+    ];
+  }
+  const query = filter.group
+    ? { ...base, status: { $in: [...PAYMENT_GROUPS[filter.group]] } }
+    : base;
+  const [list, byStatus] = await Promise.all([
+    pagePayments(query, page, pageSize, true),
+    PaymentModel.aggregate<{ _id: PaymentStatus; n: number }>([
+      { $match: base },
+      { $group: { _id: "$status", n: { $sum: 1 } } },
+    ]).exec(),
+  ]);
+  const counts = { all: 0, paid: 0, pending: 0, closed: 0, refunded: 0 };
+  for (const { _id, n } of byStatus) {
+    counts.all += n;
+    for (const [group, statuses] of Object.entries(PAYMENT_GROUPS)) {
+      if ((statuses as readonly string[]).includes(_id)) {
+        counts[group as PaymentGroup] += n;
+      }
+    }
+  }
+  return { ...list, counts };
+}
+
+async function pagePayments(
+  query: Record<string, unknown>,
+  page: number,
+  pageSize: number,
+  withUser: boolean,
+): Promise<PaymentListOutDto> {
   const [total, docs] = await Promise.all([
     PaymentModel.countDocuments(query).exec(),
     PaymentModel.find(query)

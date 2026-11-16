@@ -1,0 +1,156 @@
+# Documenso (e-signatures) hosting — one stack per customer, deployed by
+# Dokploy.
+#
+# Product settings: deploy/documenso/product.json
+# Data: /mnt/nas-sda/documenso/<username>/ (database with the documents, the
+# signing certificate and this customer's generated keys).
+
+services:
+  # On the first start, makes this customer's own random keys and a
+  # self-signed signing certificate behind a random passphrase. Later starts
+  # keep them, so sessions, encrypted data and old signatures stay valid.
+  # Nobody types or sees them; a reset deletes them with the data.
+  init:
+    image: alpine:3.22
+    restart: "no"
+    environment:
+      - CERT_NAME=docs-${USERNAME}.${DOMAIN}
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        for name in db_password nextauth_secret encryption_key encryption_secondary_key signing_passphrase; do
+          [ -s "$$name" ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > "$$name"
+        done
+        chmod 444 ./*
+        if [ ! -s /cert/cert.p12 ]; then
+          apk add --no-cache openssl >/dev/null
+          mkdir -p /tmp/cert
+          cd /tmp/cert
+          openssl genrsa -out private.key 2048
+          openssl req -new -x509 -key private.key -out certificate.crt -days 3650 -subj "/CN=$$CERT_NAME"
+          openssl pkcs12 -export -out /cert/cert.p12 -inkey private.key -in certificate.crt -passout file:/secrets/signing_passphrase
+        fi
+        chown 1001 /cert/cert.p12
+        chmod 400 /cert/cert.p12
+    # The private key's work files live in memory and vanish with the run.
+    tmpfs:
+      - /tmp:size=16m
+    volumes:
+      - /mnt/nas-sda/documenso/${USERNAME}/secrets:/secrets
+      - /mnt/nas-sda/documenso/${USERNAME}/cert:/cert
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=documenso
+      - POSTGRES_PASSWORD_FILE=/secrets/db_password
+      - POSTGRES_DB=documenso
+      - TZ=${TIMEZONE}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=40
+    volumes:
+      - /mnt/nas-sda/documenso/${USERNAME}/postgres:/var/lib/postgresql/data
+      - /mnt/nas-sda/documenso/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - init
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U documenso -d documenso"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 64mb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+          pids: 200
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  documenso:
+    image: documenso/documenso:v2.22.0
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      - PORT=3000
+      - NEXT_PUBLIC_WEBAPP_URL=https://docs-${USERNAME}.${DOMAIN}
+      - NEXT_PRIVATE_INTERNAL_WEBAPP_URL=http://localhost:3000
+      # Documents are stored in the database; 10 MB per upload.
+      - NEXT_PUBLIC_UPLOAD_TRANSPORT=database
+      - NEXT_PUBLIC_DOCUMENT_SIZE_UPLOAD_LIMIT=10
+      - NEXT_PRIVATE_SIGNING_TRANSPORT=local
+      - NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH=/opt/documenso/cert.p12
+      # Sign-up stays open until the customer turns it off after making
+      # their own account.
+      - NEXT_PUBLIC_DISABLE_SIGNUP=${DISABLE_SIGNUP}
+      # Mail is required: sign-up needs a verified email and signers are
+      # invited by email. The customer enters their own SMTP account.
+      - NEXT_PRIVATE_SMTP_TRANSPORT=smtp-auth
+      - NEXT_PRIVATE_SMTP_HOST=${SMTP_HOST}
+      - NEXT_PRIVATE_SMTP_PORT=${SMTP_PORT}
+      - NEXT_PRIVATE_SMTP_SECURE=${SMTP_SECURE}
+      - NEXT_PRIVATE_SMTP_USERNAME=${SMTP_USERNAME}
+      - NEXT_PRIVATE_SMTP_PASSWORD=${SMTP_PASSWORD}
+      - NEXT_PRIVATE_SMTP_FROM_NAME=${SMTP_FROM_NAME}
+      - NEXT_PRIVATE_SMTP_FROM_ADDRESS=${SMTP_FROM}
+      - NEXT_PUBLIC_POSTHOG_KEY=
+      # Below the memory limit, so Node collects garbage before it is killed.
+      - NODE_OPTIONS=--max-old-space-size=768
+    # The secrets come from the files made by init; until they exist the
+    # container exits and Docker restarts it.
+    command:
+      - sh
+      - -ec
+      - |
+        S=/secrets
+        export NEXTAUTH_SECRET="$$(cat $$S/nextauth_secret)"
+        export NEXT_PRIVATE_ENCRYPTION_KEY="$$(cat $$S/encryption_key)"
+        export NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY="$$(cat $$S/encryption_secondary_key)"
+        export NEXT_PRIVATE_SIGNING_PASSPHRASE="$$(cat $$S/signing_passphrase)"
+        export NEXT_PRIVATE_DATABASE_URL="postgresql://documenso:$$(cat $$S/db_password)@postgres:5432/documenso"
+        export NEXT_PRIVATE_DIRECT_DATABASE_URL="$$NEXT_PRIVATE_DATABASE_URL"
+        exec sh start.sh
+    expose:
+      - "3000"
+    volumes:
+      # The folder, not the file: Docker would make a folder at a file path
+      # that does not exist yet.
+      - /mnt/nas-sda/documenso/${USERNAME}/cert:/opt/documenso:ro
+      - /mnt/nas-sda/documenso/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - init
+      - postgres
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+          pids: 512
+        reservations:
+          memory: 192M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

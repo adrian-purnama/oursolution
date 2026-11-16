@@ -529,7 +529,7 @@ export class TicketService {
 
     await this.recordStatus(ticket._id, admin, before.status, "closed");
     if (summary) await this.deleteThread(ticket._id, !closing.messagesDeleted);
-    await this.notifyClosed(ticket, input.resolution);
+    await this.notifyClosed(ticket, input.resolution, summary);
     return {
       ticket: await this.getAny(ticketId),
       summarized: summary !== null,
@@ -619,19 +619,24 @@ export class TicketService {
   }
 
   /**
-   * In-app and email. The email carries the full resolution, which the
-   * in-app notification and a summarized ticket do not. Failing here never
-   * undoes the close.
+   * In-app and email. The email carries the AI summary (when the close was
+   * summarized) and the full resolution, which the in-app notification and
+   * a summarized ticket do not. Failing here never undoes the close.
    */
   private async notifyClosed(
     ticket: TicketDoc,
     resolution: string,
+    summary: string | null,
   ): Promise<void> {
     const id = ticket._id.toString();
     const link = `/support/${id}`;
     const title = "Your ticket was closed";
     const body = `Your support ticket "${ticket.subject}" was closed.`;
-    const emailBody = `${body}\n\nResolution:\n${resolution}`;
+    const emailBody = [
+      body,
+      ...(summary ? [`Summary:\n${summary}`] : []),
+      `Resolution:\n${resolution}`,
+    ].join("\n\n");
     const url = absoluteLink(this.deps.appBaseUrl, link);
     try {
       await this.deps.notifications.send(

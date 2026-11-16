@@ -13,12 +13,21 @@ export type CheckDeploymentInDto = DeploymentDraft;
 
 export type CheckDeploymentOutDto = DeploymentCheckResult;
 
+/** One product image; `id` is what the reorder and delete calls take. */
+export interface ProductImageOutDto {
+  id: string;
+  url: string;
+}
+
 export interface ProductOutDto {
   id: string;
   name: string;
   kind: ProductKind;
   color: string;
+  /** The cover: the first of `images`. */
   imageUrl: string | null;
+  /** In display order. */
+  images: ProductImageOutDto[];
   pricingText: string;
   description: string;
   notices: ProductNotice[];
@@ -40,7 +49,10 @@ export interface PricingProductOutDto {
   name: string;
   kind: ProductKind;
   color: string;
+  /** The cover: the first of `images`. */
   imageUrl: string | null;
+  /** In display order. */
+  images: ProductImageOutDto[];
   pricingText: string;
   description: string;
   notices: ProductNotice[];
@@ -53,6 +65,7 @@ export interface ProductSummaryDto {
   name: string;
   kind: ProductKind;
   color: string;
+  /** The cover image. */
   imageUrl: string | null;
 }
 
@@ -72,3 +85,8 @@ export interface CreateProductDto {
 
 /** The kind is fixed at creation. */
 export type UpdateProductDto = Partial<Omit<CreateProductDto, "kind">>;
+
+/** Body of the image reorder: every current image id, in the new order. */
+export interface ReorderProductImagesDto {
+  ids: string[];
+}

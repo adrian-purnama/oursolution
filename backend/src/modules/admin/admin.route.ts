@@ -44,10 +44,12 @@ router.post("/products/deployment/check", productController.checkDeployment);
 router.get("/products/:id", productController.get);
 router.patch("/products/:id", productController.update);
 router.post(
-  "/products/:id/image",
+  "/products/:id/images",
   uploadSingleImage("file"),
-  productController.updateImage,
+  productController.addImage,
 );
+router.put("/products/:id/images/order", productController.reorderImages);
+router.delete("/products/:id/images/:imageId", productController.removeImage);
 router.delete("/products/:id", productController.remove);
 router.post("/products/:id/restore", productController.restore);
 router.delete("/products/:id/permanent", productController.removePermanently);
@@ -95,6 +97,7 @@ router.delete("/users/:id/purchases/:purchaseId", purchaseController.revoke);
 
 router.get("/users/:id/payments", paymentController.listForUser);
 router.post("/users/:id/payments", paymentController.createForUser);
+router.get("/payments", paymentController.listAll);
 router.get("/payments/:paymentId", paymentController.getAny);
 router.get("/payments/:paymentId/invoice.pdf", paymentController.invoiceAny);
 

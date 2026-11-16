@@ -1,0 +1,79 @@
+# Stirling PDF hosting — one stack per customer, deployed by Dokploy.
+#
+# Product settings: deploy/stirling-pdf/product.json
+# Data: /mnt/nas-sda/stirling-pdf/<username>/ (settings, user accounts,
+# stored files and work files).
+
+services:
+  # Stirling runs as uid 1000; Docker creates missing bind folders as root.
+  init-perms:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -c
+      - chown -R 1000:1000 /f/configs /f/customFiles /f/pipeline /f/storage && chmod 1777 /f/tmp
+    volumes:
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/configs:/f/configs
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/customFiles:/f/customFiles
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/pipeline:/f/pipeline
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/storage:/f/storage
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/tmp:/f/tmp
+
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:3.3.0
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      # Sign-in is required. The first admin is created from these on the
+      # first start only. ADMIN_PASSWORD is the customer's own; when empty,
+      # Stirling uses admin / stirling and forces a change at first sign-in.
+      - SECURITY_ENABLELOGIN=true
+      - SECURITY_INITIALLOGIN_USERNAME=admin
+      - SECURITY_INITIALLOGIN_PASSWORD=${ADMIN_PASSWORD}
+      - SECURITY_LOGINATTEMPTCOUNT=5
+      - SECURITY_LOGINRESETTIMEMINUTES=120
+      - SYSTEM_ENABLEANALYTICS=false
+      - SYSTEM_ENABLEPOSTHOG=false
+      - SYSTEM_ENABLESCARF=false
+      - SYSTEM_ENABLEFEEDBACK=false
+      - SYSTEM_SHOWUPDATE=false
+      # Known to be unsafe on a public server.
+      - SYSTEM_ENABLEURLTOPDF=false
+      # Files kept on the server: 5 GB in all, 100 MB per file.
+      - STORAGE_LOCAL_BASEPATH=/storage
+      - STORAGE_QUOTAS_MAXSTORAGEMBTOTAL=5120
+      - STORAGE_QUOTAS_MAXFILEMB=100
+      - STORAGE_SHARING_ENABLED=false
+      - LANGS=en_GB,id_ID
+      # Below the memory limit, so Java collects garbage before it is killed.
+      - JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60
+    expose:
+      - "8080"
+    volumes:
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/configs:/configs
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/customFiles:/customFiles
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/pipeline:/pipeline
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/storage:/storage
+      # Work files: on the NAS, not in memory (a tmpfs would count against
+      # the memory limit). Stirling deletes them after 24 hours.
+      - /mnt/nas-sda/stirling-pdf/${USERNAME}/tmp:/tmp
+    depends_on:
+      - init-perms
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+          pids: 512
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

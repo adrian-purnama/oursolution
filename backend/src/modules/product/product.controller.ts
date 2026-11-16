@@ -7,10 +7,11 @@ import type {
 } from "../../dto/product.dto";
 import { env } from "../../environment/env";
 import { checkDeployment } from "../../utils/deployment";
-import { parseRouteId } from "../../validation/parseParam";
+import { parseParam, parseRouteId } from "../../validation/parseParam";
 import {
   parseDeploymentDraft,
   parseCreateProductDto,
+  parseReorderImagesDto,
   parseUpdateProductDto,
 } from "../../validation/product";
 import {
@@ -122,14 +123,39 @@ export class ProductController {
     }
   };
 
-  updateImage = async (req: Request, res: Response) => {
+  addImage = async (req: Request, res: Response) => {
     try {
       const id = parseRouteId(req.params.id);
       if (!req.file) throw new Error("file required");
-      const data = await productService.changeImage(id, req.file.buffer);
-      return ok<ProductOutDto>(res, 200, "Product image updated", data);
+      const data = await productService.addImage(id, req.file.buffer);
+      return ok<ProductOutDto>(res, 201, "Product image added", data);
     } catch (error) {
-      return fail(res, error, "Failed to update the product image");
+      return fail(res, error, "Failed to add the product image");
+    }
+  };
+
+  reorderImages = async (req: Request, res: Response) => {
+    try {
+      const id = parseRouteId(req.params.id);
+      const { ids } = parseReorderImagesDto(req.body);
+      const data = await productService.reorderImages(id, ids);
+      return ok<ProductOutDto>(res, 200, "Product images reordered", data);
+    } catch (error) {
+      return fail(res, error, "Failed to reorder the product images");
+    }
+  };
+
+  removeImage = async (req: Request, res: Response) => {
+    try {
+      const id = parseRouteId(req.params.id);
+      const imageId = parseParam(req.params.imageId, {
+        label: "image id",
+        objectId: true,
+      });
+      const data = await productService.removeImage(id, imageId);
+      return ok<ProductOutDto>(res, 200, "Product image removed", data);
+    } catch (error) {
+      return fail(res, error, "Failed to remove the product image");
     }
   };
 

@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "vaultwarden-${USERNAME}",
+    "variables": [
+      { "key": "ADMIN_TOKEN", "value": "", "visibility": "editable" },
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "vaultwarden", "subdomain": "vault-${USERNAME}", "port": 8080 }]
+  }
+}

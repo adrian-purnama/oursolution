@@ -93,6 +93,20 @@ export type PaymentList = {
   total: number
 }
 
+/** Admin status filter: each groups one or more payment statuses. */
+export const PAYMENT_GROUPS = [
+  { key: 'all', label: 'All' },
+  { key: 'paid', label: 'Completed' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'closed', label: 'Closed' },
+  { key: 'refunded', label: 'Refunded' },
+] as const
+export type PaymentGroup = (typeof PAYMENT_GROUPS)[number]['key']
+
+export type AdminPaymentList = PaymentList & {
+  counts: Record<PaymentGroup, number>
+}
+
 const idr = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 })
 
 /** "Rp 50.000" */

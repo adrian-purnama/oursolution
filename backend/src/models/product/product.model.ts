@@ -107,9 +107,11 @@ const productSchema = new Schema<ProductInterface>(
       required: true,
       default: false,
     },
-    image: {
-      type: Schema.Types.ObjectId,
-      default: null,
+    // In display order; the first is the cover. Older products had a single
+    // `image`, moved here at startup (ProductService.migrateLegacyImages).
+    images: {
+      type: [Schema.Types.ObjectId],
+      default: [],
     },
     deletedAt: {
       type: Date,

@@ -104,6 +104,7 @@ async function bootstrap() {
   await NotificationModel.init();
   // Runs cut short by a restart cannot resume; mark them failed.
   await productService.migrateLegacyDomains();
+  await productService.migrateLegacyImages();
   await deploymentService.recoverInterruptedRuns();
   // Services whose subscription ended are turned off by themselves.
   startLapsedSubscriptionSweep();

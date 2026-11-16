@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import type { GrantPurchaseInDto } from "../dto/purchase.dto";
 import {
   DEPLOYMENT_TYPES,
+  MAX_PRODUCT_IMAGES,
   NOTICE_TONES,
   PRODUCT_KINDS,
   type NoticeTone,
@@ -14,7 +15,11 @@ import {
   type ProductKind,
   type VariableVisibility,
 } from "../models/product/product.interface";
-import type { CreateProductDto, UpdateProductDto } from "../dto/product.dto";
+import type {
+  CreateProductDto,
+  ReorderProductImagesDto,
+  UpdateProductDto,
+} from "../dto/product.dto";
 import { env } from "../environment/env";
 import { checkDeployment, type DeploymentDraft } from "../utils/deployment";
 import type { AssignProductDto, PeriodEndSpec } from "../dto/userProduct.dto";
@@ -105,9 +110,7 @@ function parseNotices(value: unknown): ProductNotice[] {
     }
     const text = raw.text.trim();
     if (text.length > MAX_NOTICE_LENGTH) {
-      throw new Error(
-        `${at} must be at most ${MAX_NOTICE_LENGTH} characters`,
-      );
+      throw new Error(`${at} must be at most ${MAX_NOTICE_LENGTH} characters`);
     }
     return { tone: raw.tone as NoticeTone, text };
   });
@@ -403,4 +406,17 @@ export function parseAssignProductDto(body: unknown): AssignProductDto {
 export function parseGrantPurchaseInDto(body: unknown): GrantPurchaseInDto {
   const raw = asRecord(body);
   return { productId: parseObjectId(raw.productId, "productId") };
+}
+
+/** Body of the image reorder: a list of image ids. Membership is checked later. */
+export function parseReorderImagesDto(body: unknown): ReorderProductImagesDto {
+  const { ids } = asRecord(body);
+  if (
+    !Array.isArray(ids) ||
+    ids.length > MAX_PRODUCT_IMAGES ||
+    !ids.every((id) => typeof id === "string" && Types.ObjectId.isValid(id))
+  ) {
+    throw new Error("ids must be a list of image ids");
+  }
+  return { ids: ids as string[] };
 }

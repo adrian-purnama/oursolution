@@ -1,0 +1,14 @@
+{
+  "deployment": {
+    "name": "snipeit-${USERNAME}",
+    "variables": [
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" },
+      { "key": "SMTP_HOST", "value": "", "visibility": "editable" },
+      { "key": "SMTP_PORT", "value": "587", "visibility": "editable" },
+      { "key": "SMTP_USERNAME", "value": "", "visibility": "editable" },
+      { "key": "SMTP_PASSWORD", "value": "", "visibility": "editable" },
+      { "key": "SMTP_FROM", "value": "${EMAIL}", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "snipeit", "subdomain": "assets-${USERNAME}", "port": 80 }]
+  }
+}

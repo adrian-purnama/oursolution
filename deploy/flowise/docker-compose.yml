@@ -1,0 +1,81 @@
+# Flowise (AI agent / chatbot builder) hosting — one stack per customer,
+# deployed by Dokploy.
+#
+# Product settings: deploy/flowise/product.json
+# Data: /mnt/nas-sda/flowise/<username>/ (SQLite database, encryption and
+# sign-in keys, uploads, logs).
+
+services:
+  # Flowise runs as the node user (uid 1000); Docker creates a missing bind
+  # folder as root.
+  init-perms:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command: ["chown", "-R", "1000:1000", "/data"]
+    volumes:
+      - /mnt/nas-sda/flowise/${USERNAME}/flowise:/data
+
+  flowise:
+    image: flowiseai/flowise:3.1.4
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      - PORT=3000
+      - APP_URL=https://flowise-${USERNAME}.${DOMAIN}
+      # Everything in one folder. The encryption key for saved credentials
+      # and the sign-in secrets are generated there on first start, so each
+      # customer gets their own; losing that folder loses saved credentials.
+      - DATABASE_TYPE=sqlite
+      - DATABASE_PATH=/home/node/.flowise
+      - SECRETKEY_STORAGE_TYPE=local
+      - SECRETKEY_PATH=/home/node/.flowise
+      - BLOB_STORAGE_PATH=/home/node/.flowise/storage
+      - STORAGE_TYPE=local
+      - LOG_PATH=/home/node/.flowise/logs
+      - LOG_LEVEL=warn
+      # Cloudflare and Traefik sit in front.
+      - NUMBER_OF_PROXIES=2
+      - TRUST_PROXY=true
+      - SECURE_COOKIES=true
+      - FLOWISE_FILE_SIZE_LIMIT=50mb
+      - DISABLE_FLOWISE_TELEMETRY=true
+      # Shared server: keep flows away from the server and the internal
+      # network. Requests to private addresses are refused, custom JS gets
+      # no Node built-ins, and MCP tools cannot start local commands.
+      - HTTP_SECURITY_CHECK=true
+      - ALLOW_BUILTIN_DEP=false
+      - CUSTOM_MCP_SECURITY_CHECK=true
+      - CUSTOM_MCP_PROTOCOL=sse
+      # Below the memory limit, so Node collects garbage before it is killed.
+      - NODE_OPTIONS=--max-old-space-size=768
+    expose:
+      - "3000"
+    volumes:
+      - /mnt/nas-sda/flowise/${USERNAME}/flowise:/home/node/.flowise
+    depends_on:
+      - init-perms
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/v1/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+          pids: 512
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

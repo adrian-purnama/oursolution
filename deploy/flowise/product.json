@@ -1,0 +1,9 @@
+{
+  "deployment": {
+    "name": "flowise-${USERNAME}",
+    "variables": [
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "flowise", "subdomain": "flowise-${USERNAME}", "port": 3000 }]
+  }
+}

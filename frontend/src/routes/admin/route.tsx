@@ -5,7 +5,14 @@ import {
   redirect,
   useRouterState,
 } from '@tanstack/react-router'
-import { LifeBuoy, Package, Server, Settings, Users } from 'lucide-react'
+import {
+  LifeBuoy,
+  Package,
+  ReceiptText,
+  Server,
+  Settings,
+  Users,
+} from 'lucide-react'
 import { bootstrapAuth, isAdminUser } from '#/context/authContext'
 import { cn } from '#/lib/utils'
 import { privatePage } from '#/lib/seo'
@@ -31,6 +38,7 @@ const NAV_ITEMS = [
   { to: '/admin/app-config' as const, label: 'Config', icon: Settings },
   { to: '/admin/users' as const, label: 'Users', icon: Users },
   { to: '/admin/products' as const, label: 'Products', icon: Package },
+  { to: '/admin/payments' as const, label: 'Payments', icon: ReceiptText },
   { to: '/admin/deployments' as const, label: 'Deployments', icon: Server },
   { to: '/admin/tickets' as const, label: 'Tickets', icon: LifeBuoy },
 ]
@@ -44,6 +52,7 @@ function breadcrumbFor(pathname: string): string[] {
     return ['Admin', 'Products', 'Edit']
   }
   if (pathname.startsWith('/admin/products')) return ['Admin', 'Products']
+  if (pathname.startsWith('/admin/payments')) return ['Admin', 'Payments']
   if (pathname.startsWith('/admin/deployments')) {
     return ['Admin', 'Deployments']
   }

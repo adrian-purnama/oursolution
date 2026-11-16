@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
+  AdminPaymentListOutDto,
   CheckoutOutDto,
   CheckoutQuoteOutDto,
   PaymentConfigOutDto,
@@ -24,8 +25,11 @@ import { MidtransProvider, midtransStatus } from "./midtrans.provider";
 import { notifyInvoiceIssued, invoicePdfFor } from "./payment.invoice";
 import {
   CheckoutError,
+  listAllPayments,
   listPayments,
   mongoPaymentStore,
+  PAYMENT_GROUPS,
+  type PaymentGroup,
   paymentProvider,
   paymentService,
   toPaymentOut,
@@ -214,6 +218,29 @@ export class PaymentController {
         message: "Payments retrieved",
         data,
       } satisfies ApiResponseDto<PaymentListOutDto>);
+    } catch (error) {
+      return fail(res, error, "Failed to load payments");
+    }
+  };
+
+  /** Admin: every user's payments, by status group and email search. */
+  listAll = async (req: Request, res: Response) => {
+    try {
+      const { page, pageSize } = parsePageQuery(req.query);
+      const rawGroup = req.query.status;
+      const group =
+        typeof rawGroup === "string" && rawGroup in PAYMENT_GROUPS
+          ? (rawGroup as PaymentGroup)
+          : null;
+      const rawSearch = req.query.search;
+      const search =
+        typeof rawSearch === "string" ? rawSearch.slice(0, 200) : "";
+      const data = await listAllPayments({ group, search }, page, pageSize);
+      return res.status(200).json({
+        success: true,
+        message: "Payments retrieved",
+        data,
+      } satisfies ApiResponseDto<AdminPaymentListOutDto>);
     } catch (error) {
       return fail(res, error, "Failed to load payments");
     }

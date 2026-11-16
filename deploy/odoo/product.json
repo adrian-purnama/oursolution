@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "odoo-${USERNAME}",
+    "variables": [
+      { "key": "MASTER_PASSWORD", "value": "", "visibility": "editable" },
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "odoo", "subdomain": "odoo-${USERNAME}", "port": 8069 }]
+  }
+}

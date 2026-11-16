@@ -219,7 +219,7 @@ export default function Header() {
                 Log in
               </Link>
               <Link
-                to="/register"
+                to="/contact"
                 className={ctaPrimaryClass}
                 activeProps={{
                   className: cn(ctaPrimaryClass, 'opacity-90'),
@@ -455,7 +455,7 @@ export default function Header() {
                       Log in
                     </Link>
                     <Link
-                      to="/register"
+                      to="/contact"
                       className="block rounded-[var(--radius-sm)] bg-[var(--navy)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
                       onClick={closeMenu}
                     >

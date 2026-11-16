@@ -54,10 +54,13 @@ export function PaymentTable({
   payments,
   actions,
   onOpen,
+  showCustomer = false,
 }: {
   payments: Payment[]
   actions?: (payment: Payment) => ReactNode
   onOpen?: (payment: Payment) => void
+  /** Adds a column with who the invoice is for (admin lists). */
+  showCustomer?: boolean
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
@@ -65,6 +68,7 @@ export function PaymentTable({
         <TableHeader>
           <TableRow>
             <TableHead>Invoice</TableHead>
+            {showCustomer ? <TableHead>Customer</TableHead> : null}
             <TableHead>Products</TableHead>
             <TableHead className="text-right">Total</TableHead>
             <TableHead>Status</TableHead>
@@ -88,6 +92,13 @@ export function PaymentTable({
                   {formatDateTime(payment.createdAt)}
                 </p>
               </TableCell>
+              {showCustomer ? (
+                <TableCell className="max-w-[14rem] align-top">
+                  <p className="truncate" title={payment.user?.email}>
+                    {payment.user?.email ?? '—'}
+                  </p>
+                </TableCell>
+              ) : null}
               <TableCell className="max-w-[18rem] align-top">
                 <p className="truncate" title={itemsSummary(payment)}>
                   {itemsSummary(payment)}

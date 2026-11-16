@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { softDeleteBlocker, subdomainFromHost } from "./product.service";
+import {
+  reorderImageIds,
+  softDeleteBlocker,
+  subdomainFromHost,
+} from "./product.service";
 
 describe("softDeleteBlocker", () => {
   it("lets a subscription go once nobody has it running or scheduled", () => {
@@ -28,5 +32,23 @@ describe("subdomainFromHost", () => {
       "n8n-${USERNAME}",
     );
     assert.equal(subdomainFromHost("app", null), "app");
+  });
+});
+
+describe("reorderImageIds", () => {
+  const current = ["a", "b", "c"];
+
+  it("takes every current image in the new order", () => {
+    assert.deepEqual(reorderImageIds(current, ["c", "a", "b"]), [
+      "c",
+      "a",
+      "b",
+    ]);
+  });
+
+  it("rejects a list that drops, repeats or adds an image", () => {
+    assert.throws(() => reorderImageIds(current, ["a", "b"]));
+    assert.throws(() => reorderImageIds(current, ["a", "a", "b"]));
+    assert.throws(() => reorderImageIds(current, ["a", "b", "d"]));
   });
 });

@@ -1,0 +1,9 @@
+{
+  "deployment": {
+    "name": "transmute-${USERNAME}",
+    "variables": [
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "transmute", "subdomain": "convert-${USERNAME}", "port": 3313 }]
+  }
+}

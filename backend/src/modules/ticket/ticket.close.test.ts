@@ -463,7 +463,7 @@ describe("concurrent closes", () => {
 });
 
 describe("closing notification", () => {
-  it("goes in-app and by email, linking to the ticket; the email has the full resolution", async () => {
+  it("goes in-app and by email, linking to the ticket; the email has the summary and the full resolution", async () => {
     const { admin, customer, ticketId } = await busyTicket();
     const resolution = `We reset it.\n${"Long explanation. ".repeat(50).trim()}`;
     await service.close(admin.id, ticketId, {
@@ -485,7 +485,26 @@ describe("closing notification", () => {
     assert.equal(await customEmail(customer.email), true);
     assert.equal(mails[0]?.to, customer.email);
     assert.ok(mails[0]!.body.includes(resolution));
+    assert.ok(
+      mails[0]!.body.includes(
+        "Summary:\nThe customer could not log in. Support reset the password. Solved.",
+      ),
+    );
     assert.equal(mails[0]?.url, `https://app.test/support/${ticketId}`);
+  });
+
+  it("leaves the summary out of the email when the close was not summarized", async () => {
+    const { admin, customer, ticketId } = await busyTicket();
+    await service.close(admin.id, ticketId, {
+      productId: null,
+      resolution: "Done",
+      summarize: false,
+    });
+    const { customEmail } = sent[0]!;
+    assert.ok(customEmail);
+    await customEmail(customer.email);
+    assert.doesNotMatch(mails[0]!.body, /Summary:/);
+    assert.match(mails[0]!.body, /Resolution:\nDone/);
   });
 
   it("failing does not undo the close", async () => {

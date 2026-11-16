@@ -1,4 +1,4 @@
-import type { HydratedDocument, Types } from "mongoose";
+import { Types, type HydratedDocument } from "mongoose";
 import {
   deletePublicFile,
   publicFileUrl,
@@ -7,13 +7,15 @@ import {
 import type {
   CreateProductDto,
   PricingProductOutDto,
+  ProductImageOutDto,
   ProductOutDto,
   ProductSummaryDto,
   UpdateProductDto,
 } from "../../dto/product.dto";
-import type {
-  ProductInterface,
-  ProductNotice,
+import {
+  MAX_PRODUCT_IMAGES,
+  type ProductInterface,
+  type ProductNotice,
 } from "../../models/product/product.interface";
 import { ProductModel } from "../../models/product/product.model";
 import { PaymentModel } from "../../models/payment/payment.model";
@@ -35,6 +37,36 @@ export function noticesOf(product: ProductDoc): ProductNotice[] {
   return (product.notices ?? []).map(({ tone, text }) => ({ tone, text }));
 }
 
+/** The product's images in display order. */
+export function imagesOf(product: ProductDoc): ProductImageOutDto[] {
+  return (product.images ?? []).map((id) => ({
+    id: id.toString(),
+    url: publicFileUrl(id) as string,
+  }));
+}
+
+/** The cover image: the first one. */
+function coverUrl(product: ProductDoc): string | null {
+  return publicFileUrl(product.images?.[0] ?? null);
+}
+
+/**
+ * The current image ids in the order given. `ids` must name every current
+ * image exactly once, so a stale page cannot drop or duplicate one.
+ */
+export function reorderImageIds(current: string[], ids: string[]): string[] {
+  const same =
+    ids.length === current.length &&
+    new Set(ids).size === ids.length &&
+    ids.every((id) => current.includes(id));
+  if (!same) {
+    throw new Error(
+      "The images changed since the page loaded; reload and try again",
+    );
+  }
+  return ids;
+}
+
 /** The public shape: no internal price, deployment or access link. */
 export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
   return {
@@ -42,7 +74,8 @@ export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
     name: product.name,
     kind: product.kind,
     color: product.color,
-    imageUrl: publicFileUrl(product.image),
+    imageUrl: coverUrl(product),
+    images: imagesOf(product),
     pricingText: product.pricingText,
     description: product.description,
     notices: noticesOf(product),
@@ -56,7 +89,8 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
     name: product.name,
     kind: product.kind,
     color: product.color,
-    imageUrl: publicFileUrl(product.image),
+    imageUrl: coverUrl(product),
+    images: imagesOf(product),
     pricingText: product.pricingText,
     description: product.description,
     notices: noticesOf(product),
@@ -92,7 +126,7 @@ export function toProductSummary(product: ProductDoc): ProductSummaryDto {
     name: product.name,
     kind: product.kind,
     color: product.color,
-    imageUrl: publicFileUrl(product.image),
+    imageUrl: coverUrl(product),
   };
 }
 
@@ -179,6 +213,30 @@ export class ProductService {
     return legacy.length;
   }
 
+  /**
+   * Products saved with a single `image` get it as the first of `images`.
+   * Runs at startup; returns how many products it changed.
+   */
+  async migrateLegacyImages(): Promise<number> {
+    const legacy = await ProductModel.collection
+      .find<{
+        _id: Types.ObjectId;
+        image: Types.ObjectId | null;
+        images?: Types.ObjectId[];
+      }>({ image: { $exists: true } })
+      .toArray();
+    for (const product of legacy) {
+      const images = product.images ?? [];
+      const old = product.image;
+      if (old && !images.some((id) => id.equals(old))) images.unshift(old);
+      await ProductModel.collection.updateOne(
+        { _id: product._id },
+        { $set: { images }, $unset: { image: "" } },
+      );
+    }
+    return legacy.length;
+  }
+
   async list(): Promise<ProductOutDto[]> {
     const products = await ProductModel.find()
       .sort({ priceIdr: 1, name: 1 })
@@ -239,30 +297,61 @@ export class ProductService {
     return toProductOut(product);
   }
 
-  /** Replace the product's public image; the old file is removed afterwards. */
-  async changeImage(id: string, buffer: Buffer): Promise<ProductOutDto> {
+  /** Add an image after the others; the first one stays the cover. */
+  async addImage(id: string, buffer: Buffer): Promise<ProductOutDto> {
     const product = await this.get(id);
+    const full = `A product can have at most ${MAX_PRODUCT_IMAGES} images`;
+    if (product.images.length >= MAX_PRODUCT_IMAGES) throw new Error(full);
     // Re-encoding strips anything that is not pixel data (scripts in SVG,
     // polyglot files) and ignores the client-supplied content type.
     const image = await normalizeImage(buffer);
 
-    const uploaded = await updatePublicFile({
-      oldId: product.image,
+    await updatePublicFile({
       buffer: image.buffer,
       filename: `product-${product.id}.png`,
       contentType: image.contentType,
       metadata: { kind: "productImage", productId: product.id },
       onReplace: async (newId, session) => {
-        await ProductModel.updateOne(
-          { _id: product._id },
-          { $set: { image: newId } },
+        // Checked again here so two uploads at once cannot pass the limit.
+        const result = await ProductModel.updateOne(
+          {
+            _id: product._id,
+            [`images.${MAX_PRODUCT_IMAGES - 1}`]: { $exists: false },
+          },
+          { $push: { images: newId } },
           { session },
         );
+        if (result.modifiedCount === 0) throw new Error(full);
       },
     });
 
-    product.image = uploaded.id;
+    return toProductOut(await this.get(id));
+  }
+
+  /** Put the images in a new order; the first becomes the cover. */
+  async reorderImages(id: string, ids: string[]): Promise<ProductOutDto> {
+    const product = await this.get(id);
+    const order = reorderImageIds(
+      product.images.map((image) => image.toString()),
+      ids,
+    );
+    product.images = order.map((image) => new Types.ObjectId(image));
+    await product.save();
     return toProductOut(product);
+  }
+
+  /** Remove one image and its file. */
+  async removeImage(id: string, imageId: string): Promise<ProductOutDto> {
+    const product = await this.get(id);
+    const image = product.images.find((item) => item.toString() === imageId);
+    if (!image) throw new Error("Image not found");
+
+    await ProductModel.updateOne(
+      { _id: product._id },
+      { $pull: { images: image } },
+    );
+    await deletePublicFile(image);
+    return toProductOut(await this.get(id));
   }
 
   /** Hide a product everywhere new; existing owners keep it. Can be restored. */
@@ -312,7 +401,7 @@ export class ProductService {
     }
 
     await product.deleteOne();
-    if (product.image) await deletePublicFile(product.image);
+    for (const image of product.images) await deletePublicFile(image);
   }
 }
 

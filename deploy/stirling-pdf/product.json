@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "stirlingpdf-${USERNAME}",
+    "variables": [
+      { "key": "ADMIN_PASSWORD", "value": "", "visibility": "editable" },
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "stirling-pdf", "subdomain": "pdf-${USERNAME}", "port": 8080 }]
+  }
+}
