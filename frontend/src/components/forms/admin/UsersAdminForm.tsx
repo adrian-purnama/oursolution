@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { LoaderCircle, Search } from 'lucide-react'
+import { LoaderCircle, Search, UserPlus } from 'lucide-react'
+import CreateUserDialog from '#/components/forms/admin/CreateUserDialog'
+import { Button } from '#/components/ui/button'
 import ListPagination from '#/components/forms/shared/ListPagination'
 import { USER_ROLE_LABELS } from '#/lib/adminUser'
 import type { AdminUser } from '#/lib/adminUser'
@@ -17,6 +19,7 @@ export default function UsersAdminForm() {
   const [loading, setLoading] = useState(true)
   const [results, setResults] = useState<AdminUser[]>([])
   const [page, setPage] = useState(1)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     const run = { cancelled: false }
@@ -65,11 +68,17 @@ export default function UsersAdminForm() {
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-medium text-[var(--ink)]">Users</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Browse users by default. Filter by email as you type.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-medium text-[var(--ink)]">Users</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Browse users by default. Filter by email as you type.
+            </p>
+          </div>
+          <Button type="button" onClick={() => setCreating(true)}>
+            <UserPlus className="size-4" aria-hidden />
+            Add user
+          </Button>
         </div>
 
         <div className="relative">
@@ -140,6 +149,17 @@ export default function UsersAdminForm() {
           </>
         )}
       </section>
+      <CreateUserDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onCreated={(user) =>
+          setResults((current) =>
+            [...current.filter((u) => u.id !== user.id), user].sort((a, b) =>
+              a.email.localeCompare(b.email),
+            ),
+          )
+        }
+      />
     </div>
   )
 }

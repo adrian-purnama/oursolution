@@ -10,7 +10,13 @@ const userSchema = new Schema<UserInterface>(
     },
     hashedPassword: {
       type: String,
-      required: true,
+      default: undefined,
+    },
+    googleId: {
+      type: String,
+      default: undefined,
+      unique: true,
+      sparse: true,
     },
     isBlocked: {
       type: Boolean,

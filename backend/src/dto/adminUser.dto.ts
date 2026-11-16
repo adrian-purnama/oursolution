@@ -7,6 +7,12 @@ export interface AdminUserOutDto {
   role: UserRole;
 }
 
+export interface CreateAdminUserDto {
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
 export interface UpdateAdminUserDto {
   password?: string;
   isBlocked?: boolean;

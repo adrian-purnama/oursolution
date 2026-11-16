@@ -3,7 +3,10 @@ export type UserRole = (typeof USER_ROLES)[number];
 
 export interface UserInterface {
   email: string;
-  hashedPassword: string;
+  /** Missing for an account made with Google that never set a password. */
+  hashedPassword?: string;
+  /** The linked Google account's id ("sub"). Signs this user in with Google. */
+  googleId?: string | null;
   isBlocked: boolean;
   /** "admin" opens the admin area; what a user can use comes from their active products. */
   role: UserRole;

@@ -41,6 +41,7 @@ import { Route as AdminTicketsIndexRouteImport } from './routes/admin/tickets/in
 import { Route as AdminTicketsTicketIdRouteImport } from './routes/admin/tickets/$ticketId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
+import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as AuthenticatedDashboardDeploymentsProductIdRouteImport } from './routes/_authenticated/dashboard/deployments/$productId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -208,6 +209,11 @@ const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   path: '/users/$userId',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
+  id: '/auth/google/callback',
+  path: '/auth/google/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedDashboardDeploymentsProductIdRoute =
   AuthenticatedDashboardDeploymentsProductIdRouteImport.update({
     id: '/dashboard/deployments/$productId',
@@ -238,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/tickets/$ticketId': typeof AdminTicketsTicketIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/billing/': typeof AuthenticatedBillingIndexRoute
   '/checkout/': typeof AuthenticatedCheckoutIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/tickets/$ticketId': typeof AdminTicketsTicketIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/billing': typeof AuthenticatedBillingIndexRoute
   '/checkout': typeof AuthenticatedCheckoutIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
@@ -306,6 +314,7 @@ export interface FileRoutesById {
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/tickets/$ticketId': typeof AdminTicketsTicketIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/_authenticated/billing/': typeof AuthenticatedBillingIndexRoute
   '/_authenticated/checkout/': typeof AuthenticatedCheckoutIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -341,6 +350,7 @@ export interface FileRouteTypes {
     | '/admin/products/new'
     | '/admin/tickets/$ticketId'
     | '/admin/users/$userId'
+    | '/auth/google/callback'
     | '/billing/'
     | '/checkout/'
     | '/dashboard/'
@@ -373,6 +383,7 @@ export interface FileRouteTypes {
     | '/admin/products/new'
     | '/admin/tickets/$ticketId'
     | '/admin/users/$userId'
+    | '/auth/google/callback'
     | '/billing'
     | '/checkout'
     | '/dashboard'
@@ -408,6 +419,7 @@ export interface FileRouteTypes {
     | '/admin/products/new'
     | '/admin/tickets/$ticketId'
     | '/admin/users/$userId'
+    | '/auth/google/callback'
     | '/_authenticated/billing/'
     | '/_authenticated/checkout/'
     | '/_authenticated/dashboard/'
@@ -431,6 +443,7 @@ export interface RootRouteChildren {
   ProductsProductIdRoute: typeof ProductsProductIdRoute
   ServicesSlugRoute: typeof ServicesSlugRoute
   ServicesIndexRoute: typeof ServicesIndexRoute
+  AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -659,6 +672,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersUserIdRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/auth/google/callback': {
+      id: '/auth/google/callback'
+      path: '/auth/google/callback'
+      fullPath: '/auth/google/callback'
+      preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/dashboard/deployments/$productId': {
       id: '/_authenticated/dashboard/deployments/$productId'
       path: '/dashboard/deployments/$productId'
@@ -755,6 +775,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductsProductIdRoute: ProductsProductIdRoute,
   ServicesSlugRoute: ServicesSlugRoute,
   ServicesIndexRoute: ServicesIndexRoute,
+  AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

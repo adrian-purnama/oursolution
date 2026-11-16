@@ -34,6 +34,7 @@ router.post(
 );
 
 router.get("/users", adminController.searchUsers);
+router.post("/users", adminController.createUser);
 router.get("/users/:id", adminController.getUser);
 router.patch("/users/:id", adminController.updateUser);
 

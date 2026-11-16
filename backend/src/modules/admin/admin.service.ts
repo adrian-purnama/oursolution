@@ -2,6 +2,7 @@ import * as bcrypt from "bcrypt";
 import { Types } from "mongoose";
 import type {
   AdminUserDetailOutDto,
+  CreateAdminUserDto,
   AdminUserOutDto,
   UpdateAdminUserDto,
 } from "../../dto/adminUser.dto";
@@ -34,6 +35,15 @@ function toAdminUser(doc: {
     isBlocked: Boolean(doc.isBlocked),
     role: doc.role,
   };
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === 11000
+  );
 }
 
 export class AdminService {
@@ -80,6 +90,27 @@ export class AdminService {
       .exec();
 
     return users.map((user) => toAdminUser(user));
+  }
+
+  /**
+   * An account made by an admin: no OTP, and open registration does not
+   * apply. The user signs in with the password the admin set.
+   */
+  async createUser(input: CreateAdminUserDto): Promise<AdminUserOutDto> {
+    const hashedPassword = await bcrypt.hash(input.password, 10);
+    try {
+      const user = await UserModel.create({
+        email: input.email,
+        hashedPassword,
+        role: input.role,
+      });
+      return toAdminUser(user);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        throw new Error("Email already registered");
+      }
+      throw error;
+    }
   }
 
   async updateUser(

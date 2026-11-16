@@ -6,10 +6,16 @@ import {
   ResetPasswordOutDto,
 } from "../../dto/resetPassword.dto";
 import { SendOtpInDto } from "../../dto/sendOtp.dto";
+import type {
+  GoogleConfigOutDto,
+  GoogleSignInInDto,
+  GoogleSignInOutDto,
+} from "../../dto/google.dto";
 import { env } from "../../environment/env";
 import { logger } from "../../logger/logger";
 import type { OtpPurpose } from "../../models/otp/otp.interface";
 import { UserModel } from "../../models/user/user.model";
+import { googleOAuth, googleRedirectUri } from "../../utils/googleOAuth";
 import { signAccessToken } from "../../utils/jwt";
 import { encodeResetToken } from "../../utils/resetToken";
 import { passwordProblem } from "../../validation/password";
@@ -22,6 +28,10 @@ const REGISTRATION_CLOSED = "Registration is closed, please contact admin";
 const LOGIN_CLOSED = "Login is closed, please contact admin";
 const INVALID_CREDENTIALS = "Invalid email or password";
 const INVALID_OTP = "Invalid or expired OTP";
+const BLOCKED = "This account is blocked, please contact admin";
+const EMAIL_NEEDS_LINK =
+  "This email already has an account. Please sign in with your password, then link Google from your profile";
+const GOOGLE_TAKEN = "This Google account is linked to another account";
 
 // Compared against when the email is unknown, so both paths cost one bcrypt run.
 const DUMMY_HASH = bcrypt.hashSync(
@@ -176,7 +186,7 @@ export class AuthService {
     }
 
     if (user.isBlocked) {
-      throw new Error("This account is blocked, please contact admin");
+      throw new Error(BLOCKED);
     }
 
     // Admins can always sign in, otherwise nobody could reopen login.
@@ -197,6 +207,125 @@ export class AuthService {
       email: user.email,
       jwt: token,
     };
+  }
+
+  googleConfig(): GoogleConfigOutDto {
+    return {
+      clientId: env.googleClientSecret ? env.googleClientId : null,
+      redirectUri: googleRedirectUri(),
+    };
+  }
+
+  /**
+   * Signs in the account linked to this Google account. An unknown Google
+   * account registers a new user, linked from the start. An email that
+   * already has an account is refused: its owner signs in with the password
+   * and links Google from the profile.
+   */
+  async googleSignIn(input: GoogleSignInInDto): Promise<GoogleSignInOutDto> {
+    const rememberMe = input.rememberMe ?? false;
+    const method = "googleSignIn";
+    const { googleId, email } = await googleOAuth.exchangeCode(input.code);
+
+    const linked = await UserModel.findOne({ googleId });
+    if (linked) {
+      if (linked.isBlocked) {
+        throw new Error(BLOCKED);
+      }
+      // Admins can always sign in, otherwise nobody could reopen login.
+      if (!appConfigService.openLogin && linked.role !== "admin") {
+        throw new Error(LOGIN_CLOSED);
+      }
+      logger.debug(
+        `User logged in with Google: ${linked.email}`,
+        this.source,
+        method,
+      );
+      return {
+        email: linked.email,
+        jwt: signAccessToken({
+          userId: linked.id,
+          email: linked.email,
+          rememberMe,
+          tokenVersion: linked.tokenVersion ?? 0,
+        }),
+      };
+    }
+
+    if (await UserModel.findOne({ email })) {
+      throw new Error(EMAIL_NEEDS_LINK);
+    }
+
+    if (!appConfigService.openRegister && !appConfigService.firstRegister) {
+      throw new Error(REGISTRATION_CLOSED);
+    }
+
+    // Only one registration can ever win the first-admin slot.
+    const isFirstAdmin =
+      appConfigService.firstRegister &&
+      (await appConfigService.claimFirstAdmin());
+
+    if (!isFirstAdmin && !appConfigService.openRegister) {
+      throw new Error(REGISTRATION_CLOSED);
+    }
+
+    try {
+      const user = await UserModel.create({
+        email,
+        googleId,
+        role: isFirstAdmin ? "admin" : "user",
+      });
+
+      logger.debug(
+        `User registered with Google: ${email}`,
+        this.source,
+        method,
+      );
+
+      return {
+        email: user.email,
+        jwt: signAccessToken({
+          userId: user.id,
+          email: user.email,
+          rememberMe,
+          tokenVersion: user.tokenVersion ?? 0,
+        }),
+      };
+    } catch (error) {
+      if (isFirstAdmin) {
+        await appConfigService.releaseFirstAdmin();
+      }
+      if (isDuplicateKeyError(error)) {
+        throw new Error(EMAIL_NEEDS_LINK);
+      }
+      logger.error(
+        error instanceof Error ? error.message : String(error),
+        this.source,
+        method,
+      );
+      throw error;
+    }
+  }
+
+  /** Links a Google account to a signed-in user, so it can sign them in. */
+  async linkGoogle(userId: string, code: string): Promise<void> {
+    const { googleId } = await googleOAuth.exchangeCode(code);
+
+    const owner = await UserModel.findOne({ googleId });
+    if (owner && owner.id !== userId) {
+      throw new Error(GOOGLE_TAKEN);
+    }
+
+    try {
+      await UserModel.updateOne({ _id: userId }, { $set: { googleId } });
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        throw new Error(GOOGLE_TAKEN);
+      }
+      throw error;
+    }
+
+    logger.debug(`Google linked for user ${userId}`, this.source, "linkGoogle");
   }
 
   async resetPassword(input: ResetPasswordInDto): Promise<ResetPasswordOutDto> {

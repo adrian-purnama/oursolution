@@ -17,6 +17,8 @@ export interface AuthUser {
   role: UserRole
   /** Products active right now; empty when none is. */
   products: ProductSummary[]
+  /** True when a Google account can sign this user in. */
+  googleLinked: boolean
 }
 
 interface AuthContextValue {
@@ -91,6 +93,7 @@ async function fetchValidatedUser(): Promise<AuthUser | null> {
       email: body.data.email,
       role: body.data.role === 'admin' ? 'admin' : 'user',
       products: body.data.products,
+      googleLinked: body.data.googleLinked === true,
     }
   } catch {
     return null

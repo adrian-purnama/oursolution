@@ -80,3 +80,41 @@ describe("AdminService.updateUser", () => {
     assert.equal(changed.tokenVersion, 1);
   });
 });
+
+describe("AdminService.createUser", () => {
+  afterEach(() => mock.restoreAll());
+
+  it("stores a hashed password and the chosen role", async () => {
+    const created: Record<string, unknown>[] = [];
+    mock.method(UserModel, "create", async (doc: Record<string, unknown>) => {
+      created.push(doc);
+      return { id: "u2", isBlocked: false, ...doc };
+    });
+    const out = await new AdminService().createUser({
+      email: "new@b.com",
+      password: "password123",
+      role: "user",
+    });
+    assert.deepEqual(out, {
+      id: "u2",
+      email: "new@b.com",
+      isBlocked: false,
+      role: "user",
+    });
+    assert.notEqual(created[0]?.hashedPassword, "password123");
+  });
+
+  it("reports an email that is already taken", async () => {
+    mock.method(UserModel, "create", async () => {
+      throw Object.assign(new Error("dup"), { code: 11000 });
+    });
+    await assert.rejects(
+      new AdminService().createUser({
+        email: "a@b.com",
+        password: "password123",
+        role: "user",
+      }),
+      /Email already registered/,
+    );
+  });
+});

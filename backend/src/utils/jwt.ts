@@ -25,7 +25,7 @@ export function signAccessToken(payload: {
     env.jwtSecret,
     {
       algorithm: ALGORITHM,
-      expiresIn: payload.rememberMe ? "30d" : "1h",
+      expiresIn: payload.rememberMe ? "15d" : "1d",
     },
   );
 }

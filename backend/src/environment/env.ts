@@ -228,6 +228,9 @@ export const env = {
     process.env.MIDTRANS_NOTIFICATION_URL,
     backendUrl(process.env.BACKEND_URL),
   ),
+  // Google sign-in. Optional: without both, only email and password work.
+  googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || null,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || null,
   // How long an unpaid invoice can still be paid.
   paymentTtlMinutes: Number(process.env.PAYMENT_TTL_MINUTES) || 60,
   // An OpenAI-compatible chat endpoint (base only; /v1/chat/completions is

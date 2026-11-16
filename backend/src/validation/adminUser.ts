@@ -1,4 +1,8 @@
-import type { UpdateAdminUserDto } from "../dto/adminUser.dto";
+import type {
+  CreateAdminUserDto,
+  UpdateAdminUserDto,
+} from "../dto/adminUser.dto";
+import { normalizeEmail } from "../utils/email";
 import { USER_ROLES, type UserRole } from "../models/user/user.interface";
 import { passwordProblem } from "./password";
 
@@ -8,6 +12,26 @@ export function parseEmailSearchQuery(value: unknown): string {
     return value[0].trim();
   }
   return "";
+}
+
+export function parseCreateAdminUserDto(body: unknown): CreateAdminUserDto {
+  if (!body || typeof body !== "object") {
+    throw new Error("Invalid request body");
+  }
+  const raw = body as Record<string, unknown>;
+
+  const email = normalizeEmail(raw.email);
+  if (!email) throw new Error("Invalid email");
+
+  const problem = passwordProblem(raw.password);
+  if (problem) throw new Error(problem);
+
+  const role = raw.role ?? "user";
+  if (!USER_ROLES.includes(role as UserRole)) {
+    throw new Error("role must be one of: " + USER_ROLES.join(", "));
+  }
+
+  return { email, password: raw.password as string, role: role as UserRole };
 }
 
 export function parseUpdateAdminUserDto(body: unknown): UpdateAdminUserDto {

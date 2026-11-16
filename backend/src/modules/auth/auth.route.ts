@@ -14,6 +14,14 @@ router.post(
   credentialRateLimit,
   authController.resetPassword,
 );
+router.get("/google", authController.googleConfig);
+router.post("/google", credentialRateLimit, authController.googleSignIn);
+router.post(
+  "/google/link",
+  credentialRateLimit,
+  requireUser,
+  authController.linkGoogle,
+);
 router.get("/validate", requireUser, authController.validateUser);
 
 export default router;

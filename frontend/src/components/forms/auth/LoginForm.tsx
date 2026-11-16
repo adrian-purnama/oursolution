@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import GoogleButton from '#/components/forms/auth/GoogleButton'
 import PasswordInput from '#/components/forms/shared/PasswordInput'
 import { apiFetch } from '#/lib/api'
 import { useAuth } from '#/context/authContext'
@@ -128,6 +129,18 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+
+      <div className={`my-5 flex items-center gap-3 text-xs ${hintClassName}`}>
+        <span className="h-px flex-1 bg-[var(--line)]" />
+        or
+        <span className="h-px flex-1 bg-[var(--line)]" />
+      </div>
+      <GoogleButton
+        label="Continue with Google"
+        mode="signin"
+        rememberMe={rememberMe}
+        redirect={redirect}
+      />
 
       <p className={`mt-6 ${hintClassName}`}>
         Don&apos;t have an account?{' '}

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import * as bcrypt from "bcrypt";
 import { UserModel } from "../../models/user/user.model";
+import { googleOAuth } from "../../utils/googleOAuth";
 import { verifyAccessToken } from "../../utils/jwt";
 import { appConfigService } from "../appConfig/appConfig.service";
 import { mailer } from "../mail/mail.service";
@@ -235,5 +236,114 @@ describe("AuthService.resetPassword", () => {
         }),
       /Invalid or expired OTP/,
     );
+  });
+});
+
+describe("AuthService.googleSignIn", () => {
+  afterEach(() => {
+    mock.restoreAll();
+    resetConfig();
+  });
+
+  const profile = { googleId: "g-1", email: "a@b.com" };
+
+  it("signs in the account the Google account is linked to", async () => {
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async () => ({
+      id: "u1",
+      email: "other@b.com",
+      googleId: "g-1",
+      tokenVersion: 2,
+    }));
+    const out = await new AuthService(otpStub()).googleSignIn({ code: "c" });
+    assert.equal(out.email, "other@b.com");
+    assert.equal(verifyAccessToken(out.jwt).userId, "u1");
+  });
+
+  it("refuses an email that already has an unlinked account", async () => {
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async (filter: { email?: string }) =>
+      filter.email ? { id: "u1", email: "a@b.com" } : null,
+    );
+    const create = mock.method(UserModel, "create", async () => ({}));
+    await assert.rejects(
+      () => new AuthService(otpStub()).googleSignIn({ code: "c" }),
+      /link Google from your profile/,
+    );
+    assert.equal(create.mock.callCount(), 0);
+  });
+
+  it("registers a new email already linked to Google", async () => {
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async () => null);
+    let created: Record<string, unknown> = {};
+    mock.method(UserModel, "create", async (doc: Record<string, unknown>) => {
+      created = doc;
+      return { id: "u9", email: "a@b.com", tokenVersion: 0 };
+    });
+    const out = await new AuthService(otpStub()).googleSignIn({ code: "c" });
+    assert.deepEqual(created, {
+      email: "a@b.com",
+      googleId: "g-1",
+      role: "user",
+    });
+    assert.equal(verifyAccessToken(out.jwt).userId, "u9");
+  });
+
+  it("does not register while registration is closed", async () => {
+    appConfigService.openRegister = false;
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async () => null);
+    await assert.rejects(
+      () => new AuthService(otpStub()).googleSignIn({ code: "c" }),
+      /Registration is closed/,
+    );
+  });
+
+  it("refuses blocked users", async () => {
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async () => ({
+      id: "u1",
+      email: "a@b.com",
+      googleId: "g-1",
+      isBlocked: true,
+    }));
+    await assert.rejects(
+      () => new AuthService(otpStub()).googleSignIn({ code: "c" }),
+      /blocked/,
+    );
+  });
+});
+
+describe("AuthService.linkGoogle", () => {
+  afterEach(() => mock.restoreAll());
+
+  const profile = { googleId: "g-1", email: "a@b.com" };
+
+  it("refuses a Google account that belongs to someone else", async () => {
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async () => ({ id: "other" }));
+    const update = mock.method(UserModel, "updateOne", async () => ({}));
+    await assert.rejects(
+      () => new AuthService(otpStub()).linkGoogle("u1", "c"),
+      /linked to another account/,
+    );
+    assert.equal(update.mock.callCount(), 0);
+  });
+
+  it("stores the Google id on the signed-in user", async () => {
+    mock.method(googleOAuth, "exchangeCode", async () => profile);
+    mock.method(UserModel, "findOne", async () => null);
+    let change: unknown;
+    mock.method(
+      UserModel,
+      "updateOne",
+      async (_filter: unknown, update: unknown) => {
+        change = update;
+        return { matchedCount: 1 };
+      },
+    );
+    await new AuthService(otpStub()).linkGoogle("u1", "c");
+    assert.deepEqual(change, { $set: { googleId: "g-1" } });
   });
 });

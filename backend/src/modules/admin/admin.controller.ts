@@ -5,6 +5,7 @@ import type {
 } from "../../dto/adminUser.dto";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import {
+  parseCreateAdminUserDto,
   parseEmailSearchQuery,
   parseUpdateAdminUserDto,
 } from "../../validation/adminUser";
@@ -197,6 +198,25 @@ export class AdminController {
         success: false,
         message:
           error instanceof Error ? error.message : "Failed to search users",
+        data: null,
+      } satisfies ApiResponseDto);
+    }
+  };
+
+  createUser = async (req: Request, res: Response) => {
+    try {
+      const input = parseCreateAdminUserDto(req.body);
+      const data = await this.adminService.createUser(input);
+      return res.status(201).json({
+        success: true,
+        message: "User created",
+        data,
+      } satisfies ApiResponseDto<AdminUserOutDto>);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to create user",
         data: null,
       } satisfies ApiResponseDto);
     }
