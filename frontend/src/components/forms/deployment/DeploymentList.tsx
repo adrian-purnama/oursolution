@@ -10,9 +10,17 @@ import {
 } from '#/components/forms/deployment/ServiceStatus'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
-import { BUSY_STATES, formatDate, formatUptime } from '#/lib/deployment'
+import ExpiryNotice from '#/components/forms/deployment/ExpiryNotice'
+import {
+  BUSY_STATES,
+  expiryOf,
+  formatDate,
+  formatDaysLeft,
+  formatUptime,
+} from '#/lib/deployment'
 import type { Deployment } from '#/lib/deployment'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { cn } from '#/lib/utils'
 
 const REFRESH_MS = 60_000
 
@@ -31,7 +39,7 @@ function quietLine(deployment: Deployment): string {
     case 'notDeployed':
       return deployment.entitled
         ? 'Ready to deploy.'
-        : 'Renew the subscription to deploy.'
+        : 'Expired. Extend the subscription to deploy.'
     case 'stopped':
       return 'Turned off. Your data is kept.'
     case 'failed':
@@ -83,6 +91,7 @@ function ServiceCard({
   onSelect?: (productId: string) => void
 }) {
   const status = deployment.status.at(0)
+  const expiry = expiryOf(deployment)
   return (
     <CardShell deployment={deployment} onSelect={onSelect}>
       <div className="flex items-start gap-3">
@@ -124,12 +133,21 @@ function ServiceCard({
             {status.responseMs !== null ? ` · ${status.responseMs} ms` : ''}
           </span>
         ) : null}
-        <span className="ml-auto truncate">
-          {!deployment.entitled
-            ? 'Subscription not active'
-            : deployment.subscriptionEndsAt
-              ? `Until ${formatDate(deployment.subscriptionEndsAt)}`
-              : ''}
+        <span
+          className={cn(
+            'ml-auto truncate',
+            expiry?.kind === 'expired' &&
+              'font-medium text-[var(--destructive)]',
+            expiry?.kind === 'expiring' && 'font-medium text-amber-700',
+          )}
+        >
+          {expiry?.kind === 'expired'
+            ? 'Expired'
+            : expiry?.kind === 'expiring'
+              ? `Ends ${formatDaysLeft(expiry.daysLeft)}`
+              : deployment.subscriptionEndsAt
+                ? `Until ${formatDate(deployment.subscriptionEndsAt)}`
+                : ''}
         </span>
         <ArrowRight
           className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5"
@@ -231,6 +249,7 @@ export default function DeploymentList({
 
   return (
     <div className="space-y-4">
+      {admin ? null : <ExpiryNotice deployments={deployments} />}
       <dl
         className={`${cardClassName} grid grid-cols-1 gap-px overflow-hidden bg-[var(--line)] sm:grid-cols-3`}
       >

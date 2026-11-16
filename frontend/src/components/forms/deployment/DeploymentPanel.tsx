@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
+import { Link } from '@tanstack/react-router'
 import {
+  CalendarPlus,
+  CalendarX,
   Check,
   Circle,
   Copy,
@@ -45,6 +48,7 @@ import {
   RUN_ACTION_LABELS,
   STATE_LABELS,
   actionLabel,
+  expiryOf,
   formatSince,
   formatUptime,
   subscriptionLine,
@@ -359,6 +363,9 @@ export default function DeploymentPanel({
   )
   const wipe = admin ? deployment.internal?.wipe : undefined
   const locked = busy || starting !== null
+  const expiry = expiryOf(deployment)
+  /** Customers can renew from here; admins grant time elsewhere. */
+  const extendable = !admin && expiry !== null
 
   const check = live ? overallCheckState(deployment.status) : null
   const uptimes = deployment.status.flatMap((item) =>
@@ -405,11 +412,46 @@ export default function DeploymentPanel({
                 </h2>
                 <StateBadge state={state} />
               </div>
-              <p className={`mt-0.5 ${hintClassName}`}>
+              <p
+                className={cn(
+                  'mt-0.5',
+                  expiry?.kind === 'expired'
+                    ? 'text-sm text-[var(--destructive)]'
+                    : expiry?.kind === 'expiring'
+                      ? 'text-sm text-amber-700'
+                      : hintClassName,
+                )}
+              >
                 {subscriptionLine(deployment)}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {extendable && expiry.kind === 'expired' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled
+                  className="text-[var(--destructive)] disabled:opacity-100"
+                >
+                  <CalendarX aria-hidden />
+                  Expired
+                </Button>
+              ) : null}
+              {extendable ? (
+                <Button
+                  asChild
+                  variant={expiry.kind === 'expired' ? 'default' : 'outline'}
+                >
+                  <Link
+                    to="/checkout"
+                    search={{ productId: deployment.product.id }}
+                    className="no-underline"
+                  >
+                    <CalendarPlus aria-hidden />
+                    Extend
+                  </Link>
+                </Button>
+              ) : null}
               {primary ? (
                 <Button
                   type="button"
@@ -534,7 +576,7 @@ export default function DeploymentPanel({
         <p className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">
           {admin
             ? 'This subscription is not active, so only turning off is possible.'
-            : 'Your subscription is not active. Renew it to deploy or turn the service on. Your data is kept.'}
+            : 'Your subscription has expired. Extend it to deploy or turn the service on again. Your data is kept.'}
         </p>
       ) : null}
 

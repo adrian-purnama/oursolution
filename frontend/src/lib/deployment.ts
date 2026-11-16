@@ -209,11 +209,47 @@ export function formatSince(iso: string, now: number = Date.now()): string {
   return plural(Math.floor(minutes / (60 * 24)), 'day')
 }
 
+/** A subscription ending within this many days counts as "ending soon". */
+export const EXPIRING_SOON_DAYS = 7
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export type Expiry =
+  { kind: 'expired' } | { kind: 'expiring'; endsAt: string; daysLeft: number }
+
+/** Whether the subscription has ended or ends soon; null when neither. */
+export function expiryOf(
+  deployment: Pick<Deployment, 'entitled' | 'subscriptionEndsAt'>,
+  now: number = Date.now(),
+): Expiry | null {
+  if (!deployment.entitled) return { kind: 'expired' }
+  const endsAt = deployment.subscriptionEndsAt
+  if (!endsAt) return null
+  const left = Date.parse(endsAt) - now
+  if (left > EXPIRING_SOON_DAYS * DAY_MS) return null
+  return {
+    kind: 'expiring',
+    endsAt,
+    daysLeft: Math.max(0, Math.ceil(left / DAY_MS)),
+  }
+}
+
+/** "today", "tomorrow", "in 3 days". */
+export function formatDaysLeft(daysLeft: number): string {
+  if (daysLeft <= 0) return 'today'
+  if (daysLeft === 1) return 'tomorrow'
+  return `in ${daysLeft} days`
+}
+
 /** One line on where the subscription stands. */
 export function subscriptionLine(
   deployment: Pick<Deployment, 'entitled' | 'subscriptionEndsAt'>,
 ): string {
-  if (!deployment.entitled) return 'Subscription not active'
+  const expiry = expiryOf(deployment)
+  if (expiry?.kind === 'expired') return 'Subscription expired'
+  if (expiry?.kind === 'expiring') {
+    return `Subscription ends ${formatDaysLeft(expiry.daysLeft)} (${formatDate(expiry.endsAt)})`
+  }
   return deployment.subscriptionEndsAt
     ? `Subscription active until ${formatDate(deployment.subscriptionEndsAt)}`
     : 'Subscription active'
