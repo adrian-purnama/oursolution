@@ -163,23 +163,13 @@ export default function Header() {
         </Link>
 
         <div className="hidden items-center justify-center gap-1 md:flex">
-          {isAuthenticated ? (
-            <DashboardMenu
-              pathname={pathname}
-              activeClassName={activeNavClass}
-              className={navLinkClass}
-              unreadTickets={unreadTickets}
-            />
-          ) : (
-            <Link
-              to="/"
-              className={navLinkClass}
-              activeOptions={{ exact: true }}
-              activeProps={{ className: activeNavClass }}
-            >
-              Home
-            </Link>
-          )}
+          <DashboardMenu
+            signedIn={isAuthenticated}
+            pathname={pathname}
+            activeClassName={activeNavClass}
+            className={navLinkClass}
+            unreadTickets={unreadTickets}
+          />
           <ServicesMenu
             className={
               pathname.startsWith('/services') ? activeNavClass : navLinkClass
@@ -316,8 +306,8 @@ export default function Header() {
                 >
                   {isAuthenticated ? 'Dashboard' : 'Home'}
                 </Link>
-                {isAuthenticated ? (
-                  <>
+                <>
+                  {isAuthenticated ? (
                     <Link
                       to="/"
                       className={drawerSubLinkClass}
@@ -330,17 +320,19 @@ export default function Header() {
                       <House className="size-5" aria-hidden />
                       Home page
                     </Link>
-                    <Link
-                      to="/contact"
-                      className={drawerSubLinkClass}
-                      activeProps={{
-                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                      }}
-                      onClick={closeMenu}
-                    >
-                      <Mail className="size-5" aria-hidden />
-                      Contact
-                    </Link>
+                  ) : null}
+                  <Link
+                    to="/contact"
+                    className={drawerSubLinkClass}
+                    activeProps={{
+                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                    }}
+                    onClick={closeMenu}
+                  >
+                    <Mail className="size-5" aria-hidden />
+                    Contact
+                  </Link>
+                  {isAuthenticated ? (
                     <Link
                       to="/support"
                       className={drawerSubLinkClass}
@@ -362,30 +354,30 @@ export default function Header() {
                         </span>
                       ) : null}
                     </Link>
-                    <Link
-                      to="/privacy"
-                      className={drawerSubLinkClass}
-                      activeProps={{
-                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                      }}
-                      onClick={closeMenu}
-                    >
-                      <ShieldCheck className="size-5" aria-hidden />
-                      Privacy policy
-                    </Link>
-                    <Link
-                      to="/terms"
-                      className={drawerSubLinkClass}
-                      activeProps={{
-                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                      }}
-                      onClick={closeMenu}
-                    >
-                      <FileText className="size-5" aria-hidden />
-                      Terms of service
-                    </Link>
-                  </>
-                ) : null}
+                  ) : null}
+                  <Link
+                    to="/privacy"
+                    className={drawerSubLinkClass}
+                    activeProps={{
+                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                    }}
+                    onClick={closeMenu}
+                  >
+                    <ShieldCheck className="size-5" aria-hidden />
+                    Privacy policy
+                  </Link>
+                  <Link
+                    to="/terms"
+                    className={drawerSubLinkClass}
+                    activeProps={{
+                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                    }}
+                    onClick={closeMenu}
+                  >
+                    <FileText className="size-5" aria-hidden />
+                    Terms of service
+                  </Link>
+                </>
                 <Link
                   to="/services"
                   className={drawerLinkClass}
@@ -424,16 +416,6 @@ export default function Header() {
                   <ShoppingBag className="size-5" aria-hidden />
                   Shop
                 </Link>
-                {!isAuthenticated ? (
-                  <Link
-                    to="/contact"
-                    className={drawerLinkClass}
-                    activeProps={{ className: drawerActiveClass }}
-                    onClick={closeMenu}
-                  >
-                    Contact
-                  </Link>
-                ) : null}
                 {isAdmin ? (
                   <Link
                     to="/admin"
@@ -496,37 +478,43 @@ export default function Header() {
 }
 
 /**
- * The first item of the top bar for signed-in users: the dashboard, the
- * public home page, and contact and tickets (also links of their own). It
- * is named after the dashboard or home page when the user is on one, and
- * reads "Dashboard" anywhere else.
+ * The first item of the top bar: the dashboard (signed in only), the
+ * public home page, contact, tickets (signed in only) and the legal pages.
+ * It is named after the dashboard or home page when the user is on one,
+ * and reads "Dashboard" (or "Home" when signed out) anywhere else.
  */
 function DashboardMenu({
+  signedIn,
   pathname,
   className,
   activeClassName,
   unreadTickets,
 }: {
+  signedIn: boolean
   pathname: string
   className: string
   activeClassName: string
   unreadTickets: number
 }) {
   const items = [
-    {
-      to: '/dashboard' as const,
-      label: 'Dashboard',
-      hint: 'Your services and tickets',
-      icon: LayoutDashboard,
-    },
+    ...(signedIn
+      ? [
+          {
+            to: '/dashboard' as const,
+            label: 'Dashboard',
+            hint: 'Your services and tickets',
+            icon: LayoutDashboard,
+          },
+        ]
+      : []),
     {
       to: '/' as const,
-      label: 'Home page',
+      label: signedIn ? 'Home page' : 'Home',
       hint: 'What we offer',
       icon: House,
     },
   ]
-  const shortcuts = [
+  const allShortcuts = [
     {
       to: '/contact' as const,
       label: 'Contact',
@@ -545,6 +533,9 @@ function DashboardMenu({
       unread: unreadTickets,
     },
   ]
+  const shortcuts = signedIn
+    ? allShortcuts
+    : allShortcuts.filter(({ to }) => to !== '/support')
   const legal = [
     { to: '/privacy' as const, label: 'Privacy policy', icon: ShieldCheck },
     { to: '/terms' as const, label: 'Terms of service', icon: FileText },
@@ -560,7 +551,7 @@ function DashboardMenu({
           'group cursor-pointer border-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]',
         )}
       >
-        {current?.label ?? 'Dashboard'}
+        {current?.label ?? (signedIn ? 'Dashboard' : 'Home')}
         <ChevronDown
           className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180"
           aria-hidden
