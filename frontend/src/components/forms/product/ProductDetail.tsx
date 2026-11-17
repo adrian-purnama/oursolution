@@ -98,7 +98,11 @@ function Detail({ product }: { product: PricingProduct }) {
   return (
     <article>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-12">
-        <ProductNotices notices={product.notices} className="self-start">
+        <ProductNotices
+          notices={product.notices}
+          placement="top"
+          className="self-start"
+        >
           <ProductGallery product={product} />
         </ProductNotices>
 
