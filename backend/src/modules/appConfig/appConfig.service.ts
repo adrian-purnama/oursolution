@@ -48,7 +48,12 @@ export class AppConfigService {
       this.openLogin = existAppConfig.openLogin ?? DEFAULT_OPEN_LOGIN;
       this.openRegister = existAppConfig.openRegister ?? DEFAULT_OPEN_REGISTER;
       this.appLogo = existAppConfig.appLogo ?? null;
-      this.contact = { ...EMPTY_CONTACT, ...existAppConfig.contact };
+      // toObject(): spreading the Mongoose sub-document itself copies its
+      // internals, not the fields, so every restart blanked the contact.
+      this.contact = {
+        ...EMPTY_CONTACT,
+        ...existAppConfig.toObject().contact,
+      };
 
       logger.info("Existing app config found, not seeding", logSource, "init");
       return;

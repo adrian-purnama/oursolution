@@ -45,6 +45,7 @@ import {
 } from "../../utils/deploymentFolders";
 import { cloudflareService } from "../cloudflare/cloudflare.service";
 import { dokployService } from "../dokploy/dokploy.service";
+import { waitUntilAnswering } from "./deployment.readiness";
 import { entitlementService } from "../entitlement/entitlement.service";
 import { mailer } from "../mail/mail.service";
 import { notificationService } from "../notification/notification.service";
@@ -1031,6 +1032,8 @@ export class DeploymentService {
         return this.stepRoute(context);
       case "restart":
         return this.stepRestart(context);
+      case "ready":
+        return this.stepReady(context);
       case "stop":
         return this.stepStop(context);
       case "wipeCheck":
@@ -1218,13 +1221,34 @@ export class DeploymentService {
 
   private async stepRestart({ deployment }: RunContext): Promise<void> {
     if (!deployment.dokploy) throw new Error("Nothing has been deployed yet");
-    await dokployService.stopCompose(deployment.dokploy.composeId);
-    await dokployService.startCompose(deployment.dokploy.composeId);
+    const { composeId, appName } = deployment.dokploy;
+    await dokployService.stopCompose(composeId, appName);
+    await dokployService.startCompose(composeId, appName);
+  }
+
+  /**
+   * Waits for the hosts to answer. A slow start is logged, not a failure:
+   * the containers are up, and Uptime Kuma reports what happens next.
+   */
+  private async stepReady(context: RunContext): Promise<void> {
+    const { deployment } = context;
+    const hosts = context.resolved
+      ? context.resolved.domains.map(({ host }) => host)
+      : deployment.routedHosts;
+    const silent = await waitUntilAnswering(hosts);
+    if (silent.length > 0) {
+      logger.warn(
+        `Deployment ${deployment.id}: still not answering after the deploy: ${silent.join(", ")}`,
+        SOURCE,
+        "stepReady",
+      );
+    }
   }
 
   private async stepStop({ deployment }: RunContext): Promise<void> {
     if (deployment.dokploy) {
-      await dokployService.stopCompose(deployment.dokploy.composeId);
+      const { composeId, appName } = deployment.dokploy;
+      await dokployService.stopCompose(composeId, appName);
     }
   }
 

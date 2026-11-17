@@ -564,7 +564,7 @@ export default function DeploymentPanel({
               <BeatBar status={status} />
               <div className="flex justify-between text-xs text-[var(--muted)]">
                 <span>{formatSince(status.beats[0].at)} ago</span>
-                <span>Checked every minute</span>
+                <span>Checked every 5 minutes</span>
                 <span>Now</span>
               </div>
             </div>
