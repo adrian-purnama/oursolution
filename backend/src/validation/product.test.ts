@@ -102,7 +102,62 @@ describe("product deployment", () => {
       composeFile: "services:\n  app:\n    image: nginx\n",
       variables: [],
       domains: [],
+      commands: [],
     });
+  });
+
+  it("keeps commands, giving new ones an id", () => {
+    const dto = parseCreateProductDto({
+      ...base,
+      deployment: {
+        ...deployment,
+        commands: [
+          {
+            id: "keep-me",
+            label: " Reset owner ",
+            serviceName: "app",
+            command: " n8n user-management:reset ",
+          },
+          { label: "Version", serviceName: "app", command: "n8n --version" },
+        ],
+      },
+    });
+    const [kept, added] = dto.deployment?.commands ?? [];
+    assert.deepEqual(kept, {
+      id: "keep-me",
+      label: "Reset owner",
+      serviceName: "app",
+      command: "n8n user-management:reset",
+    });
+    assert.match(added.id, /^[0-9a-f]{12}$/);
+  });
+
+  it("rejects a command in a service the compose file lacks", () => {
+    assert.throws(
+      () =>
+        parseCreateProductDto({
+          ...base,
+          deployment: {
+            ...deployment,
+            commands: [{ label: "X", serviceName: "db", command: "ls" }],
+          },
+        }),
+      /not in the compose file/,
+    );
+  });
+
+  it("rejects a command on more than one line", () => {
+    assert.throws(
+      () =>
+        parseCreateProductDto({
+          ...base,
+          deployment: {
+            ...deployment,
+            commands: [{ label: "X", serviceName: "app", command: "ls\nrm" }],
+          },
+        }),
+      /one line/,
+    );
   });
 
   it("defaults to no deployment and never gives one to a one-time product", () => {

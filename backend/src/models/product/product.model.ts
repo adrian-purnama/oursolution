@@ -1,6 +1,7 @@
 import { model, Schema } from "mongoose";
 import {
   DEPLOYMENT_TYPES,
+  DeploymentCommand,
   DeploymentDomain,
   DeploymentVariable,
   NOTICE_TONES,
@@ -29,6 +30,16 @@ const domainSchema = new Schema<DeploymentDomain>(
   { _id: false },
 );
 
+const commandSchema = new Schema<DeploymentCommand>(
+  {
+    id: { type: String, required: true },
+    label: { type: String, required: true },
+    serviceName: { type: String, required: true },
+    command: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const noticeSchema = new Schema<ProductNotice>(
   {
     tone: { type: String, required: true, enum: NOTICE_TONES },
@@ -46,6 +57,7 @@ const deploymentSchema = new Schema<ProductDeployment>(
     composeFile: { type: String, required: true },
     variables: { type: [variableSchema], default: [] },
     domains: { type: [domainSchema], default: [] },
+    commands: { type: [commandSchema], default: [] },
   },
   { _id: false },
 );

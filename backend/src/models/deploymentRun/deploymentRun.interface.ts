@@ -8,6 +8,7 @@ import { Types } from "mongoose";
  * - reset: stops, erases the customer's own folders, and deploys afresh.
  * - wipe: admin only, once the service is off and the subscription is over:
  *   erases the customer's own folders and deploys nothing.
+ * - command: runs one of the product's commands inside a running container.
  */
 export const RUN_ACTIONS = [
   "deploy",
@@ -16,6 +17,7 @@ export const RUN_ACTIONS = [
   "turnOff",
   "reset",
   "wipe",
+  "command",
 ] as const;
 export type RunAction = (typeof RUN_ACTIONS)[number];
 
@@ -46,6 +48,8 @@ export interface DeploymentRunInterface {
   action: RunAction;
   status: RunStatus;
   steps: RunStep[];
+  /** Command runs only: which command, as it was when it ran. */
+  command: { id: string; label: string } | null;
   /** Who started it; null when the system did (e.g. a lapsed subscription). */
   startedBy: Types.ObjectId | null;
   startedAt: Date;

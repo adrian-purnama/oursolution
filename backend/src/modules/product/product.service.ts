@@ -112,6 +112,14 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
               port,
             }),
           ),
+          commands: (product.deployment.commands ?? []).map(
+            ({ id, label, serviceName, command }) => ({
+              id,
+              label,
+              serviceName,
+              command,
+            }),
+          ),
         }
       : null,
     accessUrl: product.accessUrl,

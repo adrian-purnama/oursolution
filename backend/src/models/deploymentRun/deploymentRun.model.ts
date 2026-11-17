@@ -31,6 +31,13 @@ const deploymentRunSchema = new Schema<DeploymentRunInterface>({
   action: { type: String, required: true, enum: RUN_ACTIONS },
   status: { type: String, required: true, enum: RUN_STATUSES },
   steps: { type: [stepSchema], default: [] },
+  command: {
+    type: new Schema(
+      { id: { type: String, required: true }, label: { type: String, required: true } },
+      { _id: false },
+    ),
+    default: null,
+  },
   startedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
   startedAt: { type: Date, required: true },
   finishedAt: { type: Date, default: null },

@@ -28,7 +28,15 @@ export interface DeploymentRunOutDto {
   finishedAt: string | null;
   /** True when the system started it, e.g. after a subscription ended. */
   automatic: boolean;
+  /** Command runs only: the label of the command that ran. */
+  commandLabel: string | null;
   steps: RunStepOutDto[];
+}
+
+/** A command the customer can run; what it really runs stays hidden. */
+export interface DeploymentCommandOutDto {
+  id: string;
+  label: string;
 }
 
 export interface DeploymentVariableOutDto {
@@ -77,6 +85,10 @@ export interface DeploymentOutDto {
   status: ServiceStatusOutDto[];
   /** What can be started now. */
   actions: RunAction[];
+  /** The product's commands, by label. */
+  commands: DeploymentCommandOutDto[];
+  /** Why the commands cannot run now, or null when they can. */
+  commandsBlocked: string | null;
   /** Latest first. */
   runs: DeploymentRunOutDto[];
   /** Admin view only. */

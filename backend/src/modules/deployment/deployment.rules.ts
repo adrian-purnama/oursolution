@@ -7,6 +7,7 @@ export const BUSY_STATES: readonly DeploymentState[] = [
   "stopping",
   "restarting",
   "erasing",
+  "runningCommand",
 ];
 
 /** The state a deployment is in while an action runs. */
@@ -17,6 +18,7 @@ export const STATE_DURING: Record<RunAction, DeploymentState> = {
   turnOff: "stopping",
   reset: "deploying",
   wipe: "erasing",
+  command: "runningCommand",
 };
 
 /** The state after an action succeeds. */
@@ -27,6 +29,7 @@ export const STATE_AFTER: Record<RunAction, DeploymentState> = {
   turnOff: "stopped",
   reset: "running",
   wipe: "stopped",
+  command: "running",
 };
 
 /**
@@ -46,6 +49,7 @@ export function allowedActions(
     stopping: [],
     restarting: [],
     erasing: [],
+    runningCommand: [],
   };
   const actions = byState[state];
   return entitled ? actions : actions.filter((action) => action === "turnOff");
@@ -165,6 +169,9 @@ export const START_LIMITS: readonly {
     windowMs: 24 * HOUR_MS,
   },
   { actions: ["reset"], max: 2, windowMs: 24 * HOUR_MS },
+  // Commands start a one-off job in Dokploy each time.
+  { actions: ["command"], max: 5, windowMs: HOUR_MS },
+  { actions: ["command"], max: 20, windowMs: 24 * HOUR_MS },
 ];
 
 /** The longest window above: how far back starts need to be looked up. */
@@ -327,6 +334,15 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
         "Empty the customer's own host folders with a one-off container in Dokploy",
     },
   ],
+  command: [
+    {
+      key: "command",
+      // Replaced by the command's own label when the run is made.
+      label: "Running",
+      internalLabel:
+        "Run the command in the service's running container with a one-off job in Dokploy",
+    },
+  ],
   turnOff: [
     {
       key: "stop",
@@ -349,4 +365,21 @@ export const ACTION_LABELS: Record<RunAction, string> = {
   restart: "Restart",
   turnOff: "Turn off",
   wipe: "Delete data",
+  command: "Run command",
 };
+
+/**
+ * Why a customer's command cannot run now, or null when it can. Commands
+ * run inside the containers, so only while the service is up.
+ */
+export function commandBlocker(
+  state: DeploymentState,
+  entitled: boolean,
+): string | null {
+  if (!entitled) return "The subscription is not active";
+  if (BUSY_STATES.includes(state)) {
+    return "Something is already in progress. Wait for it to finish";
+  }
+  if (state !== "running") return "Turn the service on first";
+  return null;
+}

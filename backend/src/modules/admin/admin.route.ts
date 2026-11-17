@@ -80,6 +80,10 @@ router.post(
   "/users/:id/deployments/:productId/actions",
   deploymentController.start,
 );
+router.post(
+  "/users/:id/deployments/:productId/commands/:commandId",
+  deploymentController.runCommand,
+);
 
 router.get("/tickets", ticketController.listAll);
 router.get("/tickets/:id", ticketController.getAny);

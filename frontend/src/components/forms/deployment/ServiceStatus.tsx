@@ -16,6 +16,7 @@ const STATE_DOT: Record<DeploymentState, string> = {
   stopped: 'bg-[var(--muted)]',
   restarting: 'bg-amber-500 animate-pulse',
   erasing: 'bg-amber-500 animate-pulse',
+  runningCommand: 'bg-amber-500 animate-pulse',
   failed: 'bg-[var(--destructive)]',
 }
 
