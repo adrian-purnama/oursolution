@@ -165,8 +165,8 @@ function ProductCard({ product }: { product: PricingProduct }) {
       <Link {...page} className="relative block" tabIndex={-1} aria-hidden>
         <ProductImage
           product={product}
-          className="aspect-[16/9] w-full border-b border-[var(--line)]"
-          iconClassName="size-7"
+          className="aspect-square w-full border-b border-[var(--line)]"
+          iconClassName="size-9"
         />
         <ProductStatusBadge
           product={product}
