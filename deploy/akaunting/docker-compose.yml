@@ -1,0 +1,214 @@
+# Akaunting (accounting) hosting — one stack per customer, deployed by Dokploy.
+# GPL-3.0: hosting it for customers is allowed; keep its branding and notices.
+#
+# Product settings: deploy/akaunting/product.json
+# Data: /mnt/nas-sda/akaunting/<username>/ (database, uploaded files,
+# installed apps, the app's .env and this customer's generated keys).
+#
+# The image keeps all of Akaunting in /var/www/html and expects a named
+# volume over it. Here only what changes is kept on the NAS (storage,
+# modules, .env), so a newer image tag really updates the code.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+configs:
+  # Shared by the app and the scheduler: links the kept files into place.
+  start_script:
+    content: |
+      set -eu
+      DB_PASSWORD="$$(cat /secrets/db_password)"
+      APP_KEY="$$(cat /secrets/app_key)"
+      export DB_PASSWORD APP_KEY
+
+      # Installed apps live on the NAS. The image's own modules are copied
+      # over them on each new container, so they update with the image.
+      if [ ! -L /var/www/html/modules ]; then
+        cp -a /var/www/html/modules/. /persist/modules/
+        rm -rf /var/www/html/modules
+        ln -s /persist/modules /var/www/html/modules
+      fi
+
+      # The installer renames .env.example over a missing .env, which would
+      # replace this link, so the file is made first and then only edited.
+      [ -s /persist/config/.env ] || cp /var/www/html/.env.example /persist/config/.env
+      ln -sfn /persist/config/.env /var/www/html/.env
+      chown -R www-data:www-data /persist/modules /persist/config
+
+  # TLS ends before this container and Akaunting trusts no proxy, so it
+  # would build http:// links. Every request to it came in over HTTPS.
+  apache_https:
+    content: |
+      SetEnv HTTPS on
+
+services:
+  # Makes this customer's own random keys on the first start and keeps them.
+  # Nobody types or sees them; a reset deletes them with the data.
+  secrets-init:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        [ -s app_key ] || printf 'base64:%s' "$$(head -c 32 /dev/urandom | base64)" > app_key
+        for name in db_password db_root_password; do
+          [ -s "$$name" ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > "$$name"
+        done
+        chmod 444 app_key db_password db_root_password
+    volumes:
+      - /mnt/nas-sda/akaunting/${USERNAME}/secrets:/secrets
+
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      - MARIADB_DATABASE=akaunting
+      - MARIADB_USER=akaunting
+      - MARIADB_PASSWORD_FILE=/secrets/db_password
+      - MARIADB_ROOT_PASSWORD_FILE=/secrets/db_root_password
+      - TZ=${TIMEZONE}
+    command:
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=50
+      - --performance-schema=OFF
+    volumes:
+      - /mnt/nas-sda/akaunting/${USERNAME}/mariadb:/var/lib/mysql
+      - /mnt/nas-sda/akaunting/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - secrets-init
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 128M
+    logging: *logging
+
+  akaunting:
+    image: docker.io/akaunting/akaunting:3.3.1
+    restart: unless-stopped
+    # The image's own start script installs Akaunting when AKAUNTING_SETUP is
+    # true. It is true only until the install has finished once, so a
+    # restart never installs again.
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        . /usr/local/bin/fedier-start.sh
+        if grep -q '^APP_INSTALLED=true' /persist/config/.env; then
+          export AKAUNTING_SETUP=false
+        elif [ -z "$${ADMIN_PASSWORD:-}" ]; then
+          echo "ADMIN_PASSWORD is empty: set it before the first start." >&2
+          exit 1
+        else
+          export AKAUNTING_SETUP=true
+        fi
+        exec /usr/local/bin/akaunting.sh --start
+    configs:
+      - source: start_script
+        target: /usr/local/bin/fedier-start.sh
+      - source: apache_https
+        target: /etc/apache2/conf-enabled/fedier-https.conf
+    environment:
+      - TZ=${TIMEZONE}
+      - APP_URL=https://accounting-${USERNAME}.${DOMAIN}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - LOCALE=${LOCALE}
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_NAME=akaunting
+      - DB_USERNAME=akaunting
+      - DB_PREFIX=ak_
+      # First company and admin, made once on the first start. The customer
+      # sets their own password; while it is empty the first start stops
+      # with an error instead of using a default.
+      - COMPANY_NAME=${COMPANY_NAME}
+      - COMPANY_EMAIL=${EMAIL}
+      - ADMIN_EMAIL=${EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - AKAUNTING_SETUP_TIMEOUT=120
+    expose:
+      - "80"
+    volumes:
+      - /mnt/nas-sda/akaunting/${USERNAME}/storage:/var/www/html/storage
+      - /mnt/nas-sda/akaunting/${USERNAME}/modules:/persist/modules
+      - /mnt/nas-sda/akaunting/${USERNAME}/config:/persist/config
+      - /mnt/nas-sda/akaunting/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+          pids: 256
+        reservations:
+          memory: 192M
+    logging: *logging
+
+  # Recurring invoices, bills and reminders run from Laravel's scheduler.
+  scheduler:
+    image: docker.io/akaunting/akaunting:3.3.1
+    restart: unless-stopped
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        . /usr/local/bin/fedier-start.sh
+        until grep -q '^APP_INSTALLED=true' /persist/config/.env; do sleep 30; done
+        cd /var/www/html
+        exec su -s /bin/sh www-data -c 'while true; do php artisan schedule:run --no-interaction || true; sleep 60; done'
+    configs:
+      - source: start_script
+        target: /usr/local/bin/fedier-start.sh
+    environment:
+      - TZ=${TIMEZONE}
+      - APP_URL=https://accounting-${USERNAME}.${DOMAIN}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_NAME=akaunting
+      - DB_USERNAME=akaunting
+      - DB_PREFIX=ak_
+    volumes:
+      - /mnt/nas-sda/akaunting/${USERNAME}/storage:/var/www/html/storage
+      - /mnt/nas-sda/akaunting/${USERNAME}/modules:/persist/modules
+      - /mnt/nas-sda/akaunting/${USERNAME}/config:/persist/config
+      - /mnt/nas-sda/akaunting/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - akaunting
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+          pids: 64
+    logging: *logging

@@ -27,6 +27,7 @@ import { VARIABLE_VISIBILITY_LABELS } from '#/lib/product'
 import type {
   ComposeIssue,
   DeploymentCheck,
+  DeploymentCommand,
   DeploymentVariable,
   ProductDeployment,
   VariableVisibility,
@@ -41,6 +42,7 @@ export type DeploymentDraft = {
   composeFile: string
   variables: DeploymentVariable[]
   domains: { serviceName: string; subdomain: string; port: string }[]
+  commands: DeploymentCommand[]
 }
 
 export const EMPTY_DEPLOYMENT: DeploymentDraft = {
@@ -49,6 +51,7 @@ export const EMPTY_DEPLOYMENT: DeploymentDraft = {
   composeFile: '',
   variables: [],
   domains: [],
+  commands: [],
 }
 
 export function toDeploymentDraft(
@@ -64,6 +67,7 @@ export function toDeploymentDraft(
       ...domain,
       port: String(domain.port),
     })),
+    commands: deployment.commands,
   }
 }
 
@@ -74,6 +78,7 @@ export function toDeploymentBody(draft: DeploymentDraft) {
     composeFile: draft.composeFile,
     variables: draft.variables,
     domains: draft.domains.map((domain) => ({ ...domain, port: domain.port })),
+    commands: draft.commands,
   }
 }
 
@@ -235,6 +240,14 @@ export default function DeploymentFields({
     set({
       domains: value.domains.map((domain, at) =>
         at === index ? { ...domain, ...patch } : domain,
+      ),
+    })
+  }
+
+  function setCommand(index: number, patch: Partial<DeploymentCommand>) {
+    set({
+      commands: value.commands.map((command, at) =>
+        at === index ? { ...command, ...patch } : command,
       ),
     })
   }
@@ -596,6 +609,128 @@ export default function DeploymentFields({
         >
           <Plus aria-hidden />
           Add domain
+        </Button>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className={subheadingClassName}>Commands</legend>
+        <p className={`text-xs ${hintClassName}`}>
+          Customers see only the label and a Run button, while the service runs.
+          The command runs with <Code>sh -c</Code> in the service&apos;s
+          container, e.g. <Code>n8n user-management:reset</Code>. Each customer
+          can run commands 5 times an hour and 20 times a day.
+        </p>
+
+        {value.commands.length > 0 ? (
+          <div className="space-y-3">
+            <div
+              className={`hidden gap-2 text-xs sm:grid sm:grid-cols-[minmax(0,1fr)_10rem_minmax(0,1.4fr)_2.25rem] ${hintClassName}`}
+              aria-hidden
+            >
+              <span>Label</span>
+              <span>Service</span>
+              <span>Command</span>
+            </div>
+            {value.commands.map((command, index) => {
+              const options = services.includes(command.serviceName)
+                ? services
+                : [command.serviceName, ...services].filter(Boolean)
+              return (
+                <div
+                  key={command.id || `new-${index}`}
+                  className="grid grid-cols-[minmax(0,1fr)_2.25rem] gap-2 border-b border-[var(--line)] pb-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_10rem_minmax(0,1.4fr)_2.25rem] sm:border-0 sm:pb-0"
+                >
+                  <Input
+                    aria-label={`Command ${index + 1} label`}
+                    value={command.label}
+                    maxLength={60}
+                    placeholder="Reset owner password"
+                    className="bg-white"
+                    onChange={(event) =>
+                      setCommand(index, { label: event.target.value })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="sm:order-last"
+                    aria-label={`Remove command ${command.label || index + 1}`}
+                    onClick={() =>
+                      set({
+                        commands: value.commands.filter(
+                          (_, at) => at !== index,
+                        ),
+                      })
+                    }
+                  >
+                    <X aria-hidden />
+                  </Button>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Select
+                      value={command.serviceName || undefined}
+                      disabled={options.length === 0}
+                      onValueChange={(serviceName) =>
+                        setCommand(index, { serviceName })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={`Command ${index + 1} service`}
+                        className="w-full bg-white"
+                      >
+                        <SelectValue
+                          placeholder={
+                            options.length === 0 ? 'No services yet' : 'Service'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Input
+                    aria-label={`Command ${index + 1} command`}
+                    value={command.command}
+                    maxLength={2000}
+                    placeholder="n8n user-management:reset"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    className={`col-span-2 sm:col-span-1 ${monoInputClassName}`}
+                    onChange={(event) =>
+                      setCommand(index, { command: event.target.value })
+                    }
+                  />
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            set({
+              commands: [
+                ...value.commands,
+                {
+                  id: '',
+                  label: '',
+                  serviceName: services.length === 1 ? services[0] : '',
+                  command: '',
+                },
+              ],
+            })
+          }
+        >
+          <Plus aria-hidden />
+          Add command
         </Button>
       </fieldset>
 

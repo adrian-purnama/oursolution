@@ -1,0 +1,12 @@
+{
+  "deployment": {
+    "name": "akaunting-${USERNAME}",
+    "variables": [
+      { "key": "ADMIN_PASSWORD", "value": "", "visibility": "editable" },
+      { "key": "COMPANY_NAME", "value": "My Company", "visibility": "editable" },
+      { "key": "LOCALE", "value": "en-GB", "visibility": "editable" },
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "akaunting", "subdomain": "accounting-${USERNAME}", "port": 80 }]
+  }
+}

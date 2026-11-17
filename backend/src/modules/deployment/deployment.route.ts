@@ -21,5 +21,10 @@ router.post(
   deploymentRateLimit,
   deploymentController.start,
 );
+router.post(
+  "/:productId/commands/:commandId",
+  deploymentRateLimit,
+  deploymentController.runCommand,
+);
 
 export default router;

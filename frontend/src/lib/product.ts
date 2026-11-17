@@ -56,6 +56,17 @@ export type DeploymentDomain = {
 }
 
 /** How a subscription's service is deployed. Only Docker Compose for now. */
+/** A command customers can run in their service; they see only the label. */
+export type DeploymentCommand = {
+  /** Empty for a new one; the server gives it an id on save. */
+  id: string
+  label: string
+  /** The compose service whose container it runs in. */
+  serviceName: string
+  /** Run with `sh -c` inside that container. */
+  command: string
+}
+
 export type ProductDeployment = {
   type: 'dockerCompose'
   /** The Dokploy project every deployment of this product goes into. */
@@ -65,6 +76,7 @@ export type ProductDeployment = {
   composeFile: string
   variables: DeploymentVariable[]
   domains: DeploymentDomain[]
+  commands: DeploymentCommand[]
 }
 
 export type DokployProject = {

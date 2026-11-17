@@ -13,10 +13,12 @@ import {
   ExternalLink,
   Globe,
   LoaderCircle,
+  Play,
   Power,
   RefreshCw,
   RotateCcw,
   Rocket,
+  SquareTerminal,
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -45,16 +47,17 @@ import {
   BUSY_STATES,
   CHECK_STATE_LABELS,
   RUN_ACTION_HINTS,
-  RUN_ACTION_LABELS,
   STATE_LABELS,
   actionLabel,
   expiryOf,
   formatSince,
   formatUptime,
+  runTitle,
   subscriptionLine,
 } from '#/lib/deployment'
 import type {
   Deployment,
+  DeploymentCommand,
   DeploymentRun,
   RunAction,
   RunStep,
@@ -74,6 +77,7 @@ const ACTION_ICONS: Record<RunAction, LucideIcon> = {
   turnOff: Power,
   reset: Eraser,
   wipe: Trash2,
+  command: SquareTerminal,
 }
 
 function StepIcon({ status }: { status: RunStep['status'] }) {
@@ -194,6 +198,11 @@ export default function DeploymentPanel({
     null,
   )
   const [eraseName, setEraseName] = useState('')
+  /** The command waiting to be confirmed. */
+  const [confirmCommand, setConfirmCommand] =
+    useState<DeploymentCommand | null>(null)
+  /** The command being started, until the server answers. */
+  const [startingCommand, setStartingCommand] = useState<string | null>(null)
 
   const url = `${apiBase}/${productId}`
 
@@ -326,6 +335,27 @@ export default function DeploymentPanel({
     }
   }
 
+  async function runCommand(command: DeploymentCommand) {
+    setConfirmCommand(null)
+    setStartingCommand(command.id)
+    try {
+      const response = await apiFetch<Deployment>(
+        `${url}/commands/${encodeURIComponent(command.id)}`,
+        { method: 'POST' },
+      )
+      if (!response.success || !response.data) {
+        toast.error(response.message || 'Could not run it')
+        await load(true, true)
+        return
+      }
+      accept(response.data, true)
+    } catch {
+      toast.error('Unable to reach the server')
+    } finally {
+      setStartingCommand(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className={`flex items-center gap-2 ${hintClassName}`}>
@@ -362,7 +392,7 @@ export default function DeploymentPanel({
     (action) => action !== primary && action !== 'wipe',
   )
   const wipe = admin ? deployment.internal?.wipe : undefined
-  const locked = busy || starting !== null
+  const locked = busy || starting !== null || startingCommand !== null
   const expiry = expiryOf(deployment)
   /** Customers can renew from here; admins grant time elsewhere. */
   const extendable = !admin && expiry !== null
@@ -584,8 +614,8 @@ export default function DeploymentPanel({
         <section className={`${cardClassName} p-5`} aria-live="polite">
           <h3 className="mb-4 text-sm font-medium">
             {featured.status === 'running'
-              ? `${RUN_ACTION_LABELS[featured.action]} in progress`
-              : `${RUN_ACTION_LABELS[featured.action]} did not finish`}
+              ? `${runTitle(featured)} in progress`
+              : `${runTitle(featured)} did not finish`}
             <span className={`ml-2 font-normal ${hintClassName}`}>
               {formatDateTime(featured.startedAt)}
               {featured.automatic ? ' · automatic' : ''}
@@ -738,6 +768,45 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
+      {deployment.commands.length > 0 ? (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-medium">Commands</h3>
+            {deployment.commandsBlocked ? (
+              <p className={`text-xs ${hintClassName}`}>
+                {deployment.commandsBlocked}.
+              </p>
+            ) : null}
+          </div>
+          <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
+            {deployment.commands.map((command) => (
+              <li
+                key={command.id}
+                className="flex items-center gap-4 px-5 py-3"
+              >
+                <p className="min-w-0 flex-1 text-sm font-medium break-words">
+                  {command.label}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={locked || deployment.commandsBlocked !== null}
+                  onClick={() => setConfirmCommand(command)}
+                >
+                  {startingCommand === command.id ? (
+                    <LoaderCircle className="animate-spin" aria-hidden />
+                  ) : (
+                    <Play aria-hidden />
+                  )}
+                  Run
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {wipe && deployment.internal ? (
         <section className="space-y-3">
           <h3 className="text-sm font-medium">Delete data</h3>
@@ -848,9 +917,7 @@ export default function DeploymentPanel({
                           : 'bg-[var(--accent)]',
                     )}
                   />
-                  <span className="font-medium">
-                    {RUN_ACTION_LABELS[run.action]}
-                  </span>
+                  <span className="font-medium">{runTitle(run)}</span>
                   <span
                     className={
                       run.status === 'failed'
@@ -950,6 +1017,40 @@ export default function DeploymentPanel({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmCommand !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmCommand(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Run "{confirmCommand?.label}"?</DialogTitle>
+            <DialogDescription>
+              It runs in {deployment.product.name} now. This page shows when it
+              has finished.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmCommand(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (confirmCommand) void runCommand(confirmCommand)
+              }}
+            >
+              Run
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

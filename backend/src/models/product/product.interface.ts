@@ -47,6 +47,24 @@ export interface DeploymentDomain {
   port: number;
 }
 
+/** How many commands one product may offer. */
+export const MAX_DEPLOYMENT_COMMANDS = 20;
+
+/**
+ * A command a customer may run inside one of their service's containers,
+ * e.g. n8n's `n8n user-management:reset`. Customers see only `label`.
+ */
+export interface DeploymentCommand {
+  /** Stable across edits, so runs and buttons keep pointing at it. */
+  id: string;
+  /** What the customer sees on the button, e.g. "Reset owner password". */
+  label: string;
+  /** The compose service whose running container it runs in. */
+  serviceName: string;
+  /** Run with `sh -c` inside that container. Admin-only. */
+  command: string;
+}
+
 export interface ProductDeployment {
   type: DeploymentType;
   /** The Dokploy project every deployment of this product goes into. */
@@ -60,6 +78,8 @@ export interface ProductDeployment {
   composeFile: string;
   variables: DeploymentVariable[];
   domains: DeploymentDomain[];
+  /** Commands customers can run on their running service. */
+  commands: DeploymentCommand[];
 }
 
 /**

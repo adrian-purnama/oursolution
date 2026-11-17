@@ -1,13 +1,16 @@
+import { randomBytes } from "node:crypto";
 import { Types } from "mongoose";
 import type { GrantPurchaseInDto } from "../dto/purchase.dto";
 import {
   DEPLOYMENT_TYPES,
+  MAX_DEPLOYMENT_COMMANDS,
   MAX_PRODUCT_IMAGES,
   NOTICE_TONES,
   PRODUCT_KINDS,
   type NoticeTone,
   type ProductNotice,
   VARIABLE_VISIBILITIES,
+  type DeploymentCommand,
   type DeploymentDomain,
   type DeploymentType,
   type DeploymentVariable,
@@ -40,6 +43,9 @@ const MAX_VARIABLES = 100;
 const MAX_DOMAINS = 20;
 const MAX_VARIABLE_KEY_LENGTH = 100;
 const MAX_VARIABLE_VALUE_LENGTH = 4000;
+const MAX_COMMAND_LABEL_LENGTH = 60;
+const MAX_COMMAND_LENGTH = 2000;
+const COMMAND_ID = /^[A-Za-z0-9_-]{1,40}$/;
 
 function asRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -221,6 +227,64 @@ function parseDomain(value: unknown): DeploymentDomain {
   };
 }
 
+/** One command; a new one (no id yet) gets one. */
+function parseCommand(value: unknown, index: number): DeploymentCommand {
+  const raw = asRecord(value);
+  const where = `Command ${index + 1}`;
+  const id =
+    raw.id === undefined || raw.id === null || raw.id === ""
+      ? randomBytes(6).toString("hex")
+      : raw.id;
+  if (typeof id !== "string" || !COMMAND_ID.test(id)) {
+    throw new Error(`${where} has an invalid id`);
+  }
+  const label = parseText(
+    raw.label ?? "",
+    `${where}'s label`,
+    MAX_COMMAND_LABEL_LENGTH,
+  ).trim();
+  const serviceName = parseText(
+    raw.serviceName ?? "",
+    `${where}'s service`,
+    MAX_NAME_LENGTH,
+  ).trim();
+  const command = parseText(
+    raw.command ?? "",
+    `${where}'s command`,
+    MAX_COMMAND_LENGTH,
+  ).trim();
+  if (!label) throw new Error(`${where} needs a label`);
+  if (!serviceName) throw new Error(`${where} needs a service`);
+  if (!command) throw new Error(`${where} needs a command`);
+  if (/[\r\n\0]/.test(command)) {
+    throw new Error(`${where}'s command must be on one line`);
+  }
+  return { id, label, serviceName, command };
+}
+
+/** Commands, each in a service of the compose file, with unique ids. */
+function parseCommands(
+  value: unknown,
+  services: string[],
+): DeploymentCommand[] {
+  const commands = parseList(value, "commands", MAX_DEPLOYMENT_COMMANDS).map(
+    parseCommand,
+  );
+  const ids = new Set<string>();
+  for (const [index, command] of commands.entries()) {
+    if (ids.has(command.id)) {
+      throw new Error(`Command ${index + 1} has the same id as another`);
+    }
+    ids.add(command.id);
+    if (!services.includes(command.serviceName)) {
+      throw new Error(
+        `Command "${command.label}" runs in service "${command.serviceName}", which is not in the compose file`,
+      );
+    }
+  }
+  return commands;
+}
+
 /**
  * Body: `{ name, composeFile, variables?, domains? }` as typed. Only the
  * shape is checked here; `checkDeployment` judges the content.
@@ -276,6 +340,7 @@ function parseDeployment(value: unknown): ProductDeployment | null {
     composeFile: check.composeFile,
     variables: draft.variables,
     domains: draft.domains,
+    commands: parseCommands(raw.commands, check.services),
   };
 }
 

@@ -8,6 +8,7 @@ export type DeploymentState =
   | 'stopped'
   | 'restarting'
   | 'erasing'
+  | 'runningCommand'
   | 'failed'
 
 export type RunAction =
@@ -18,6 +19,8 @@ export type RunAction =
   | 'reset'
   /** Admin only: erases a stopped, unsubscribed customer's data. */
   | 'wipe'
+  /** Runs one of the product's commands in the running service. */
+  | 'command'
 export type RunStatus = 'running' | 'succeeded' | 'failed'
 export type StepStatus = 'pending' | 'running' | 'done' | 'failed'
 
@@ -39,7 +42,15 @@ export type DeploymentRun = {
   finishedAt: string | null
   /** Started by the system, e.g. after a subscription ended. */
   automatic: boolean
+  /** Command runs only: the label of the command that ran. */
+  commandLabel: string | null
   steps: RunStep[]
+}
+
+/** A command the customer can run, shown by its label only. */
+export type DeploymentCommand = {
+  id: string
+  label: string
 }
 
 export type DeploymentVariable = {
@@ -79,6 +90,10 @@ export type Deployment = {
   status: ServiceStatus[]
   variables: DeploymentVariable[]
   actions: RunAction[]
+  /** The product's commands. */
+  commands: DeploymentCommand[]
+  /** Why the commands cannot run now, or null when they can. */
+  commandsBlocked: string | null
   /** Latest first. */
   runs: DeploymentRun[]
   /** Admin view only. */
@@ -157,6 +172,7 @@ export const BUSY_STATES: DeploymentState[] = [
   'stopping',
   'restarting',
   'erasing',
+  'runningCommand',
 ]
 
 export const STATE_LABELS: Record<DeploymentState, string> = {
@@ -167,6 +183,7 @@ export const STATE_LABELS: Record<DeploymentState, string> = {
   stopped: 'Off',
   restarting: 'Restarting',
   erasing: 'Deleting data',
+  runningCommand: 'Running a command',
   failed: 'Needs attention',
 }
 
@@ -177,6 +194,7 @@ export const RUN_ACTION_LABELS: Record<RunAction, string> = {
   turnOff: 'Turn off',
   reset: 'Reset',
   wipe: 'Delete data',
+  command: 'Command',
 }
 
 /** What each action does, in the customer's words. */
@@ -188,6 +206,12 @@ export const RUN_ACTION_HINTS: Record<RunAction, string> = {
     'Takes the service and its address offline. Your data is kept until you turn it on again.',
   reset: 'Erases everything stored in the service and starts it again as new.',
   wipe: 'Erases everything stored in the service. It stays off.',
+  command: 'Runs a command in the service.',
+}
+
+/** What a run is called: a command's own label, else its action's. */
+export function runTitle(run: Pick<DeploymentRun, 'action' | 'commandLabel'>) {
+  return run.commandLabel ?? RUN_ACTION_LABELS[run.action]
 }
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {

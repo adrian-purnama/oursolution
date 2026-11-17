@@ -2,7 +2,8 @@ import { Types } from "mongoose";
 
 /**
  * Where a customer's deployment of a product stands. "deploying",
- * "stopping", "restarting" and "erasing" mean a run is in progress.
+ * "stopping", "restarting", "erasing" and "runningCommand" mean a run is
+ * in progress.
  */
 export const DEPLOYMENT_STATES = [
   "notDeployed",
@@ -12,6 +13,7 @@ export const DEPLOYMENT_STATES = [
   "stopped",
   "restarting",
   "erasing",
+  "runningCommand",
   "failed",
 ] as const;
 export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];

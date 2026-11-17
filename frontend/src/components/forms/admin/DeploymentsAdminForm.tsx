@@ -21,10 +21,10 @@ import { apiFetch } from '#/lib/api'
 import {
   BUSY_STATES,
   CHECK_STATE_LABELS,
-  RUN_ACTION_LABELS,
   STATE_LABELS,
   formatSince,
   formatUptime,
+  runTitle,
   subscriptionLine,
 } from '#/lib/deployment'
 import type {
@@ -496,7 +496,7 @@ function DeploymentRow({ row }: { row: AdminDeploymentRow }) {
           <Field label="Last activity" className="col-span-1 sm:col-span-3">
             {latest ? (
               <span>
-                {RUN_ACTION_LABELS[latest.action]}{' '}
+                {runTitle(latest)}{' '}
                 <span
                   className={
                     latest.status === 'failed'

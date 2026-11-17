@@ -22,6 +22,7 @@ import type {
 } from "../../models/deploymentRun/deploymentRun.interface";
 import { DeploymentRunModel } from "../../models/deploymentRun/deploymentRun.model";
 import type {
+  DeploymentCommand,
   ProductDeployment,
   ProductInterface,
 } from "../../models/product/product.interface";
@@ -35,6 +36,7 @@ import {
   type BuiltInVariable,
   type ResolvedDeployment,
 } from "../../utils/deployment";
+import { commandComposeFile } from "../../utils/deploymentCommand";
 import {
   customerFolders,
   hostPaths,
@@ -56,6 +58,7 @@ import {
   ACTION_LABELS,
   allowedActions,
   BUSY_STATES,
+  commandBlocker,
   domainIssue,
   mayBeRunning,
   nextAllowedStart,
@@ -185,6 +188,7 @@ function toRunOut(run: RunDoc, view: DeploymentView): DeploymentRunOutDto {
     startedAt: run.startedAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString() ?? null,
     automatic: run.startedBy === null,
+    commandLabel: run.command?.label ?? null,
     steps: run.steps.map((step) => ({
       key: step.key,
       label: step.label,
@@ -431,6 +435,46 @@ export class DeploymentService {
     }
 
     await this.launch(deployment, action, startedBy);
+    return this.get(userId, productId, view);
+  }
+
+  /**
+   * Runs one of the product's commands inside the customer's running
+   * service, in the background. Customers are limited like other starts.
+   */
+  async startCommand(
+    userId: string,
+    productId: string,
+    commandId: string,
+    startedBy: string,
+    view: DeploymentView,
+  ): Promise<DeploymentOutDto> {
+    const product = await this.loadProduct(productId);
+    const command = product.deployment?.commands.find(
+      (item) => item.id === commandId,
+    );
+    if (!command) throw new Error("This command does not exist");
+
+    const [deployment, entitled] = await Promise.all([
+      DeploymentModel.findOne({ userId, productId }).exec(),
+      entitlementService.canRunService(userId, productId),
+    ]);
+    if (!deployment) throw new Error("Turn the service on first");
+    const blocker = commandBlocker(deployment.state, entitled);
+    if (blocker) {
+      throw BUSY_STATES.includes(deployment.state)
+        ? new DeploymentBusyError(blocker)
+        : new Error(blocker);
+    }
+    if (!deployment.dokploy?.appName) {
+      throw new Error("Nothing has been deployed yet");
+    }
+
+    if (view === "customer") {
+      await this.assertWithinLimits(deployment, "command", startedBy);
+    }
+
+    await this.launch(deployment, "command", startedBy, command);
     return this.get(userId, productId, view);
   }
 
@@ -817,6 +861,7 @@ export class DeploymentService {
     deployment: DeploymentDoc,
     action: RunAction,
     startedBy: string | null,
+    command: DeploymentCommand | null = null,
   ): Promise<void> {
     const release = this.hold(deployment.id);
     const claimed = await DeploymentModel.findOneAndUpdate(
@@ -838,7 +883,7 @@ export class DeploymentService {
 
     let run: RunDoc;
     try {
-      run = await this.createRun(deployment, action, startedBy);
+      run = await this.createRun(deployment, action, startedBy, command);
     } catch (error) {
       // No run to follow: give the deployment back instead of leaving it busy.
       await DeploymentModel.updateOne(
@@ -873,6 +918,7 @@ export class DeploymentService {
     deployment: DeploymentDoc,
     action: RunAction,
     startedBy: string | null,
+    command: DeploymentCommand | null,
   ): Promise<RunDoc> {
     return DeploymentRunModel.create({
       deploymentId: deployment._id,
@@ -880,8 +926,10 @@ export class DeploymentService {
       productId: deployment.productId,
       action,
       status: "running",
+      command: command ? { id: command.id, label: command.label } : null,
       steps: PIPELINES[action].map((step) => ({
         ...step,
+        ...(command && step.key === "command" ? { label: command.label } : {}),
         status: "pending",
         error: null,
         startedAt: null,
@@ -956,7 +1004,8 @@ export class DeploymentService {
     if (
       !uptimeKumaService.configured ||
       run.action === "restart" ||
-      run.action === "wipe"
+      run.action === "wipe" ||
+      run.action === "command"
     ) {
       return;
     }
@@ -1042,6 +1091,8 @@ export class DeploymentService {
         return this.stepWipe(context);
       case "unroute":
         return this.stepUnroute(context);
+      case "command":
+        return this.stepCommand(context);
       default:
         throw new Error(`Unknown step "${key}"`);
     }
@@ -1338,6 +1389,41 @@ export class DeploymentService {
     }
   }
 
+  /**
+   * Runs the run's command in its service's container. Dokploy's API has
+   * no exec, so a one-off container with the Docker socket does it. The
+   * command is read from the product now, so an admin's fix applies.
+   */
+  private async stepCommand(context: RunContext): Promise<void> {
+    const { run, deployment, product } = context;
+    const config = product.deployment;
+    const command = config?.commands.find(
+      (item) => item.id === run.command?.id,
+    );
+    if (!config || !command) {
+      throw new Error("The command was removed from the product");
+    }
+    if (!deployment.dokploy?.appName) {
+      throw new Error("Nothing has been deployed yet");
+    }
+    logger.info(
+      `Deployment ${deployment.id}: running command ${command.id} (${command.label}) in ${command.serviceName}`,
+      SOURCE,
+      "stepCommand",
+    );
+    await dokployService.runOnce({
+      projectId: config.projectId,
+      // New every time, so it can never be an existing compose's name.
+      name: `cmd-${deployment.id}-${Date.now().toString(36)}`,
+      composeFile: commandComposeFile({
+        appName: deployment.dokploy.appName,
+        serviceName: command.serviceName,
+        command: command.command,
+      }),
+      title: `Run "${command.label}" (started by the app)`,
+    });
+  }
+
   private async stepUnroute({ deployment }: RunContext): Promise<void> {
     for (const host of [...deployment.routedHosts]) {
       await cloudflareService.removeRoute(host);
@@ -1368,9 +1454,13 @@ export class DeploymentService {
     run.finishedAt = now;
     await run.save();
     const untouched = run.action === "wipe" && stepKey === "wipeCheck";
+    // A failed command leaves the service as it was: running. A sync
+    // corrects that if it is not.
+    const state =
+      run.action === "command" ? "running" : untouched ? "stopped" : "failed";
     await DeploymentModel.updateOne(
       { _id: run.deploymentId },
-      { $set: { state: untouched ? "stopped" : "failed" } },
+      { $set: { state } },
     ).exec();
 
     logger.error(
@@ -1444,7 +1534,9 @@ export class DeploymentService {
       {
         customerEmail: user?.email ?? String(run.userId),
         productName: product?.name ?? String(run.productId),
-        action: ACTION_LABELS[run.action],
+        action: run.command
+          ? `${ACTION_LABELS[run.action]}: ${run.command.label}`
+          : ACTION_LABELS[run.action],
         step: step
           ? `${step.label}: ${step.internalLabel}`
           : "Before the first step",
@@ -1593,6 +1685,11 @@ export class DeploymentService {
       variables,
       status,
       actions,
+      commands: (config?.commands ?? []).map(({ id, label }) => ({
+        id,
+        label,
+      })),
+      commandsBlocked: commandBlocker(state, entitled),
       runs: runs.map((run) => toRunOut(run, view)),
       ...(view === "admin"
         ? {

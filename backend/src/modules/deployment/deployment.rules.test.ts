@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   allowedActions,
+  commandBlocker,
   domainIssue,
   nextAllowedStart,
   mayBeRunning,
@@ -217,5 +218,29 @@ describe("wipeBlocker", () => {
     assert.equal(allowedActions("stopped", false).includes("wipe"), false);
     assert.equal(allowedActions("stopped", true).includes("wipe"), false);
     assert.deepEqual(allowedActions("erasing", true), []);
+  });
+});
+
+describe("commandBlocker", () => {
+  it("lets commands run only while the service runs and is paid for", () => {
+    assert.equal(commandBlocker("running", true), null);
+    assert.match(commandBlocker("running", false) ?? "", /not active/);
+    assert.match(commandBlocker("stopped", true) ?? "", /on first/);
+    assert.match(commandBlocker("runningCommand", true) ?? "", /in progress/);
+  });
+});
+
+describe("command limits", () => {
+  it("allows five commands an hour", () => {
+    const now = new Date("2026-01-01T12:00:00Z");
+    const starts = Array.from({ length: 5 }, (_, index) => ({
+      action: "command" as const,
+      startedAt: new Date(now.getTime() - (index + 1) * 60_000),
+    }));
+    assert.equal(nextAllowedStart("command", starts.slice(0, 4), now), null);
+    const next = nextAllowedStart("command", starts, now);
+    assert.equal(next?.toISOString(), "2026-01-01T12:55:00.000Z");
+    // Commands do not use up deploys.
+    assert.equal(nextAllowedStart("deploy", starts, now), null);
   });
 });

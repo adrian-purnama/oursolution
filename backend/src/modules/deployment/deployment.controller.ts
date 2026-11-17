@@ -123,6 +123,24 @@ export class DeploymentController {
     }
   };
 
+  runCommand = async (req: Request, res: Response) => {
+    try {
+      const commandId = parseParam(req.params.commandId, {
+        label: "command id",
+      });
+      const data = await deploymentService.startCommand(
+        target(req, this.view),
+        productIdOf(req),
+        commandId,
+        req.user!.id,
+        this.view,
+      );
+      return ok<DeploymentOutDto>(res, 202, "Started", data);
+    } catch (error) {
+      return fail(res, error, "Failed to run the command");
+    }
+  };
+
   start = async (req: Request, res: Response) => {
     try {
       const { action } = parseDeploymentActionInDto(req.body);
