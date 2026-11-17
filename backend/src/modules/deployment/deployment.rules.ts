@@ -226,6 +226,12 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
       label: "Connecting your address",
       internalLabel: "Route the hosts through the Cloudflare tunnel to Traefik",
     },
+    {
+      key: "ready",
+      label: "Starting up",
+      internalLabel:
+        "Wait until every host answers over HTTPS (up to 5 minutes; a slow start does not fail the run)",
+    },
   ],
   redeploy: [
     {
@@ -245,12 +251,24 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
       label: "Connecting your address",
       internalLabel: "Route the hosts through the Cloudflare tunnel to Traefik",
     },
+    {
+      key: "ready",
+      label: "Starting up",
+      internalLabel:
+        "Wait until every host answers over HTTPS (up to 5 minutes; a slow start does not fail the run)",
+    },
   ],
   restart: [
     {
       key: "restart",
       label: "Restarting",
       internalLabel: "Stop and start the compose in Dokploy",
+    },
+    {
+      key: "ready",
+      label: "Starting up",
+      internalLabel:
+        "Wait until every host answers over HTTPS (up to 5 minutes; a slow start does not fail the run)",
     },
   ],
   reset: [
@@ -281,6 +299,12 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
       key: "route",
       label: "Connecting your address",
       internalLabel: "Route the hosts through the Cloudflare tunnel to Traefik",
+    },
+    {
+      key: "ready",
+      label: "Starting up",
+      internalLabel:
+        "Wait until every host answers over HTTPS (up to 5 minutes; a slow start does not fail the run)",
     },
   ],
   wipe: [

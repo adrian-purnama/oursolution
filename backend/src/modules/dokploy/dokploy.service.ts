@@ -14,6 +14,17 @@ const RUN_ONCE_POLL_MS = 3_000;
 const CONTAINER_GRACE_MS = 60_000;
 /** Dokploy's clock and ours may differ a little. */
 const CLOCK_SKEW_MS = 15_000;
+/**
+ * compose.stop / compose.start answer only once Docker is done, and a
+ * container that ignores SIGTERM takes its whole stop grace period.
+ */
+const LIFECYCLE_TIMEOUT_MS = 90_000;
+/** How long to watch the containers when that answer never came. */
+const LIFECYCLE_SETTLE_MS = 3 * 60_000;
+const LIFECYCLE_POLL_MS = 3_000;
+
+/** Dokploy could not be reached, or did not answer in time. */
+export class DokployUnreachableError extends Error {}
 
 type Json = Record<string, unknown>;
 
@@ -204,6 +215,7 @@ export class DokployService {
     method: "GET" | "POST",
     path: string,
     payload?: Json,
+    timeoutMs = TIMEOUT_MS,
   ): Promise<unknown> {
     if (!env.dokployUrl || !env.dokployApiKey) {
       throw new Error(
@@ -225,10 +237,17 @@ export class DokployService {
           ...(method === "POST" ? { "content-type": "application/json" } : {}),
         },
         body: method === "POST" ? JSON.stringify(payload ?? {}) : undefined,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
-    } catch {
-      throw new Error(`Could not reach Dokploy at ${env.dokployUrl}`);
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new DokployUnreachableError(
+          `Dokploy did not answer ${path} within ${timeoutMs / 1000} seconds`,
+        );
+      }
+      throw new DokployUnreachableError(
+        `Could not reach Dokploy at ${env.dokployUrl}`,
+      );
     }
 
     const raw = await response.text();
@@ -487,12 +506,39 @@ export class DokployService {
     );
   }
 
-  async stopCompose(composeId: string): Promise<void> {
-    await this.request("POST", "compose.stop", { composeId });
+  async stopCompose(composeId: string, appName: string): Promise<void> {
+    await this.lifecycle("compose.stop", composeId, appName, "stopped");
   }
 
-  async startCompose(composeId: string): Promise<void> {
-    await this.request("POST", "compose.start", { composeId });
+  async startCompose(composeId: string, appName: string): Promise<void> {
+    await this.lifecycle("compose.start", composeId, appName, "running");
+  }
+
+  /**
+   * Calls compose.stop or compose.start. When the answer is lost (slow
+   * Docker, dropped connection), Docker's own view decides instead: the
+   * containers often reach `wanted` a moment later.
+   */
+  private async lifecycle(
+    path: "compose.stop" | "compose.start",
+    composeId: string,
+    appName: string,
+    wanted: ContainersState,
+  ): Promise<void> {
+    try {
+      await this.request("POST", path, { composeId }, LIFECYCLE_TIMEOUT_MS);
+      return;
+    } catch (error) {
+      // An empty appName would match every compose's containers.
+      if (!(error instanceof DokployUnreachableError) || !appName) throw error;
+      const since = Date.now();
+      while (Date.now() - since < LIFECYCLE_SETTLE_MS) {
+        const state = await this.containersState(appName).catch(() => null);
+        if (state === wanted) return;
+        await sleep(LIFECYCLE_POLL_MS);
+      }
+      throw error;
+    }
   }
 }
 
