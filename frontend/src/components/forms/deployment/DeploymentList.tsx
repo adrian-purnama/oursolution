@@ -3,12 +3,16 @@ import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, LoaderCircle } from 'lucide-react'
 import { ProductMark } from '#/components/ProductBadge'
+import BulkDeploymentActions, {
+  bulkKey,
+} from '#/components/forms/admin/BulkDeploymentActions'
 import {
   BeatBar,
   Stat,
   StateBadge,
 } from '#/components/forms/deployment/ServiceStatus'
 import { Button } from '#/components/ui/button'
+import { Checkbox } from '#/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { apiFetch } from '#/lib/api'
 import ExpiryNotice from '#/components/forms/deployment/ExpiryNotice'
@@ -167,13 +171,17 @@ export default function DeploymentList({
   apiBase = '/me/deployments',
   onSelect,
   admin = false,
+  bulkUserId,
 }: {
   apiBase?: string
   onSelect?: (productId: string) => void
   admin?: boolean
+  /** Admin: whose deployments, so they can be selected and acted on at once. */
+  bulkUserId?: string
 }) {
   const [deployments, setDeployments] = useState<Deployment[] | null>(null)
   const [failed, setFailed] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   async function load(quiet: boolean) {
     if (!quiet) setFailed(false)
@@ -242,12 +250,44 @@ export default function DeploymentList({
     )
   }
 
+  const selection: Selection | undefined = bulkUserId
+    ? {
+        has: (productId) => selected.has(bulkKey(bulkUserId, productId)),
+        toggle: (productId, on) => {
+          const next = new Set(selected)
+          const key = bulkKey(bulkUserId, productId)
+          if (on) next.add(key)
+          else next.delete(key)
+          setSelected(next)
+        },
+      }
+    : undefined
+
   const expired = admin
     ? []
     : deployments.filter((item) => expiryOf(item)?.kind === 'expired')
   if (expired.length === 0) {
     return (
-      <Overview deployments={deployments} onSelect={onSelect} admin={admin} />
+      <div className="space-y-4">
+        {bulkUserId ? (
+          <BulkDeploymentActions
+            shown={deployments.map((item) => ({
+              key: bulkKey(bulkUserId, item.product.id),
+              userId: bulkUserId,
+              productId: item.product.id,
+            }))}
+            selected={selected}
+            onSelectedChange={setSelected}
+            onDone={() => load(true)}
+          />
+        ) : null}
+        <Overview
+          deployments={deployments}
+          onSelect={onSelect}
+          admin={admin}
+          selection={selection}
+        />
+      </div>
     )
   }
   const active = deployments.filter((item) => !expired.includes(item))
@@ -288,18 +328,41 @@ export default function DeploymentList({
   )
 }
 
+/** Admin: which cards are ticked for a bulk action. */
+type Selection = {
+  has: (productId: string) => boolean
+  toggle: (productId: string, on: boolean) => void
+}
+
 function ServiceGrid({
   deployments,
   onSelect,
+  selection,
 }: {
   deployments: Deployment[]
   onSelect?: (productId: string) => void
+  selection?: Selection
 }) {
   return (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
       {deployments.map((deployment) => (
-        <li key={deployment.product.id} className="min-w-0">
-          <ServiceCard deployment={deployment} onSelect={onSelect} />
+        <li
+          key={deployment.product.id}
+          className={cn('min-w-0', selection && 'flex items-start gap-3')}
+        >
+          {selection ? (
+            <Checkbox
+              className="mt-5 bg-white"
+              checked={selection.has(deployment.product.id)}
+              aria-label={`Select ${deployment.product.name}`}
+              onCheckedChange={(checked) =>
+                selection.toggle(deployment.product.id, checked === true)
+              }
+            />
+          ) : null}
+          <div className="h-full min-w-0 flex-1">
+            <ServiceCard deployment={deployment} onSelect={onSelect} />
+          </div>
         </li>
       ))}
     </ul>
@@ -311,10 +374,12 @@ function Overview({
   deployments,
   onSelect,
   admin,
+  selection,
 }: {
   deployments: Deployment[]
   onSelect?: (productId: string) => void
   admin: boolean
+  selection?: Selection
 }) {
   const running = deployments.filter((item) => item.state === 'running').length
   const uptimes = deployments
@@ -358,7 +423,11 @@ function Overview({
         </Stat>
       </dl>
 
-      <ServiceGrid deployments={deployments} onSelect={onSelect} />
+      <ServiceGrid
+        deployments={deployments}
+        onSelect={onSelect}
+        selection={selection}
+      />
     </div>
   )
 }

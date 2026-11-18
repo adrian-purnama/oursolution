@@ -4,41 +4,27 @@ import { Link } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
 import {
   ArrowDownUp,
-  Eraser,
   LoaderCircle,
-  Power,
   RefreshCw,
-  Rocket,
   Search,
   Server,
   X,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import {
   BeatBar,
   StateBadge,
   overallCheckState,
 } from '#/components/forms/deployment/ServiceStatus'
+import BulkDeploymentActions, {
+  bulkKey,
+} from '#/components/forms/admin/BulkDeploymentActions'
 import ProductImage from '#/components/forms/product/ProductImage'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '#/components/ui/dialog'
-import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import { apiFetch } from '#/lib/api'
 import {
-  BULK_ACTION_LABELS,
   BUSY_STATES,
   CHECK_STATE_LABELS,
-  MAX_BULK_TARGETS,
-  RUN_ACTION_LABELS,
   STATE_LABELS,
   formatSince,
   formatUptime,
@@ -47,9 +33,7 @@ import {
 } from '#/lib/deployment'
 import type {
   AdminDeploymentRow,
-  BulkAction,
   Deployment,
-  DeploymentBulk,
   DeploymentSync,
   DeploymentSyncItem,
   ServiceCheckState,
@@ -77,27 +61,8 @@ const CHECK_TEXT: Record<ServiceCheckState, string> = {
   maintenance: 'text-sky-700',
 }
 
-const BULK_ICONS: Record<BulkAction, LucideIcon> = {
-  turnOn: Rocket,
-  turnOff: Power,
-  erase: Eraser,
-}
-
-/** What each bulk action does and leaves alone, for the confirmation. */
-const BULK_RULES: Record<BulkAction, string> = {
-  turnOn:
-    'Each one is deployed with its own checks. Ones already on, busy, or without an active subscription are left alone.',
-  turnOff:
-    'Each one is stopped and its address taken offline. Data is kept. Ones already off or busy are left alone.',
-  erase:
-    'Each one that is off has its data erased for good, and its service removed from Dokploy, Cloudflare and Uptime Kuma. Ones still on are left alone: turn them off first. Every one is checked on its own; this cannot be undone.',
-}
-
-/** The word typed to confirm erasing many at once. */
-const ERASE_WORD = 'erase'
-
 function rowKey(row: AdminDeploymentRow): string {
-  return `${row.user.id}:${row.deployment.product.id}`
+  return bulkKey(row.user.id, row.deployment.product.id)
 }
 
 /** Down checks or a failed state: something an admin should look at. */
@@ -197,11 +162,6 @@ export default function DeploymentsAdminForm() {
   }
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [confirmBulk, setConfirmBulk] = useState<BulkAction | null>(null)
-  const [eraseWord, setEraseWord] = useState('')
-  const [bulking, setBulking] = useState(false)
-  const [bulk, setBulk] = useState<DeploymentBulk | null>(null)
-
   function toggle(key: string, on: boolean) {
     setSelected((current) => {
       const next = new Set(current)
@@ -209,42 +169,6 @@ export default function DeploymentsAdminForm() {
       else next.delete(key)
       return next
     })
-  }
-
-  /** Runs one action on every selected deployment, then reloads. */
-  async function handleBulk(action: BulkAction) {
-    const targets = (rows ?? [])
-      .filter((row) => selected.has(rowKey(row)))
-      .map((row) => ({
-        userId: row.user.id,
-        productId: row.deployment.product.id,
-      }))
-    setConfirmBulk(null)
-    setBulking(true)
-    try {
-      const response = await apiFetch<DeploymentBulk>(
-        '/admin/deployments/bulk',
-        { method: 'POST', body: JSON.stringify({ action, targets }) },
-      )
-      if (!response.success || !response.data) {
-        toast.error(response.message || 'Failed to run the bulk action')
-        return
-      }
-      const result = response.data
-      setBulk(result)
-      setSelected(new Set())
-      const summary = `${result.started} started, ${result.skipped} left alone`
-      if (result.refused > 0) {
-        toast.error(`${summary}, ${result.refused} refused`)
-      } else {
-        toast.success(summary)
-      }
-      await load(true)
-    } catch {
-      toast.error('Unable to reach the server')
-    } finally {
-      setBulking(false)
-    }
   }
 
   useEffect(() => {
@@ -274,12 +198,6 @@ export default function DeploymentsAdminForm() {
       ].some((text) => text.toLowerCase().includes(needle))
     })
   }, [rows, filter, query])
-
-  const shownKeys = shown.map(rowKey)
-  const allShown =
-    shownKeys.length > 0 && shownKeys.every((key) => selected.has(key))
-  const someShown = shownKeys.some((key) => selected.has(key))
-  const tooMany = selected.size > MAX_BULK_TARGETS
 
   if (failed) {
     return (
@@ -348,7 +266,6 @@ export default function DeploymentsAdminForm() {
       </div>
 
       {sync ? <SyncResult sync={sync} onClose={() => setSync(null)} /> : null}
-      {bulk ? <BulkResult bulk={bulk} onClose={() => setBulk(null)} /> : null}
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
         {FILTERS.map(({ key, label }) => (
@@ -372,84 +289,16 @@ export default function DeploymentsAdminForm() {
         ))}
       </div>
 
-      {shown.length > 0 ? (
-        <div
-          className={cn(
-            cardClassName,
-            'flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-5',
-          )}
-        >
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={allShown ? true : someShown ? 'indeterminate' : false}
-              aria-label="Select every deployment shown"
-              onCheckedChange={(checked) =>
-                setSelected((current) => {
-                  const next = new Set(current)
-                  for (const key of shownKeys) {
-                    if (checked === true) next.add(key)
-                    else next.delete(key)
-                  }
-                  return next
-                })
-              }
-            />
-            {selected.size > 0 ? (
-              <span className="tabular-nums">{selected.size} selected</span>
-            ) : (
-              <span className={hintClassName}>Select all shown</span>
-            )}
-          </label>
-          {selected.size > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-              {tooMany ? (
-                <span className="text-xs text-[var(--destructive)]">
-                  At most {MAX_BULK_TARGETS} at once
-                </span>
-              ) : null}
-              {(Object.keys(BULK_ACTION_LABELS) as BulkAction[]).map(
-                (action) => {
-                  const Icon = BULK_ICONS[action]
-                  return (
-                    <Button
-                      key={action}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={bulking || tooMany}
-                      className={
-                        action === 'erase'
-                          ? 'text-[var(--destructive)]'
-                          : undefined
-                      }
-                      onClick={() => {
-                        setEraseWord('')
-                        setConfirmBulk(action)
-                      }}
-                    >
-                      {bulking ? (
-                        <LoaderCircle className="animate-spin" aria-hidden />
-                      ) : (
-                        <Icon aria-hidden />
-                      )}
-                      {BULK_ACTION_LABELS[action]}
-                    </Button>
-                  )
-                },
-              )}
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={bulking}
-                onClick={() => setSelected(new Set())}
-              >
-                Clear
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <BulkDeploymentActions
+        shown={shown.map((row) => ({
+          key: rowKey(row),
+          userId: row.user.id,
+          productId: row.deployment.product.id,
+        }))}
+        selected={selected}
+        onSelectedChange={setSelected}
+        onDone={() => load(true)}
+      />
 
       {shown.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--line)] px-6 py-12 text-center">
@@ -480,142 +329,7 @@ export default function DeploymentsAdminForm() {
           ))}
         </ul>
       )}
-
-      <Dialog
-        open={confirmBulk !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmBulk(null)
-        }}
-      >
-        <DialogContent>
-          <form
-            className="contents"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (
-                confirmBulk &&
-                (confirmBulk !== 'erase' || eraseWord.trim() === ERASE_WORD)
-              ) {
-                void handleBulk(confirmBulk)
-              }
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>
-                {confirmBulk ? BULK_ACTION_LABELS[confirmBulk] : ''}{' '}
-                {selected.size} deployment{selected.size === 1 ? '' : 's'}?
-              </DialogTitle>
-              <DialogDescription>
-                {confirmBulk ? BULK_RULES[confirmBulk] : ''}
-              </DialogDescription>
-            </DialogHeader>
-            {confirmBulk === 'erase' ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="bulk-erase">
-                  Type <span className="font-medium">{ERASE_WORD}</span> to
-                  confirm
-                </Label>
-                <Input
-                  id="bulk-erase"
-                  value={eraseWord}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="bg-white"
-                  onChange={(event) => setEraseWord(event.target.value)}
-                />
-              </div>
-            ) : null}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setConfirmBulk(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant={confirmBulk === 'erase' ? 'destructive' : 'default'}
-                disabled={
-                  confirmBulk === 'erase' && eraseWord.trim() !== ERASE_WORD
-                }
-              >
-                {confirmBulk ? BULK_ACTION_LABELS[confirmBulk] : ''}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
-  )
-}
-
-/** What the last bulk action did: totals, then each one not started. */
-function BulkResult({
-  bulk,
-  onClose,
-}: {
-  bulk: DeploymentBulk
-  onClose: () => void
-}) {
-  const totals = [
-    `${bulk.started} started`,
-    `${bulk.skipped} left alone`,
-    ...(bulk.refused > 0 ? [`${bulk.refused} refused`] : []),
-  ]
-  return (
-    <section
-      className={`${cardClassName} px-4 py-3 sm:px-5`}
-      aria-label="Bulk action result"
-      aria-live="polite"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-[var(--ink)]">
-            Bulk action done
-          </p>
-          <p className={`text-xs tabular-nums ${hintClassName}`}>
-            {totals.join(' · ')}. Started runs go on in the background.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Dismiss bulk action result"
-          onClick={onClose}
-        >
-          <X aria-hidden />
-        </Button>
-      </div>
-      <ul className="mt-3 space-y-2 border-t border-[var(--line)] pt-3 text-sm">
-        {bulk.items.map((item) => (
-          <li key={`${item.user.id}-${item.product.id}`} className="min-w-0">
-            <p className="truncate text-[var(--ink)]">
-              {item.product.name ?? item.product.id}
-              <span className="text-[var(--muted)]">
-                {' '}
-                · {item.user.email ?? item.user.id}
-              </span>
-            </p>
-            <p
-              className={cn(
-                'text-xs break-words',
-                item.outcome === 'refused'
-                  ? 'text-[var(--destructive)]'
-                  : item.outcome === 'started'
-                    ? 'text-[var(--accent)]'
-                    : 'text-[var(--muted)]',
-              )}
-            >
-              {item.outcome === 'started'
-                ? `Started: ${item.run ? RUN_ACTION_LABELS[item.run] : ''}`
-                : `${item.outcome === 'refused' ? 'Refused' : 'Left alone'}: ${item.message ?? ''}`}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }
 

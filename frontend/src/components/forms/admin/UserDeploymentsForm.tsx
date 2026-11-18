@@ -28,5 +28,12 @@ export default function UserDeploymentsForm({ userId }: { userId: string }) {
     )
   }
 
-  return <DeploymentList apiBase={apiBase} onSelect={setOpen} admin />
+  return (
+    <DeploymentList
+      apiBase={apiBase}
+      onSelect={setOpen}
+      admin
+      bulkUserId={userId}
+    />
+  )
 }
