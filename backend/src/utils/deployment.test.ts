@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   checkDeployment,
+  missingValues,
   renderTemplate,
   resolveDeployment,
   scanTemplate,
@@ -90,6 +91,29 @@ describe("checkDeployment", () => {
     assert.equal(checkDeployment(draft).valid, false);
   });
 
+  it("rejects a volume or a name a set-once variable decides", () => {
+    const variables: DeploymentDraft["variables"] = [
+      ...GOOD.variables,
+      { key: "SPACE", value: "", visibility: "setOnce" },
+    ];
+    const mounted: DeploymentDraft = {
+      ...GOOD,
+      variables,
+      composeFile: COMPOSE.replace("${USERNAME}:", "${SPACE}:"),
+    };
+    assert.match(messages(mounted), /could mount any folder of the server/);
+    const named: DeploymentDraft = {
+      ...GOOD,
+      variables,
+      composeFile: COMPOSE.replace("TZ=", "SPACE=${SPACE}\n      - TZ="),
+      name: "n8n-${SPACE}-${USERNAME}",
+    };
+    assert.match(
+      messages(named),
+      /The name uses \$\{SPACE\}, which the customer sets/,
+    );
+  });
+
   it("lets the name use a variable the customer cannot edit", () => {
     const result = checkDeployment({
       ...GOOD,
@@ -116,7 +140,7 @@ describe("checkDeployment", () => {
   it("refuses a name built from a variable the customer can edit", () => {
     assert.match(
       messages({ ...GOOD, name: "n8n-${TIMEZONE}-${USERNAME}" }),
-      /TIMEZONE\}, which the customer can change/,
+      /TIMEZONE\}, which the customer sets/,
     );
   });
 
@@ -222,6 +246,32 @@ describe("resolveDeployment", () => {
       resolveDeployment(GOOD, builtIns, {}).env.TIMEZONE,
       "Asia/Jakarta",
     );
+  });
+
+  it("leaves a set-once variable empty until the customer fills it", () => {
+    const draft: DeploymentDraft = {
+      ...GOOD,
+      variables: [
+        ...GOOD.variables,
+        {
+          key: "ADMIN_PASSWORD",
+          value: "example",
+          visibility: "setOnceHidden",
+        },
+        { key: "ADMIN_NAME", value: "", visibility: "setOnce" },
+      ],
+    };
+    assert.equal(resolveDeployment(draft, builtIns, {}).env.ADMIN_PASSWORD, "");
+    assert.deepEqual(missingValues(draft.variables, {}), [
+      "ADMIN_PASSWORD",
+      "ADMIN_NAME",
+    ]);
+    const values = { ADMIN_PASSWORD: "s3cret", ADMIN_NAME: "  " };
+    assert.equal(
+      resolveDeployment(draft, builtIns, values).env.ADMIN_PASSWORD,
+      "s3cret",
+    );
+    assert.deepEqual(missingValues(draft.variables, values), ["ADMIN_NAME"]);
   });
 });
 

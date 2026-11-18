@@ -107,7 +107,13 @@ const COMPOSE_PLACEHOLDER = `services:
     volumes:
       - /mnt/nas-sda/n8n/\${USERNAME}:/home/node/.n8n`
 
-const VISIBILITIES: VariableVisibility[] = ['editable', 'readOnly', 'hidden']
+const VISIBILITIES: VariableVisibility[] = [
+  'editable',
+  'readOnly',
+  'hidden',
+  'setOnce',
+  'setOnceHidden',
+]
 
 const subheadingClassName = 'text-sm font-medium'
 const monoInputClassName = 'bg-white font-mono text-[13px] md:text-[13px]'
@@ -430,7 +436,10 @@ export default function DeploymentFields({
                 placeholder={
                   variable.visibility === 'editable'
                     ? 'Default value'
-                    : 'e.g. ${USERNAME}'
+                    : variable.visibility === 'setOnce' ||
+                        variable.visibility === 'setOnceHidden'
+                      ? 'Example shown to the customer'
+                      : 'e.g. ${USERNAME}'
                 }
                 spellCheck={false}
                 autoCapitalize="off"

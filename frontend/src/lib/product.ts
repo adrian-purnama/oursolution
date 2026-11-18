@@ -32,13 +32,21 @@ export type ProductImage = {
  * - editable: the customer sees and can change it; the value is a default.
  * - readOnly: the customer sees it, only an admin sets it.
  * - hidden: the customer never sees it.
+ * - setOnce: the customer must fill it before turning the service on and
+ *   cannot change it afterwards; they keep seeing it. The value is only an
+ *   example shown in the empty field.
+ * - setOnceHidden: like setOnce, but hidden from the customer once filled,
+ *   e.g. a first admin password.
  */
-export type VariableVisibility = 'editable' | 'readOnly' | 'hidden'
+export type VariableVisibility =
+  'editable' | 'readOnly' | 'hidden' | 'setOnce' | 'setOnceHidden'
 
 export const VARIABLE_VISIBILITY_LABELS: Record<VariableVisibility, string> = {
   editable: 'Can see and edit',
   readOnly: 'Can see',
   hidden: 'Hidden',
+  setOnce: 'Must fill once, then can see',
+  setOnceHidden: 'Must fill once, then hidden',
 }
 
 export type DeploymentVariable = {

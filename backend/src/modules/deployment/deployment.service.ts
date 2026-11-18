@@ -21,15 +21,19 @@ import type {
   RunAction,
 } from "../../models/deploymentRun/deploymentRun.interface";
 import { DeploymentRunModel } from "../../models/deploymentRun/deploymentRun.model";
-import type {
-  DeploymentCommand,
-  ProductDeployment,
-  ProductInterface,
+import {
+  isCustomerSet,
+  isSetOnce,
+  type DeploymentCommand,
+  type ProductDeployment,
+  type ProductInterface,
 } from "../../models/product/product.interface";
 import { ProductModel } from "../../models/product/product.model";
 import type { UserInterface } from "../../models/user/user.interface";
 import { UserModel } from "../../models/user/user.model";
 import {
+  missingValues,
+  renderTemplate,
   resolveDeployment,
   toEnvFile,
   usernameFromEmail,
@@ -106,6 +110,12 @@ const OWNER_MESSAGES: Partial<
     doneBody: "Your service was restarted and is running again.",
     failed: (name) => `${name} could not be restarted`,
   },
+  erase: {
+    done: (name) => `${name}'s data was erased`,
+    doneBody:
+      "Everything stored in your service was erased and the service was removed. Turn it on to start afresh.",
+    failed: (name) => `${name}'s data could not be erased`,
+  },
 };
 
 const SOURCE = "modules/deployment/deployment.service.ts";
@@ -154,8 +164,8 @@ function builtInsFor(
 const NOBODY = { USERNAME: "-", EMAIL: "-@-", USER_ID: "-" };
 
 /**
- * The host folders that hold this customer's data only, which a reset
- * empties. `resolved` is the deployment as resolved for the customer.
+ * The host folders that hold this customer's data only, which an erase
+ * or a wipe empties. `resolved` is the deployment as resolved for the customer.
  */
 function resetFoldersOf(
   config: ProductDeployment,
@@ -168,7 +178,7 @@ function resetFoldersOf(
   );
   const editable = new Set(
     config.variables
-      .filter((variable) => variable.visibility === "editable")
+      .filter((variable) => isCustomerSet(variable.visibility))
       .map((variable) => variable.key),
   );
   return customerFolders(
@@ -208,7 +218,7 @@ interface RunContext {
   user: UserDoc;
   resolved: ResolvedDeployment | null;
   environmentId: string | null;
-  /** Reset only: the folders the check step found safe to empty. */
+  /** Erase and wipe: the folders the check step found safe to empty. */
   resetFolders: string[];
 }
 
@@ -338,8 +348,11 @@ export class DeploymentService {
   // ---------------------------------------------------------------- writing
 
   /**
-   * Saves what the customer typed for editable variables. Applies at the
-   * next deploy or redeploy; nothing is redeployed now.
+   * Saves what the customer typed for the variables they set. Applies at
+   * the next deploy or redeploy; nothing is redeployed now. A set-once
+   * variable is taken while empty and then kept: the customer cannot change
+   * it, and leaving it blank changes nothing. An admin may change it, or
+   * empty it so the customer fills it again.
    */
   async updateValues(
     userId: string,
@@ -348,18 +361,40 @@ export class DeploymentService {
     view: DeploymentView,
   ): Promise<DeploymentOutDto> {
     const product = await this.loadProduct(productId);
-    const editable = new Set(
-      (product.deployment?.variables ?? [])
-        .filter((variable) => variable.visibility === "editable")
-        .map((variable) => variable.key),
+    const variables = product.deployment?.variables ?? [];
+    const visibilityOf = new Map(
+      variables.map((variable) => [variable.key, variable.visibility]),
     );
-    for (const key of Object.keys(values)) {
-      if (!editable.has(key)) throw new Error(`${key} cannot be changed`);
-    }
     const deployment = await this.findOrCreate(userId, productId);
-    const merged = { ...valuesOf(deployment), ...values };
+    const merged = valuesOf(deployment);
+
+    for (const [key, value] of Object.entries(values)) {
+      const visibility = visibilityOf.get(key);
+      if (!visibility || !isCustomerSet(visibility)) {
+        throw new Error(`${key} cannot be changed`);
+      }
+      if (visibility === "editable") {
+        merged[key] = value;
+        continue;
+      }
+      const filled = Boolean(merged[key]?.trim());
+      if (view === "admin") {
+        if (value.trim()) merged[key] = value;
+        else delete merged[key];
+      } else if (!value.trim()) {
+        // Left blank: still to fill, or already set and kept.
+      } else if (filled && value !== merged[key]) {
+        throw new Error(`${key} is already set and cannot be changed`);
+      } else {
+        merged[key] = value;
+      }
+    }
+
     deployment.values = Object.entries(merged)
-      .filter(([key]) => editable.has(key))
+      .filter(([key]) => {
+        const visibility = visibilityOf.get(key);
+        return visibility !== undefined && isCustomerSet(visibility);
+      })
       .map(([key, value]) => ({ key, value }));
     await deployment.save();
     return this.get(userId, productId, view);
@@ -421,11 +456,14 @@ export class DeploymentService {
     if (action !== "turnOff" && !product.deployment) {
       throw new Error("This product has nothing to deploy");
     }
-    if (action === "reset") {
+    if (action === "deploy" || action === "redeploy") {
+      this.assertFilled(product, deployment);
+    }
+    if (action === "erase") {
       const out = await this.get(userId, productId, "admin");
-      if (!out.actions.includes("reset")) {
+      if (!out.actions.includes("erase")) {
         throw new Error(
-          "This service keeps no data in a folder of its own, so there is nothing to reset",
+          "This service keeps no data in a folder of its own, so there is nothing to erase",
         );
       }
     }
@@ -476,6 +514,20 @@ export class DeploymentService {
 
     await this.launch(deployment, "command", startedBy, command);
     return this.get(userId, productId, view);
+  }
+
+  /** Throws while the customer still has set-once variables to fill. */
+  private assertFilled(product: ProductDoc, deployment: DeploymentDoc): void {
+    const missing = missingValues(
+      product.deployment?.variables ?? [],
+      valuesOf(deployment),
+    );
+    if (missing.length > 0) {
+      const them = missing.length === 1 ? "it" : "them";
+      throw new Error(
+        `Fill in ${missing.join(", ")} first: the service cannot be turned on without ${them}`,
+      );
+    }
   }
 
   /** Throws when this customer has started too much on it lately. */
@@ -835,6 +887,13 @@ export class DeploymentService {
    * failed (they stopped mid-way) and admins are told.
    */
   async recoverInterruptedRuns(): Promise<void> {
+    // "reset" (erase, then deploy) became "erase" (erase only). Old runs
+    // keep their history under the new name.
+    // Straight on the collection: "reset" is no longer a known action.
+    await DeploymentRunModel.collection.updateMany(
+      { action: "reset" },
+      { $set: { action: "erase" } },
+    );
     const runs = await DeploymentRunModel.find({ status: "running" }).exec();
     for (const run of runs) {
       const step =
@@ -1005,6 +1064,7 @@ export class DeploymentService {
       !uptimeKumaService.configured ||
       run.action === "restart" ||
       run.action === "wipe" ||
+      run.action === "erase" ||
       run.action === "command"
     ) {
       return;
@@ -1091,6 +1151,8 @@ export class DeploymentService {
         return this.stepWipe(context);
       case "unroute":
         return this.stepUnroute(context);
+      case "remove":
+        return this.stepRemove(context);
       case "command":
         return this.stepCommand(context);
       default:
@@ -1114,6 +1176,7 @@ export class DeploymentService {
     if (!(await entitlementService.canRunService(user.id, product.id))) {
       throw new Error("The subscription is no longer active");
     }
+    this.assertFilled(product, deployment);
 
     const username = await this.ensureUsername(user);
     const resolved = resolveDeployment(
@@ -1150,17 +1213,6 @@ export class DeploymentService {
       }
     }
 
-    if (context.run.action === "reset") {
-      const { folders } = resetFoldersOf(config, resolved);
-      if (folders.length === 0) {
-        throw new Error(
-          "The compose file mounts no host folder that is this customer's only and inside DEPLOY_DATA_ROOTS, so there is nothing to erase",
-        );
-      }
-      await this.assertFoldersAreOwn(deployment, folders);
-      context.resetFolders = folders;
-    }
-
     await cloudflareService.checkAvailable();
     for (const { host } of resolved.domains) {
       if (deployment.routedHosts.includes(host)) continue;
@@ -1180,20 +1232,30 @@ export class DeploymentService {
   }
 
   /**
-   * Before deleting data: the service is off, nobody is entitled to it,
-   * and the folders are this customer's only. Resolved with the username
-   * the customer was deployed under, so the folders are the ones used.
+   * Before deleting data: the service is off and the folders are this
+   * customer's only. An admin's wipe needs the subscription over; a
+   * customer's erase needs it still active. Resolved with the username the
+   * customer was deployed under, so the folders are the ones used.
    */
   private async stepWipeCheck(context: RunContext): Promise<void> {
-    const { deployment, product, user } = context;
+    const { deployment, product, user, run } = context;
     const config = product.deployment;
     if (!config) throw new Error("The product has no deployment settings");
     if (!user.deployUsername) {
       throw new Error("It was never deployed, so there is no data");
     }
-    if (await entitlementService.canRunService(user.id, product.id)) {
+    const entitled = await entitlementService.canRunService(
+      user.id,
+      product.id,
+    );
+    if (run.action === "wipe" && entitled) {
       throw new Error(
         "The subscription is active again, so its data is kept. Nothing was erased",
+      );
+    }
+    if (run.action === "erase" && !entitled) {
+      throw new Error(
+        "The subscription is no longer active. Nothing was erased",
       );
     }
     const resolved = resolveDeployment(
@@ -1329,7 +1391,7 @@ export class DeploymentService {
       // New every time, so it can never be an existing compose's name.
       name: `wipe-${context.deployment.id}-${Date.now().toString(36)}`,
       composeFile: wipeComposeFile(folders),
-      title: "Erase the customer's data (reset by the app)",
+      title: `Erase the customer's data (${context.run.action === "wipe" ? "deleted by an admin" : "erased by the customer"} in the app)`,
     });
   }
 
@@ -1424,6 +1486,47 @@ export class DeploymentService {
     });
   }
 
+  /**
+   * After an erase: takes away everything the service had, so it is as if
+   * it was never deployed. Set-once values go too, so the customer chooses
+   * them afresh (a first admin password is useless without its data).
+   */
+  private async stepRemove(context: RunContext): Promise<void> {
+    const { deployment, product } = context;
+    await this.stepUnroute(context);
+    if (
+      deployment.dokploy &&
+      (await dokployService.composeExists(deployment.dokploy.composeId))
+    ) {
+      await dokployService.deleteCompose(deployment.dokploy.composeId);
+    }
+    deployment.dokploy = null;
+    await DeploymentModel.updateOne(
+      { _id: deployment._id },
+      { $set: { dokploy: null } },
+    ).exec();
+
+    if (uptimeKumaService.configured) {
+      for (const { monitorId } of [...deployment.monitors]) {
+        await uptimeKumaService.deleteMonitor(monitorId);
+        await DeploymentModel.updateOne(
+          { _id: deployment._id },
+          { $pull: { monitors: { monitorId } } },
+        ).exec();
+      }
+    }
+
+    const setOnce = new Set(
+      (product.deployment?.variables ?? [])
+        .filter((variable) => isSetOnce(variable.visibility))
+        .map((variable) => variable.key),
+    );
+    await DeploymentModel.updateOne(
+      { _id: deployment._id },
+      { $pull: { values: { key: { $in: [...setOnce] } } } },
+    ).exec();
+  }
+
   private async stepUnroute({ deployment }: RunContext): Promise<void> {
     for (const host of [...deployment.routedHosts]) {
       await cloudflareService.removeRoute(host);
@@ -1453,7 +1556,10 @@ export class DeploymentService {
     run.status = "failed";
     run.finishedAt = now;
     await run.save();
-    const untouched = run.action === "wipe" && stepKey === "wipeCheck";
+    // Nothing was stopped or erased yet: it is still off, as it was.
+    const untouched =
+      (run.action === "wipe" || run.action === "erase") &&
+      stepKey === "wipeCheck";
     // A failed command leaves the service as it was: running. A sync
     // corrects that if it is not.
     const state =
@@ -1627,16 +1733,32 @@ export class DeploymentService {
         )
       : null;
 
+    const builtIns = builtInsFor(user, username);
     const variables: DeploymentVariableOutDto[] = (config?.variables ?? [])
       .filter(
         (variable) => view === "admin" || variable.visibility !== "hidden",
       )
-      .map((variable) => ({
-        key: variable.key,
-        value: resolved?.env[variable.key] ?? "",
-        editable: variable.visibility === "editable",
-        ...(view === "admin" ? { visibility: variable.visibility } : {}),
-      }));
+      .map((variable) => {
+        const value = resolved?.env[variable.key] ?? "";
+        const setOnce = isSetOnce(variable.visibility);
+        const filled = setOnce && Boolean(value.trim());
+        const secret = variable.visibility === "setOnceHidden";
+        const concealed = view === "customer" && filled && secret;
+        return {
+          key: variable.key,
+          value: concealed ? "" : value,
+          editable:
+            variable.visibility === "editable" ||
+            (setOnce && (view === "admin" || !filled)),
+          setOnce,
+          filled,
+          secret,
+          placeholder: setOnce
+            ? renderTemplate(variable.value, builtIns) || null
+            : null,
+          ...(view === "admin" ? { visibility: variable.visibility } : {}),
+        };
+      });
 
     const runs = deployment
       ? await DeploymentRunModel.find({ deploymentId: deployment._id })
@@ -1668,7 +1790,7 @@ export class DeploymentService {
     const actions = allowedActions(state, entitled).filter(
       (action) =>
         action === "turnOff" ||
-        (action === "reset" ? reset.folders.length > 0 : Boolean(config)),
+        (action === "erase" ? reset.folders.length > 0 : Boolean(config)),
     );
 
     return {
@@ -1683,6 +1805,9 @@ export class DeploymentService {
           ? resolved.domains.map(({ host }) => host)
           : (deployment?.routedHosts ?? []),
       variables,
+      missingValues: config
+        ? missingValues(config.variables, valuesOf(deployment))
+        : [],
       status,
       actions,
       commands: (config?.commands ?? []).map(({ id, label }) => ({
