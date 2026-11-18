@@ -1,6 +1,8 @@
-import type {
-  DeploymentDomain,
-  DeploymentVariable,
+import {
+  isCustomerSet,
+  isSetOnce,
+  type DeploymentDomain,
+  type DeploymentVariable,
 } from "../models/product/product.interface";
 import {
   checkDockerCompose,
@@ -117,8 +119,9 @@ export interface ResolvedDeployment {
 
 /**
  * Fills a product's templates for one customer. `customerValues` are what
- * the customer typed for editable variables, taken literally; missing ones
- * fall back to the product's default.
+ * the customer typed for the variables they set, taken literally; missing
+ * editable ones fall back to the product's default, missing set-once ones
+ * are empty (`missingValues` tells).
  */
 export function resolveDeployment(
   deployment: Pick<DeploymentDraft, "name" | "variables" | "domains">,
@@ -132,6 +135,8 @@ export function resolveDeployment(
     const byAdmin = renderTemplate(variable.value, builtIns);
     if (variable.visibility === "editable") {
       env[variable.key] = customerValues[variable.key] ?? byAdmin;
+    } else if (isSetOnce(variable.visibility)) {
+      env[variable.key] = customerValues[variable.key] ?? "";
     } else {
       env[variable.key] = byAdmin;
       fixed[variable.key] = byAdmin;
@@ -146,6 +151,22 @@ export function resolveDeployment(
       port: domain.port,
     })),
   };
+}
+
+/**
+ * The set-once variables the customer has not filled yet. The service
+ * cannot be deployed until this is empty.
+ */
+export function missingValues(
+  variables: readonly DeploymentVariable[],
+  customerValues: Readonly<Record<string, string>>,
+): string[] {
+  return variables
+    .filter(
+      (variable) =>
+        isSetOnce(variable.visibility) && !customerValues[variable.key]?.trim(),
+    )
+    .map((variable) => variable.key);
 }
 
 /**
@@ -231,9 +252,9 @@ export function checkDeployment(
     if (/[\r\n]/.test(variable.value)) {
       error(`${label}: the value must be on one line`);
     }
-    if (variable.visibility === "editable" && mounted.has(key)) {
+    if (isCustomerSet(variable.visibility) && mounted.has(key)) {
       error(
-        `${label} decides what a volume mounts, and the customer can change it, so they could mount any folder of the server. Make it read-only or hidden, or take it out of the volume`,
+        `${label} decides what a volume mounts, and the customer sets it, so they could mount any folder of the server. Make it read-only or hidden, or take it out of the volume`,
       );
     }
     const scan = scanTemplate(variable.value);
@@ -270,7 +291,7 @@ export function checkDeployment(
   const contextFor = (sample: Record<BuiltInVariable, string>) => {
     const context: Record<string, string> = { ...sample };
     for (const [key, variable] of defined) {
-      if (variable.visibility !== "editable") {
+      if (!isCustomerSet(variable.visibility)) {
         context[key] = renderTemplate(variable.value, sample);
       }
     }
@@ -299,9 +320,9 @@ export function checkDeployment(
       if (!variable) {
         error(`${label} uses \${${name}}, which is not defined`);
         usable = false;
-      } else if (variable.visibility === "editable") {
+      } else if (isCustomerSet(variable.visibility)) {
         error(
-          `${label} uses \${${name}}, which the customer can change. Use a built-in variable or one the customer cannot edit`,
+          `${label} uses \${${name}}, which the customer sets. Use a built-in variable or one only an admin sets`,
         );
         usable = false;
       }

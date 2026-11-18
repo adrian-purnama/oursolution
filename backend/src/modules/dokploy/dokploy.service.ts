@@ -472,7 +472,8 @@ export class DokployService {
     }
   }
 
-  private async deleteCompose(composeId: string): Promise<void> {
+  /** Removes the compose, its containers and its named volumes. */
+  async deleteCompose(composeId: string): Promise<void> {
     await this.request("POST", "compose.delete", {
       composeId,
       deleteVolumes: true,

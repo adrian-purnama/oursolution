@@ -75,7 +75,7 @@ const ACTION_ICONS: Record<RunAction, LucideIcon> = {
   redeploy: RefreshCw,
   restart: RotateCcw,
   turnOff: Power,
-  reset: Eraser,
+  erase: Eraser,
   wipe: Trash2,
   command: SquareTerminal,
 }
@@ -194,7 +194,7 @@ export default function DeploymentPanel({
   const [starting, setStarting] = useState<RunAction | null>(null)
   const [confirmOff, setConfirmOff] = useState(false)
   /** The erasing action waiting for the product name to be typed. */
-  const [confirmErase, setConfirmErase] = useState<'reset' | 'wipe' | null>(
+  const [confirmErase, setConfirmErase] = useState<'erase' | 'wipe' | null>(
     null,
   )
   const [eraseName, setEraseName] = useState('')
@@ -388,6 +388,17 @@ export default function DeploymentPanel({
   const primary: RunAction | null = deployment.actions.includes('deploy')
     ? 'deploy'
     : null
+  /** Set-once values still empty, counting what was typed but not saved. */
+  const unfilled = deployment.missingValues.filter(
+    (key) => !(values[key] ?? '').trim(),
+  )
+  /** Turning on waits for them; a redeploy for the saved ones. */
+  const blockedBy = (action: RunAction) =>
+    action === 'deploy'
+      ? unfilled
+      : action === 'redeploy'
+        ? deployment.missingValues
+        : []
   const secondary = deployment.actions.filter(
     (action) => action !== primary && action !== 'wipe',
   )
@@ -411,7 +422,7 @@ export default function DeploymentPanel({
 
   function ask(action: RunAction) {
     if (action === 'turnOff') setConfirmOff(true)
-    else if (action === 'reset' || action === 'wipe') {
+    else if (action === 'erase' || action === 'wipe') {
       setEraseName('')
       setConfirmErase(action)
     } else void start(action)
@@ -485,7 +496,12 @@ export default function DeploymentPanel({
               {primary ? (
                 <Button
                   type="button"
-                  disabled={locked}
+                  disabled={locked || blockedBy(primary).length > 0}
+                  title={
+                    blockedBy(primary).length > 0
+                      ? `Fill in ${blockedBy(primary).join(', ')} first`
+                      : undefined
+                  }
                   onClick={() => void start(primary)}
                 >
                   {starting === primary ? (
@@ -635,9 +651,11 @@ export default function DeploymentPanel({
           <div>
             <h3 className="text-sm font-medium">Settings</h3>
             <p className={`text-xs ${hintClassName}`}>
-              {state === 'notDeployed'
-                ? 'Fill these in before you deploy.'
-                : 'Changes apply the next time you redeploy.'}
+              {unfilled.length > 0
+                ? `Fill in ${unfilled.join(', ')} before you turn it on. Once saved, ${unfilled.length === 1 ? 'it' : 'they'} cannot be changed.`
+                : state === 'notDeployed'
+                  ? 'Fill these in before you deploy.'
+                  : 'Changes apply the next time you redeploy.'}
             </p>
           </div>
 
@@ -653,10 +671,24 @@ export default function DeploymentPanel({
                       <span className="font-mono text-[13px]">
                         {variable.key}
                       </span>
+                      {variable.setOnce ? (
+                        <span
+                          className={`text-xs font-normal ${hintClassName}`}
+                        >
+                          {admin
+                            ? variable.secret
+                              ? 'set once by the customer, then hidden'
+                              : 'set once by the customer'
+                            : 'required'}
+                        </span>
+                      ) : null}
                     </Label>
                     <Input
                       id={`value-${productId}-${variable.key}`}
                       value={values[variable.key] ?? ''}
+                      placeholder={variable.placeholder ?? undefined}
+                      aria-required={variable.setOnce || undefined}
+                      autoComplete="off"
                       spellCheck={false}
                       autoCapitalize="off"
                       className="bg-white font-mono text-[13px] md:text-[13px]"
@@ -668,6 +700,13 @@ export default function DeploymentPanel({
                         setDirty(true)
                       }}
                     />
+                    {variable.setOnce && !admin ? (
+                      <p className={`text-xs ${hintClassName}`}>
+                        {variable.secret
+                          ? 'It can be set only once and is hidden after saving, so keep a copy.'
+                          : 'It can be set only once.'}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
                 <div className="flex items-center gap-3">
@@ -709,8 +748,14 @@ export default function DeploymentPanel({
                       ) : null}
                     </dt>
                     <dd className="font-mono text-[13px] break-all">
-                      {variable.value || (
-                        <span className="text-[var(--muted)]">empty</span>
+                      {variable.secret && variable.filled && !admin ? (
+                        <span className="font-sans text-[var(--muted)]">
+                          Set · hidden
+                        </span>
+                      ) : (
+                        variable.value || (
+                          <span className="text-[var(--muted)]">empty</span>
+                        )
                       )}
                     </dd>
                   </div>
@@ -727,7 +772,7 @@ export default function DeploymentPanel({
           <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
             {secondary.map((action) => {
               const Icon = ACTION_ICONS[action]
-              const danger = action === 'reset'
+              const danger = action === 'erase'
               return (
                 <li
                   key={action}
@@ -750,7 +795,12 @@ export default function DeploymentPanel({
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={locked}
+                    disabled={locked || blockedBy(action).length > 0}
+                    title={
+                      blockedBy(action).length > 0
+                        ? `Fill in ${blockedBy(action).join(', ')} first`
+                        : undefined
+                    }
                     className={danger ? 'text-[var(--destructive)]' : undefined}
                     onClick={() => ask(action)}
                   >
@@ -871,14 +921,14 @@ export default function DeploymentPanel({
             <dd className="font-mono text-[13px] break-all">
               {deployment.internal.routedHosts.join(', ') || 'none'}
             </dd>
-            <dt className={hintClassName}>Emptied by Reset</dt>
+            <dt className={hintClassName}>Emptied by Erase data</dt>
             <dd className="font-mono text-[13px] break-all">
               {deployment.internal.resetFolders.join(', ') ||
-                'nothing, so Reset is not offered'}
+                'nothing, so Erase data is not offered'}
             </dd>
             {deployment.internal.resetSkipped.length > 0 ? (
               <>
-                <dt className={hintClassName}>Left alone by Reset</dt>
+                <dt className={hintClassName}>Left alone by Erase data</dt>
                 <dd className="space-y-0.5 text-[13px]">
                   {deployment.internal.resetSkipped.map((item) => (
                     <p key={item.path} className="break-all">
@@ -977,22 +1027,22 @@ export default function DeploymentPanel({
               <DialogTitle>
                 {confirmErase === 'wipe'
                   ? `Delete ${deployment.product.name} data?`
-                  : `Reset ${deployment.product.name}?`}
+                  : `Erase ${deployment.product.name} data?`}
               </DialogTitle>
               <DialogDescription>
                 {confirmErase === 'wipe'
                   ? `Everything ${deployment.internal?.username ?? 'this customer'} stored in this service is erased for good. The service stays off. This cannot be undone.`
-                  : 'Everything stored in this service is erased for good, and it starts again as new. This cannot be undone.'}
+                  : 'Everything stored in this service is erased for good and the service is removed, including the values you set once. Turn it on again to start afresh. This cannot be undone.'}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-1.5">
-              <Label htmlFor={`reset-${productId}`}>
+              <Label htmlFor={`erase-${productId}`}>
                 Type{' '}
                 <span className="font-medium">{deployment.product.name}</span>{' '}
                 to confirm
               </Label>
               <Input
-                id={`reset-${productId}`}
+                id={`erase-${productId}`}
                 value={eraseName}
                 autoComplete="off"
                 spellCheck={false}
@@ -1013,7 +1063,7 @@ export default function DeploymentPanel({
                 variant="destructive"
                 disabled={eraseName.trim() !== deployment.product.name}
               >
-                {confirmErase === 'wipe' ? 'Erase data' : 'Erase and reset'}
+                Erase data
               </Button>
             </DialogFooter>
           </form>

@@ -16,7 +16,7 @@ export const STATE_DURING: Record<RunAction, DeploymentState> = {
   redeploy: "deploying",
   restart: "restarting",
   turnOff: "stopping",
-  reset: "deploying",
+  erase: "erasing",
   wipe: "erasing",
   command: "runningCommand",
 };
@@ -27,7 +27,8 @@ export const STATE_AFTER: Record<RunAction, DeploymentState> = {
   redeploy: "running",
   restart: "running",
   turnOff: "stopped",
-  reset: "running",
+  // Nothing is left in Dokploy: the next turn-on starts from scratch.
+  erase: "notDeployed",
   wipe: "stopped",
   command: "running",
 };
@@ -42,9 +43,10 @@ export function allowedActions(
 ): RunAction[] {
   const byState: Record<DeploymentState, RunAction[]> = {
     notDeployed: ["deploy"],
-    running: ["restart", "redeploy", "turnOff", "reset"],
-    stopped: ["deploy", "reset"],
-    failed: ["deploy", "turnOff", "reset"],
+    running: ["restart", "redeploy", "turnOff"],
+    // Erasing needs the service off, so nothing writes meanwhile.
+    stopped: ["deploy", "erase"],
+    failed: ["deploy", "turnOff"],
     deploying: [],
     stopping: [],
     restarting: [],
@@ -159,16 +161,16 @@ export const START_LIMITS: readonly {
   windowMs: number;
 }[] = [
   {
-    actions: ["deploy", "redeploy", "restart", "reset"],
+    actions: ["deploy", "redeploy", "restart", "erase"],
     max: 6,
     windowMs: HOUR_MS,
   },
   {
-    actions: ["deploy", "redeploy", "restart", "reset"],
+    actions: ["deploy", "redeploy", "restart", "erase"],
     max: 20,
     windowMs: 24 * HOUR_MS,
   },
-  { actions: ["reset"], max: 2, windowMs: 24 * HOUR_MS },
+  { actions: ["erase"], max: 2, windowMs: 24 * HOUR_MS },
   // Commands start a one-off job in Dokploy each time.
   { actions: ["command"], max: 5, windowMs: HOUR_MS },
   { actions: ["command"], max: 20, windowMs: 24 * HOUR_MS },
@@ -278,17 +280,18 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
         "Wait until every host answers over HTTPS (up to 5 minutes; a slow start does not fail the run)",
     },
   ],
-  reset: [
+  erase: [
     {
-      key: "check",
+      key: "wipeCheck",
       label: "Preparing",
       internalLabel:
-        "Check subscription, Dokploy and Cloudflare, that the name and hosts are free, and that the folders to empty are this customer's only",
+        "Check the subscription, that the service is off, and that the folders to empty are this customer's only",
     },
     {
       key: "stop",
       label: "Stopping",
-      internalLabel: "Stop the compose in Dokploy",
+      internalLabel:
+        "Make sure the compose is stopped in Dokploy, so nothing writes while erasing",
     },
     {
       key: "wipe",
@@ -297,21 +300,10 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
         "Empty the customer's own host folders with a one-off container in Dokploy",
     },
     {
-      key: "dokploy",
-      label: "Deploying",
+      key: "remove",
+      label: "Removing your service",
       internalLabel:
-        "Create or update the compose, env and domains in Dokploy, deploy, and wait for it",
-    },
-    {
-      key: "route",
-      label: "Connecting your address",
-      internalLabel: "Route the hosts through the Cloudflare tunnel to Traefik",
-    },
-    {
-      key: "ready",
-      label: "Starting up",
-      internalLabel:
-        "Wait until every host answers over HTTPS (up to 5 minutes; a slow start does not fail the run)",
+        "Remove the Cloudflare routes, the compose with its containers and volumes in Dokploy, and the Uptime Kuma monitors. Set-once values are cleared",
     },
   ],
   wipe: [
@@ -359,7 +351,7 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
 };
 
 export const ACTION_LABELS: Record<RunAction, string> = {
-  reset: "Reset",
+  erase: "Erase data",
   deploy: "Deploy",
   redeploy: "Redeploy",
   restart: "Restart",

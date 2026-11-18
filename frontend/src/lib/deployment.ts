@@ -1,4 +1,8 @@
-import type { ProductNotice, ProductSummary } from '#/lib/product'
+import type {
+  ProductNotice,
+  ProductSummary,
+  VariableVisibility,
+} from '#/lib/product'
 
 export type DeploymentState =
   | 'notDeployed'
@@ -16,7 +20,8 @@ export type RunAction =
   | 'redeploy'
   | 'restart'
   | 'turnOff'
-  | 'reset'
+  /** The customer erases their data while the service is off. */
+  | 'erase'
   /** Admin only: erases a stopped, unsubscribed customer's data. */
   | 'wipe'
   /** Runs one of the product's commands in the running service. */
@@ -55,10 +60,20 @@ export type DeploymentCommand = {
 
 export type DeploymentVariable = {
   key: string
+  /** Empty for the customer once a secret is filled. */
   value: string
+  /** It may be changed now. */
   editable: boolean
+  /** Filled once by the customer before the first deploy, then fixed. */
+  setOnce: boolean
+  /** Set-once only: it has a value. */
+  filled: boolean
+  /** Set once, then hidden from the customer. */
+  secret: boolean
+  /** Set-once only: the product's example for the empty field. */
+  placeholder: string | null
   /** Admin view only. */
-  visibility?: 'editable' | 'readOnly' | 'hidden'
+  visibility?: VariableVisibility
 }
 
 export type ServiceCheckState = 'up' | 'down' | 'pending' | 'maintenance'
@@ -89,6 +104,8 @@ export type Deployment = {
   /** Per address, while the service runs and is monitored; else empty. */
   status: ServiceStatus[]
   variables: DeploymentVariable[]
+  /** Set-once variables still to fill; it cannot be turned on until then. */
+  missingValues: string[]
   actions: RunAction[]
   /** The product's commands. */
   commands: DeploymentCommand[]
@@ -104,9 +121,9 @@ export type Deployment = {
     appName: string | null
     routedHosts: string[]
     monitors: { host: string; monitorId: number }[]
-    /** Host folders a reset empties. */
+    /** Host folders erasing empties. */
     resetFolders: string[]
-    /** Mounted host paths a reset leaves alone, and why. */
+    /** Mounted host paths erasing leaves alone, and why. */
     resetSkipped: { path: string; reason: string }[]
     /** Whether "Delete data" may run now, and if not, why. */
     wipe: { allowed: boolean; reason: string | null }
@@ -192,7 +209,7 @@ export const RUN_ACTION_LABELS: Record<RunAction, string> = {
   redeploy: 'Redeploy',
   restart: 'Restart',
   turnOff: 'Turn off',
-  reset: 'Reset',
+  erase: 'Erase data',
   wipe: 'Delete data',
   command: 'Command',
 }
@@ -204,7 +221,8 @@ export const RUN_ACTION_HINTS: Record<RunAction, string> = {
   restart: 'Stops and starts the service. Your data is kept.',
   turnOff:
     'Takes the service and its address offline. Your data is kept until you turn it on again.',
-  reset: 'Erases everything stored in the service and starts it again as new.',
+  erase:
+    'Erases everything stored in the service and removes it. Turn it on again to start afresh.',
   wipe: 'Erases everything stored in the service. It stays off.',
   command: 'Runs a command in the service.',
 }

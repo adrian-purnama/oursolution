@@ -108,14 +108,9 @@ describe("allowedActions", () => {
       "restart",
       "redeploy",
       "turnOff",
-      "reset",
     ]);
-    assert.deepEqual(allowedActions("stopped", true), ["deploy", "reset"]);
-    assert.deepEqual(allowedActions("failed", true), [
-      "deploy",
-      "turnOff",
-      "reset",
-    ]);
+    assert.deepEqual(allowedActions("stopped", true), ["deploy", "erase"]);
+    assert.deepEqual(allowedActions("failed", true), ["deploy", "turnOff"]);
     assert.deepEqual(allowedActions("deploying", true), []);
   });
 
@@ -167,17 +162,17 @@ describe("nextAllowedStart", () => {
     );
   });
 
-  it("allows two resets a day", () => {
-    const resets = [600, 300].map((minutes) => ({
-      action: "reset" as const,
+  it("allows two erases a day", () => {
+    const erases = [600, 300].map((minutes) => ({
+      action: "erase" as const,
       startedAt: ago(minutes),
     }));
-    assert.equal(nextAllowedStart("reset", resets.slice(1), now), null);
+    assert.equal(nextAllowedStart("erase", erases.slice(1), now), null);
     assert.deepEqual(
-      nextAllowedStart("reset", resets, now),
+      nextAllowedStart("erase", erases, now),
       new Date("2026-11-12T02:00:00Z"),
     );
-    assert.equal(nextAllowedStart("restart", resets, now), null);
+    assert.equal(nextAllowedStart("restart", erases, now), null);
   });
 
   it("never limits turning off", () => {

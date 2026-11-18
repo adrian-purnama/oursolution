@@ -42,8 +42,19 @@ export interface DeploymentCommandOutDto {
 export interface DeploymentVariableOutDto {
   key: string;
   value: string;
-  /** The customer may change it; it applies at the next deploy. */
+  /** It may be changed now; it applies at the next deploy. */
   editable: boolean;
+  /** The customer fills it once before the first deploy; then it is fixed. */
+  setOnce: boolean;
+  /** Set-once only: it has a value. */
+  filled: boolean;
+  /**
+   * Set once, then hidden: the customer is never shown its value again, so
+   * `value` is empty for them once it is filled.
+   */
+  secret: boolean;
+  /** Set-once only: the product's example for the empty field. */
+  placeholder: string | null;
   /** Admin view only: hidden ones are only in the admin view. */
   visibility?: VariableVisibility;
 }
@@ -81,6 +92,8 @@ export interface DeploymentOutDto {
   /** Public addresses, e.g. "n8n-jo.example.com". */
   hosts: string[];
   variables: DeploymentVariableOutDto[];
+  /** Set-once variables still to fill; deploying waits for them. */
+  missingValues: string[];
   /** Per address, while the service runs and is monitored; else empty. */
   status: ServiceStatusOutDto[];
   /** What can be started now. */
@@ -99,9 +112,9 @@ export interface DeploymentOutDto {
     appName: string | null;
     routedHosts: string[];
     monitors: { host: string; monitorId: number }[];
-    /** Host folders a reset empties: this customer's and nobody else's. */
+    /** Host folders erasing empties: this customer's and nobody else's. */
     resetFolders: string[];
-    /** Mounted host paths a reset leaves alone, and why. */
+    /** Mounted host paths erasing leaves alone, and why. */
     resetSkipped: { path: string; reason: string }[];
     /** Whether "Delete data" may run now, and if not, why. */
     wipe: { allowed: boolean; reason: string | null };

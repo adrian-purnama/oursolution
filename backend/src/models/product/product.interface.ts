@@ -18,13 +18,30 @@ export type DeploymentType = (typeof DEPLOYMENT_TYPES)[number];
  * - "editable": the customer sees it and can change it; the value is a default.
  * - "readOnly": the customer sees it but only an admin sets it.
  * - "hidden": the customer never sees it.
+ * - "setOnce": the customer must fill it before the service can be turned
+ *   on, and cannot change it afterwards; they keep seeing it. The admin's
+ *   value is only an example shown in the empty field.
+ * - "setOnceHidden": like "setOnce", but once filled its value is never
+ *   shown to the customer again, e.g. a first admin password.
  */
 export const VARIABLE_VISIBILITIES = [
   "editable",
   "readOnly",
   "hidden",
+  "setOnce",
+  "setOnceHidden",
 ] as const;
 export type VariableVisibility = (typeof VARIABLE_VISIBILITIES)[number];
+
+/** The customer fills it once, before the first deploy. */
+export function isSetOnce(visibility: VariableVisibility): boolean {
+  return visibility === "setOnce" || visibility === "setOnceHidden";
+}
+
+/** The customer decides its value, so it can be anything at all. */
+export function isCustomerSet(visibility: VariableVisibility): boolean {
+  return visibility === "editable" || isSetOnce(visibility);
+}
 
 /** One `KEY=value` of a deployment's environment. */
 export interface DeploymentVariable {
