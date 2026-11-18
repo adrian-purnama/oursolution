@@ -592,7 +592,7 @@ export class DeploymentService {
         message: null,
       };
       items.push(item);
-      if (!record || !user || !product) {
+      if (!user || !product) {
         item.message = "Not found";
         continue;
       }
@@ -601,7 +601,13 @@ export class DeploymentService {
           userId,
           productId,
         );
-        const plan = bulkPlan(input.action, record.state, entitled);
+        // No record yet: a subscription never deployed, which turning on
+        // may deploy for the first time.
+        const plan = bulkPlan(
+          input.action,
+          record?.state ?? "notDeployed",
+          entitled,
+        );
         if ("skip" in plan) {
           item.message = plan.skip;
           continue;
