@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Rocket,
   SquareTerminal,
+  TriangleAlert,
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -203,6 +204,8 @@ export default function DeploymentPanel({
     useState<DeploymentCommand | null>(null)
   /** The command being started, until the server answers. */
   const [startingCommand, setStartingCommand] = useState<string | null>(null)
+  /** Set after trying to start with required settings empty. */
+  const [showMissing, setShowMissing] = useState(false)
 
   const url = `${apiBase}/${productId}`
 
@@ -420,6 +423,31 @@ export default function DeploymentPanel({
   const featured = latest && latest.status !== 'succeeded' ? latest : null
   const history = featured ? deployment.runs.slice(1) : deployment.runs
 
+  const fieldId = (key: string) => `value-${productId}-${key}`
+
+  function focusSetting(key: string) {
+    const element = document.getElementById(fieldId(key))
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    element?.focus({ preventScroll: true })
+  }
+
+  /** Starts the action, or points at the settings it still waits for. */
+  function attempt(action: RunAction, run: () => void) {
+    const missing = blockedBy(action)
+    if (missing.length === 0) {
+      run()
+      return
+    }
+    setShowMissing(true)
+    const typed = missing.filter((key) => (values[key] ?? '').trim())
+    toast.error(
+      typed.length === missing.length
+        ? `Save ${missing.join(', ')} first`
+        : `Fill in ${missing.join(', ')} first`,
+    )
+    focusSetting(missing.find((key) => !typed.includes(key)) ?? missing[0])
+  }
+
   function ask(action: RunAction) {
     if (action === 'turnOff') setConfirmOff(true)
     else if (action === 'erase' || action === 'wipe') {
@@ -496,13 +524,8 @@ export default function DeploymentPanel({
               {primary ? (
                 <Button
                   type="button"
-                  disabled={locked || blockedBy(primary).length > 0}
-                  title={
-                    blockedBy(primary).length > 0
-                      ? `Fill in ${blockedBy(primary).join(', ')} first`
-                      : undefined
-                  }
-                  onClick={() => void start(primary)}
+                  disabled={locked}
+                  onClick={() => attempt(primary, () => void start(primary))}
                 >
                   {starting === primary ? (
                     <LoaderCircle className="animate-spin" aria-hidden />
@@ -651,65 +674,138 @@ export default function DeploymentPanel({
           <div>
             <h3 className="text-sm font-medium">Settings</h3>
             <p className={`text-xs ${hintClassName}`}>
-              {unfilled.length > 0
-                ? `Fill in ${unfilled.join(', ')} before you turn it on. Once saved, ${unfilled.length === 1 ? 'it' : 'they'} cannot be changed.`
-                : state === 'notDeployed'
-                  ? 'Fill these in before you deploy.'
-                  : 'Changes apply the next time you redeploy.'}
+              {state === 'notDeployed'
+                ? 'Fill these in before you deploy.'
+                : 'Changes apply the next time you redeploy.'}
             </p>
           </div>
 
+          {unfilled.length > 0 && !admin ? (
+            <div
+              role={showMissing ? 'alert' : undefined}
+              className={cn(
+                'flex gap-3 rounded-md border px-4 py-3 text-sm',
+                showMissing
+                  ? 'border-[var(--destructive)]/40 bg-[var(--destructive)]/5'
+                  : 'border-amber-300 bg-amber-50',
+              )}
+            >
+              <TriangleAlert
+                className={cn(
+                  'mt-0.5 size-4 shrink-0',
+                  showMissing ? 'text-[var(--destructive)]' : 'text-amber-600',
+                )}
+                aria-hidden
+              />
+              <div className="min-w-0 space-y-1">
+                <p className="font-medium">
+                  {unfilled.length === 1
+                    ? '1 setting is needed before you can turn it on'
+                    : `${unfilled.length} settings are needed before you can turn it on`}
+                </p>
+                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                  {unfilled.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px] ring-1 ring-[var(--line)] hover:ring-[var(--ink)]"
+                      onClick={() => focusSetting(key)}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </p>
+                <p className={`text-xs ${hintClassName}`}>
+                  Marked with{' '}
+                  <span className="text-[var(--destructive)]">*</span> below.
+                  Once saved, {unfilled.length === 1 ? 'it' : 'they'} cannot be
+                  changed.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className={`${cardClassName} overflow-hidden`}>
             {editable.length > 0 ? (
-              <form
-                className="space-y-4 p-5"
-                onSubmit={(event) => void handleSave(event)}
-              >
-                {editable.map((variable) => (
-                  <div key={variable.key} className="space-y-1.5">
-                    <Label htmlFor={`value-${productId}-${variable.key}`}>
-                      <span className="font-mono text-[13px]">
-                        {variable.key}
-                      </span>
-                      {variable.setOnce ? (
-                        <span
-                          className={`text-xs font-normal ${hintClassName}`}
-                        >
-                          {admin
-                            ? variable.secret
-                              ? 'set once by the customer, then hidden'
-                              : 'set once by the customer'
-                            : 'required'}
+              <form onSubmit={(event) => void handleSave(event)}>
+                <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2">
+                  {editable.map((variable) => (
+                    <div key={variable.key} className="min-w-0 space-y-1.5">
+                      <Label
+                        htmlFor={fieldId(variable.key)}
+                        className="min-w-0 flex-wrap gap-x-2 gap-y-0.5"
+                      >
+                        <span className="min-w-0 truncate font-mono text-[13px]">
+                          {variable.key}
+                          {variable.setOnce ? (
+                            <>
+                              <span
+                                aria-hidden
+                                className="ml-0.5 font-sans text-[var(--destructive)]"
+                              >
+                                *
+                              </span>
+                              <span className="sr-only"> (required)</span>
+                            </>
+                          ) : null}
                         </span>
+                        {variable.setOnce && admin ? (
+                          <span
+                            className={`text-xs font-normal ${hintClassName}`}
+                          >
+                            {variable.secret
+                              ? 'set once by the customer, then hidden'
+                              : 'set once by the customer'}
+                          </span>
+                        ) : null}
+                      </Label>
+                      <Input
+                        id={fieldId(variable.key)}
+                        value={values[variable.key] ?? ''}
+                        placeholder={variable.placeholder ?? undefined}
+                        aria-required={variable.setOnce || undefined}
+                        aria-invalid={
+                          (showMissing && unfilled.includes(variable.key)) ||
+                          undefined
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
+                        autoCapitalize="off"
+                        className="bg-white font-mono text-[13px] md:text-[13px]"
+                        onChange={(event) => {
+                          setValues({
+                            ...values,
+                            [variable.key]: event.target.value,
+                          })
+                          setDirty(true)
+                        }}
+                      />
+                      {showMissing && unfilled.includes(variable.key) ? (
+                        <p className="text-xs text-[var(--destructive)]">
+                          Fill this in to turn it on.{' '}
+                          {variable.secret
+                            ? 'It can be set only once and is hidden after saving.'
+                            : 'It can be set only once.'}
+                        </p>
+                      ) : variable.setOnce && !admin ? (
+                        <p className={`text-xs ${hintClassName}`}>
+                          {variable.secret
+                            ? 'It can be set only once and is hidden after saving, so keep a copy.'
+                            : 'It can be set only once.'}
+                        </p>
                       ) : null}
-                    </Label>
-                    <Input
-                      id={`value-${productId}-${variable.key}`}
-                      value={values[variable.key] ?? ''}
-                      placeholder={variable.placeholder ?? undefined}
-                      aria-required={variable.setOnce || undefined}
-                      autoComplete="off"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      className="bg-white font-mono text-[13px] md:text-[13px]"
-                      onChange={(event) => {
-                        setValues({
-                          ...values,
-                          [variable.key]: event.target.value,
-                        })
-                        setDirty(true)
-                      }}
-                    />
-                    {variable.setOnce && !admin ? (
-                      <p className={`text-xs ${hintClassName}`}>
-                        {variable.secret
-                          ? 'It can be set only once and is hidden after saving, so keep a copy.'
-                          : 'It can be set only once.'}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-                <div className="flex items-center gap-3">
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 border-t border-[var(--line)] bg-[var(--surface)] px-5 py-3">
+                  {editable.some((variable) => variable.setOnce) && !admin ? (
+                    <span className={`mr-auto text-xs ${hintClassName}`}>
+                      <span aria-hidden className="text-[var(--destructive)]">
+                        *
+                      </span>{' '}
+                      Required
+                    </span>
+                  ) : null}
                   <Button
                     type="submit"
                     variant="outline"
@@ -795,14 +891,9 @@ export default function DeploymentPanel({
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={locked || blockedBy(action).length > 0}
-                    title={
-                      blockedBy(action).length > 0
-                        ? `Fill in ${blockedBy(action).join(', ')} first`
-                        : undefined
-                    }
+                    disabled={locked}
                     className={danger ? 'text-[var(--destructive)]' : undefined}
-                    onClick={() => ask(action)}
+                    onClick={() => attempt(action, () => ask(action))}
                   >
                     {starting === action ? (
                       <LoaderCircle className="animate-spin" aria-hidden />

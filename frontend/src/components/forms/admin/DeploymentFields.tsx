@@ -3,6 +3,8 @@ import type { KeyboardEvent, ReactNode } from 'react'
 import toast from 'react-hot-toast'
 import {
   AlignLeft,
+  ChevronDown,
+  ChevronUp,
   CircleCheck,
   CircleX,
   LoaderCircle,
@@ -239,6 +241,15 @@ export default function DeploymentFields({
     })
   }
 
+  /** Moves a variable by one place; customers see them in this order. */
+  function moveVariable(index: number, by: -1 | 1) {
+    const to = index + by
+    if (to < 0 || to >= value.variables.length) return
+    const variables = [...value.variables]
+    ;[variables[index], variables[to]] = [variables[to], variables[index]]
+    set({ variables })
+  }
+
   function setDomain(
     index: number,
     patch: Partial<DeploymentDraft['domains'][number]>,
@@ -364,14 +375,15 @@ export default function DeploymentFields({
       <fieldset className="space-y-3">
         <legend className={subheadingClassName}>Environment</legend>
         <p className={`text-xs ${hintClassName}`}>
-          Fills the compose file&apos;s variables. The first four are set
-          automatically. Use any variable as <Code>{'${KEY}'}</Code>, in a
-          value, the name or a subdomain, e.g. <Code>{'n8n-${USERNAME}'}</Code>.
+          Fills the compose file&apos;s variables. Customers see them in this
+          order. The first four are set automatically. Use any variable as{' '}
+          <Code>{'${KEY}'}</Code>, in a value, the name or a subdomain, e.g.{' '}
+          <Code>{'n8n-${USERNAME}'}</Code>.
         </p>
 
         <div className="space-y-2">
           <div
-            className={`hidden gap-2 text-xs sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_11rem_2.25rem] ${hintClassName}`}
+            className={`hidden gap-2 text-xs sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_11rem_6rem] ${hintClassName}`}
             aria-hidden
           >
             <span>Key</span>
@@ -386,7 +398,7 @@ export default function DeploymentFields({
           ].map(([key, description]) => (
             <div
               key={key}
-              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-center gap-x-2 gap-y-0.5 rounded-md bg-[var(--surface)] px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_11rem_2.25rem]"
+              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-center gap-x-2 gap-y-0.5 rounded-md bg-[var(--surface)] px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_11rem_6rem]"
             >
               <code className="truncate font-mono text-[13px]">{key}</code>
               <span className="truncate text-sm text-[var(--muted)]">
@@ -400,7 +412,7 @@ export default function DeploymentFields({
           {value.variables.map((variable, index) => (
             <div
               key={index}
-              className="grid grid-cols-[minmax(0,1fr)_2.25rem] gap-2 border-b border-[var(--line)] pb-2 last:border-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_11rem_2.25rem] sm:border-0 sm:pb-0"
+              className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2 border-b border-[var(--line)] pb-2 last:border-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_11rem_6rem] sm:border-0 sm:pb-0"
             >
               <Input
                 id={`variable-${index}-key`}
@@ -415,20 +427,43 @@ export default function DeploymentFields({
                   setVariable(index, { key: event.target.value })
                 }
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="sm:order-last"
-                aria-label={`Remove variable ${variable.key || index + 1}`}
-                onClick={() =>
-                  set({
-                    variables: value.variables.filter((_, at) => at !== index),
-                  })
-                }
-              >
-                <X aria-hidden />
-              </Button>
+              <div className="flex items-center justify-end sm:order-last">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={index === 0}
+                  aria-label={`Move variable ${variable.key || index + 1} up`}
+                  onClick={() => moveVariable(index, -1)}
+                >
+                  <ChevronUp aria-hidden />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={index === value.variables.length - 1}
+                  aria-label={`Move variable ${variable.key || index + 1} down`}
+                  onClick={() => moveVariable(index, 1)}
+                >
+                  <ChevronDown aria-hidden />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove variable ${variable.key || index + 1}`}
+                  onClick={() =>
+                    set({
+                      variables: value.variables.filter(
+                        (_, at) => at !== index,
+                      ),
+                    })
+                  }
+                >
+                  <X aria-hidden />
+                </Button>
+              </div>
               <Input
                 aria-label={`Variable ${index + 1} value`}
                 aria-invalid={invalid(`variables.${index}`)}
