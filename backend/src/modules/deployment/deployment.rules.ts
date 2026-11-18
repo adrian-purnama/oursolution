@@ -1,5 +1,8 @@
 import type { DeploymentState } from "../../models/deployment/deployment.interface";
-import type { RunAction } from "../../models/deploymentRun/deploymentRun.interface";
+import type {
+  BulkAction,
+  RunAction,
+} from "../../models/deploymentRun/deploymentRun.interface";
 
 /** States in which a run is in progress, so nothing else may start. */
 export const BUSY_STATES: readonly DeploymentState[] = [
@@ -80,6 +83,41 @@ export function wipeBlocker(
     return "The compose file mounts no host folder that is this customer's only and inside DEPLOY_DATA_ROOTS";
   }
   return null;
+}
+
+/** How many deployments one bulk action may take. */
+export const MAX_BULK_TARGETS = 100;
+
+/**
+ * What a bulk action does to one deployment: the run to start, or why it
+ * is left alone. Never more than the one action asked for: erasing does
+ * not turn a running service off first, and turning on never deploys a
+ * service whose subscription ended. The run's own checks still apply.
+ */
+export function bulkPlan(
+  action: BulkAction,
+  state: DeploymentState,
+  entitled: boolean,
+): { run: RunAction } | { skip: string } {
+  if (BUSY_STATES.includes(state)) {
+    return { skip: "Something is already in progress" };
+  }
+  switch (action) {
+    case "turnOn":
+      if (state === "running") return { skip: "Already on" };
+      if (!entitled) return { skip: "The subscription is not active" };
+      return { run: "deploy" };
+    case "turnOff":
+      if (state === "stopped" || state === "notDeployed") {
+        return { skip: "Already off" };
+      }
+      return { run: "turnOff" };
+    case "erase":
+      if (state === "notDeployed") return { skip: "Nothing to erase" };
+      if (state !== "stopped") return { skip: "Turn it off first" };
+      // The customer's erase while subscribed; an admin's wipe after.
+      return { run: entitled ? "erase" : "wipe" };
+  }
 }
 
 /** True when the service may be running and should be turned off. */

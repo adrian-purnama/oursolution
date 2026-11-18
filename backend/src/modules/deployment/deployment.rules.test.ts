@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   allowedActions,
+  bulkPlan,
   commandBlocker,
   domainIssue,
   nextAllowedStart,
@@ -98,6 +99,41 @@ describe("shouldAutoTurnOff", () => {
       shouldAutoTurnOff("failed", false, { ...failedAuto, automatic: false }),
       true,
     );
+  });
+});
+
+describe("bulkPlan", () => {
+  it("turns on only what is off and subscribed", () => {
+    assert.deepEqual(bulkPlan("turnOn", "stopped", true), { run: "deploy" });
+    assert.deepEqual(bulkPlan("turnOn", "notDeployed", true), {
+      run: "deploy",
+    });
+    assert.deepEqual(bulkPlan("turnOn", "failed", true), { run: "deploy" });
+    assert.ok("skip" in bulkPlan("turnOn", "running", true));
+    assert.ok("skip" in bulkPlan("turnOn", "stopped", false));
+  });
+
+  it("turns off what may run, even without a subscription", () => {
+    assert.deepEqual(bulkPlan("turnOff", "running", false), {
+      run: "turnOff",
+    });
+    assert.deepEqual(bulkPlan("turnOff", "failed", true), { run: "turnOff" });
+    assert.ok("skip" in bulkPlan("turnOff", "stopped", true));
+    assert.ok("skip" in bulkPlan("turnOff", "notDeployed", true));
+  });
+
+  it("erases only what is off, and never turns anything off for it", () => {
+    assert.deepEqual(bulkPlan("erase", "stopped", true), { run: "erase" });
+    assert.deepEqual(bulkPlan("erase", "stopped", false), { run: "wipe" });
+    for (const state of ["running", "failed", "notDeployed"] as const) {
+      assert.ok("skip" in bulkPlan("erase", state, true), state);
+    }
+  });
+
+  it("leaves busy deployments alone", () => {
+    for (const action of ["turnOn", "turnOff", "erase"] as const) {
+      assert.ok("skip" in bulkPlan(action, "deploying", true), action);
+    }
   });
 });
 

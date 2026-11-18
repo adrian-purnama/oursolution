@@ -70,6 +70,7 @@ router.delete(
 
 router.get("/deployments", deploymentController.listAll);
 router.post("/deployments/sync", deploymentController.syncAll);
+router.post("/deployments/bulk", deploymentController.bulk);
 router.get("/users/:id/deployments", deploymentController.list);
 router.get("/users/:id/deployments/:productId", deploymentController.get);
 router.put(

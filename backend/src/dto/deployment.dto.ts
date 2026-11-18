@@ -1,5 +1,6 @@
 import type { DeploymentState } from "../models/deployment/deployment.interface";
 import type {
+  BulkAction,
   RunAction,
   RunStatus,
   StepStatus,
@@ -173,4 +174,30 @@ export interface UpdateDeploymentValuesInDto {
 
 export interface DeploymentActionInDto {
   action: RunAction;
+}
+
+/** Admin: one action on many deployments, each checked on its own. */
+export interface DeploymentBulkInDto {
+  action: BulkAction;
+  targets: { userId: string; productId: string }[];
+}
+
+export interface DeploymentBulkItemOutDto {
+  user: { id: string; email: string | null };
+  product: { id: string; name: string | null };
+  /**
+   * started: its run began. skipped: nothing to do, or busy. refused: a
+   * check said no; nothing was changed.
+   */
+  outcome: "started" | "skipped" | "refused";
+  /** The run started, e.g. "wipe" for erasing after the subscription. */
+  run: RunAction | null;
+  message: string | null;
+}
+
+export interface DeploymentBulkOutDto {
+  started: number;
+  skipped: number;
+  refused: number;
+  items: DeploymentBulkItemOutDto[];
 }
