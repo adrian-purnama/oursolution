@@ -1417,6 +1417,11 @@ export class DeploymentService {
   private async stepRestart({ deployment }: RunContext): Promise<void> {
     if (!deployment.dokploy) throw new Error("Nothing has been deployed yet");
     const { composeId, appName } = deployment.dokploy;
+    if (!(await dokployService.composeExists(composeId))) {
+      throw new Error(
+        "The compose is gone from Dokploy, so there is nothing to restart. Deploy again to create it",
+      );
+    }
     await dokployService.stopCompose(composeId, appName);
     await dokployService.startCompose(composeId, appName);
   }
@@ -1440,11 +1445,28 @@ export class DeploymentService {
     }
   }
 
+  /**
+   * Stops the compose. One already gone from Dokploy (deleted there by
+   * hand, say) has nothing left to stop: the link is forgotten and the run
+   * goes on, so turning off still takes the address offline.
+   */
   private async stepStop({ deployment }: RunContext): Promise<void> {
-    if (deployment.dokploy) {
-      const { composeId, appName } = deployment.dokploy;
-      await dokployService.stopCompose(composeId, appName);
+    if (!deployment.dokploy) return;
+    const { composeId, appName } = deployment.dokploy;
+    if (!(await dokployService.composeExists(composeId))) {
+      logger.warn(
+        `Deployment ${deployment.id}: compose ${composeId} is gone from Dokploy, so there is nothing to stop`,
+        SOURCE,
+        "stepStop",
+      );
+      deployment.dokploy = null;
+      await DeploymentModel.updateOne(
+        { _id: deployment._id },
+        { $set: { dokploy: null } },
+      ).exec();
+      return;
     }
+    await dokployService.stopCompose(composeId, appName);
   }
 
   /**
