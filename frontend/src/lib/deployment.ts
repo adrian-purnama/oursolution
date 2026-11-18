@@ -223,7 +223,7 @@ export const RUN_ACTION_HINTS: Record<RunAction, string> = {
     'Takes the service and its address offline. Your data is kept until you turn it on again.',
   erase:
     'Erases everything stored in the service and removes it. Turn it on again to start afresh.',
-  wipe: 'Erases everything stored in the service. It stays off.',
+  wipe: 'Erases everything stored in the service and removes it from Dokploy.',
   command: 'Runs a command in the service.',
 }
 

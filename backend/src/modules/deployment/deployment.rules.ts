@@ -29,7 +29,7 @@ export const STATE_AFTER: Record<RunAction, DeploymentState> = {
   turnOff: "stopped",
   // Nothing is left in Dokploy: the next turn-on starts from scratch.
   erase: "notDeployed",
-  wipe: "stopped",
+  wipe: "notDeployed",
   command: "running",
 };
 
@@ -324,6 +324,12 @@ export const PIPELINES: Record<RunAction, StepDefinition[]> = {
       label: "Erasing the data",
       internalLabel:
         "Empty the customer's own host folders with a one-off container in Dokploy",
+    },
+    {
+      key: "remove",
+      label: "Removing the service",
+      internalLabel:
+        "Remove the Cloudflare routes, the compose with its containers and volumes in Dokploy, and the Uptime Kuma monitors. Set-once values are cleared",
     },
   ],
   command: [
