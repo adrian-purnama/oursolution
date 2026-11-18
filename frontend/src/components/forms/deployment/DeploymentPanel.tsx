@@ -1031,7 +1031,7 @@ export default function DeploymentPanel({
               </DialogTitle>
               <DialogDescription>
                 {confirmErase === 'wipe'
-                  ? `Everything ${deployment.internal?.username ?? 'this customer'} stored in this service is erased for good. The service stays off. This cannot be undone.`
+                  ? `Everything ${deployment.internal?.username ?? 'this customer'} stored in this service is erased for good, and the service is removed from Dokploy. This cannot be undone.`
                   : 'Everything stored in this service is erased for good and the service is removed, including the values you set once. Turn it on again to start afresh. This cannot be undone.'}
               </DialogDescription>
             </DialogHeader>

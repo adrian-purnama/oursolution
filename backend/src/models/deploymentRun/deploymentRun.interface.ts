@@ -9,7 +9,7 @@ import { Types } from "mongoose";
  *   stopped, erases their own folders, and removes the service from
  *   Dokploy, Cloudflare and Uptime Kuma. It is as if never deployed.
  * - wipe: admin only, once the service is off and the subscription is over:
- *   erases the customer's own folders and deploys nothing.
+ *   erases the customer's own folders and removes the service, like erase.
  * - command: runs one of the product's commands inside a running container.
  */
 export const RUN_ACTIONS = [
@@ -22,6 +22,10 @@ export const RUN_ACTIONS = [
   "command",
 ] as const;
 export type RunAction = (typeof RUN_ACTIONS)[number];
+
+/** What an admin can do to many deployments at once. */
+export const BULK_ACTIONS = ["turnOn", "turnOff", "erase"] as const;
+export type BulkAction = (typeof BULK_ACTIONS)[number];
 
 export const RUN_STATUSES = ["running", "succeeded", "failed"] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];

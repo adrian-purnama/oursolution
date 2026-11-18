@@ -2,11 +2,13 @@ import type { Request, Response } from "express";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   AdminDeploymentRowOutDto,
+  DeploymentBulkOutDto,
   DeploymentOutDto,
   DeploymentSyncOutDto,
 } from "../../dto/deployment.dto";
 import {
   parseDeploymentActionInDto,
+  parseDeploymentBulkInDto,
   parseUpdateDeploymentValuesInDto,
 } from "../../validation/deployment";
 import { parseParam, parseRouteId } from "../../validation/parseParam";
@@ -80,6 +82,17 @@ export class DeploymentController {
       return ok<DeploymentSyncOutDto>(res, 200, "Deployments synced", data);
     } catch (error) {
       return fail(res, error, "Failed to sync deployments");
+    }
+  };
+
+  /** Admin: turn on, turn off or erase many deployments at once. */
+  bulk = async (req: Request, res: Response) => {
+    try {
+      const input = parseDeploymentBulkInDto(req.body);
+      const data = await deploymentService.bulk(input, req.user!.id);
+      return ok<DeploymentBulkOutDto>(res, 200, "Bulk action done", data);
+    } catch (error) {
+      return fail(res, error, "Failed to run the bulk action");
     }
   };
 

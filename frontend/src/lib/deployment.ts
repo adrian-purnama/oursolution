@@ -171,6 +171,35 @@ export type DeploymentSync = {
   items: DeploymentSyncItem[]
 }
 
+/** What an admin can do to many deployments at once. */
+export type BulkAction = 'turnOn' | 'turnOff' | 'erase'
+
+export const BULK_ACTION_LABELS: Record<BulkAction, string> = {
+  turnOn: 'Turn on',
+  turnOff: 'Turn off',
+  erase: 'Erase data',
+}
+
+/** How many deployments one bulk action may take. */
+export const MAX_BULK_TARGETS = 100
+
+export type DeploymentBulkItem = {
+  user: { id: string; email: string | null }
+  product: { id: string; name: string | null }
+  /** skipped: nothing to do or busy. refused: a check said no. */
+  outcome: 'started' | 'skipped' | 'refused'
+  run: RunAction | null
+  message: string | null
+}
+
+/** What a bulk action did, one line per deployment. */
+export type DeploymentBulk = {
+  started: number
+  skipped: number
+  refused: number
+  items: DeploymentBulkItem[]
+}
+
 export const CHECK_STATE_LABELS: Record<ServiceCheckState, string> = {
   up: 'Up',
   down: 'Not responding',
@@ -223,7 +252,7 @@ export const RUN_ACTION_HINTS: Record<RunAction, string> = {
     'Takes the service and its address offline. Your data is kept until you turn it on again.',
   erase:
     'Erases everything stored in the service and removes it. Turn it on again to start afresh.',
-  wipe: 'Erases everything stored in the service. It stays off.',
+  wipe: 'Erases everything stored in the service and removes it from Dokploy.',
   command: 'Runs a command in the service.',
 }
 

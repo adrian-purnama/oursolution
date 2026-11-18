@@ -1,6 +1,9 @@
 import type { HydratedDocument } from "mongoose";
 import type {
   AdminDeploymentRowOutDto,
+  DeploymentBulkInDto,
+  DeploymentBulkItemOutDto,
+  DeploymentBulkOutDto,
   DeploymentOutDto,
   DeploymentRunOutDto,
   DeploymentSyncDomainOutDto,
@@ -61,6 +64,7 @@ import { userProductService } from "../userProduct/userProduct.service";
 import {
   ACTION_LABELS,
   allowedActions,
+  bulkPlan,
   BUSY_STATES,
   commandBlocker,
   domainIssue,
@@ -554,6 +558,78 @@ export class DeploymentService {
     throw new DeploymentLimitError(
       `${ACTION_LABELS[action]} was used a lot lately. You can do it again in ${wait}`,
     );
+  }
+
+  /**
+   * Admin: one action on many deployments. Each is checked on its own,
+   * exactly as if it were started by itself, and one being refused never
+   * stops the rest. Ones already as asked, or busy, are left alone.
+   */
+  async bulk(
+    input: DeploymentBulkInDto,
+    startedBy: string,
+  ): Promise<DeploymentBulkOutDto> {
+    const seen = new Set<string>();
+    const targets = input.targets.filter(({ userId, productId }) => {
+      const key = `${userId}:${productId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const items: DeploymentBulkItemOutDto[] = [];
+    for (const { userId, productId } of targets) {
+      const [record, user, product] = await Promise.all([
+        DeploymentModel.findOne({ userId, productId }).exec(),
+        UserModel.findById(userId).select("email").exec(),
+        ProductModel.findById(productId).select("name").exec(),
+      ]);
+      const item: DeploymentBulkItemOutDto = {
+        user: { id: userId, email: user?.email ?? null },
+        product: { id: productId, name: product?.name ?? null },
+        outcome: "skipped",
+        run: null,
+        message: null,
+      };
+      items.push(item);
+      if (!record || !user || !product) {
+        item.message = "Not found";
+        continue;
+      }
+      try {
+        const entitled = await entitlementService.canRunService(
+          userId,
+          productId,
+        );
+        const plan = bulkPlan(input.action, record.state, entitled);
+        if ("skip" in plan) {
+          item.message = plan.skip;
+          continue;
+        }
+        await this.start(userId, productId, plan.run, startedBy, "admin");
+        item.outcome = "started";
+        item.run = plan.run;
+      } catch (error) {
+        item.outcome =
+          error instanceof DeploymentBusyError ? "skipped" : "refused";
+        item.message = messageOf(error);
+      }
+    }
+
+    const count = (outcome: DeploymentBulkItemOutDto["outcome"]) =>
+      items.filter((item) => item.outcome === outcome).length;
+    const result: DeploymentBulkOutDto = {
+      started: count("started"),
+      skipped: count("skipped"),
+      refused: count("refused"),
+      items,
+    };
+    logger.info(
+      `Bulk ${input.action} by ${startedBy}: ${result.started} started, ${result.skipped} skipped, ${result.refused} refused`,
+      SOURCE,
+      "bulk",
+    );
+    return result;
   }
 
   /**
