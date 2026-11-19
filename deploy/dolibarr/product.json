@@ -1,0 +1,11 @@
+{
+  "deployment": {
+    "name": "dolibarr-${USERNAME}",
+    "variables": [
+      { "key": "ADMIN_LOGIN", "value": "admin", "visibility": "readOnly" },
+      { "key": "ADMIN_PASSWORD", "value": "", "visibility": "editable" },
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "dolibarr", "subdomain": "erp-${USERNAME}", "port": 80 }]
+  }
+}
