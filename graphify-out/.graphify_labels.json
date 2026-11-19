@@ -116,6 +116,8 @@
   "114": "reset-password.tsx",
   "115": "yaml",
   "116": "tsconfig.build.json",
+  "117": "ticketImage.ts",
+  "118": "app-config.tsx",
   "122": "SideDrawer.tsx",
   "127": "prettier.config.js",
   "128": "vite.config.ts",

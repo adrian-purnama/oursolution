@@ -28,6 +28,7 @@ import {
   startPaymentSweep,
 } from "./modules/payment/payment.scheduler";
 import productRoutes from "./modules/product/product.route";
+import redeemRoutes from "./modules/redeemCode/redeemCode.route";
 import { productService } from "./modules/product/product.service";
 import ticketRoutes from "./modules/ticket/ticket.route";
 import userProductRoutes from "./modules/userProduct/userProduct.route";
@@ -66,6 +67,7 @@ function createApp(): Express {
   app.use("/payments", paymentRoutes);
   app.use("/me/basket", basketRoutes);
   app.use("/me/deployments", deploymentRoutes);
+  app.use("/me/redeem", redeemRoutes);
   app.use("/tickets", ticketRoutes);
   app.use("/me", userProductRoutes);
   app.use("/notifications", notificationRoutes);

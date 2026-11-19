@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ShoppingBag } from 'lucide-react'
 import ProductBadge from '#/components/ProductBadge'
 import UnpaidNotice from '#/components/forms/billing/UnpaidNotice'
 import SupportButton from '#/components/forms/ticket/SupportButton'
 import DeploymentList from '#/components/forms/deployment/DeploymentList'
+import DashboardTours from '#/components/forms/tour/DashboardTours'
 import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
@@ -12,28 +13,34 @@ import type { Deployment } from '#/lib/deployment'
 import type { ProductSummary } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
+import type { TourId } from '#/lib/tours'
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
   head: () => privatePage('Dashboard'),
+  /** `tour` replays a tour, from the profile. */
+  validateSearch: (search: Record<string, unknown>): { tour?: TourId } =>
+    search.tour === 'welcome' || search.tour === 'firstService'
+      ? { tour: search.tour }
+      : {},
   component: DashboardPage,
 })
 
-/** IDs of the user's products that have a deployment page. */
-function useDeployableIds(): Set<string> {
-  const [ids, setIds] = useState<Set<string>>(() => new Set())
+/** The user's services; null until loaded (or when they fail to load). */
+function useMyDeployments(): Deployment[] | null {
+  const [deployments, setDeployments] = useState<Deployment[] | null>(null)
   useEffect(() => {
     let cancelled = false
     apiFetch<Deployment[]>('/me/deployments')
       .then((response) => {
         if (cancelled || !response.success || !response.data) return
-        setIds(new Set(response.data.map((item) => item.product.id)))
+        setDeployments(response.data)
       })
       .catch(() => undefined)
     return () => {
       cancelled = true
     }
   }, [])
-  return ids
+  return deployments
 }
 
 /**
@@ -69,7 +76,12 @@ function OwnedProductLink({
 
 function DashboardPage() {
   const { user } = useAuth()
-  const deployableIds = useDeployableIds()
+  const { tour } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const deployments = useMyDeployments()
+  const deployableIds = new Set(
+    (deployments ?? []).map((item) => item.product.id),
+  )
 
   return (
     <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-4xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
@@ -82,7 +94,7 @@ function DashboardPage() {
         </div>
         <div className="flex gap-2">
           <SupportButton />
-          <Button asChild size="sm">
+          <Button asChild size="sm" data-tour="shop">
             <Link to="/pricing" className="no-underline">
               <ShoppingBag aria-hidden />
               Shop
@@ -113,6 +125,12 @@ function DashboardPage() {
           </ul>
         </section>
       ) : null}
+
+      <DashboardTours
+        deployments={deployments}
+        replay={tour}
+        onReplayEnd={() => void navigate({ search: {}, replace: true })}
+      />
     </main>
   )
 }

@@ -11,6 +11,7 @@ import {
   ReceiptText,
   Server,
   Settings,
+  Ticket,
   Users,
 } from 'lucide-react'
 import { bootstrapAuth, isAdminUser } from '#/context/authContext'
@@ -39,6 +40,7 @@ const NAV_ITEMS = [
   { to: '/admin/users' as const, label: 'Users', icon: Users },
   { to: '/admin/products' as const, label: 'Products', icon: Package },
   { to: '/admin/payments' as const, label: 'Payments', icon: ReceiptText },
+  { to: '/admin/redeem-codes' as const, label: 'Redeem codes', icon: Ticket },
   { to: '/admin/deployments' as const, label: 'Deployments', icon: Server },
   { to: '/admin/tickets' as const, label: 'Tickets', icon: LifeBuoy },
 ]
@@ -53,6 +55,9 @@ function breadcrumbFor(pathname: string): string[] {
   }
   if (pathname.startsWith('/admin/products')) return ['Admin', 'Products']
   if (pathname.startsWith('/admin/payments')) return ['Admin', 'Payments']
+  if (pathname.startsWith('/admin/redeem-codes')) {
+    return ['Admin', 'Redeem codes']
+  }
   if (pathname.startsWith('/admin/deployments')) {
     return ['Admin', 'Deployments']
   }

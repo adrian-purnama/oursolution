@@ -136,6 +136,26 @@ export function planAppend(
   return { startsAt, endsAt: resolveEnd(startsAt, end, null) };
 }
 
+/**
+ * A period at fixed times must not overlap any running or scheduled period of
+ * the same product.
+ */
+export function assertFree(periods: PeriodLike[], plan: AppendPlan): void {
+  if (plan.endsAt !== null && plan.endsAt <= plan.startsAt) {
+    throw new PlanScheduleError("The period ends before it starts");
+  }
+  const clash = periods.some(
+    (period) =>
+      (period.endsAt === null || period.endsAt > plan.startsAt) &&
+      (plan.endsAt === null || period.startsAt < plan.endsAt),
+  );
+  if (clash) {
+    throw new PlanScheduleError(
+      "This product is already active or scheduled during that time",
+    );
+  }
+}
+
 /** Stop the product now: the running period ends at `now`. */
 export function planEndNow(periods: PeriodLike[], now: Date): string {
   const current = activePeriod(periods, now);

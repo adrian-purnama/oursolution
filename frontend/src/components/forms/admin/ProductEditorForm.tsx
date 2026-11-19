@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { Textarea } from '#/components/ui/textarea'
 import { apiFetch } from '#/lib/api'
 import { PRODUCT_KIND_LABELS } from '#/lib/product'
@@ -32,6 +33,11 @@ import type { Product, ProductKind, ProductNotice } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 
 type DeploymentChoice = 'none' | 'dockerCompose'
+
+type EditorTab = 'general' | 'pricing' | 'content' | 'delivery'
+
+/** Inactive panels stay mounted so their state and ids survive tab switches. */
+const tabPanelClassName = 'space-y-5 data-[state=inactive]:hidden'
 
 const DEPLOYMENT_LABELS: Record<DeploymentChoice, string> = {
   none: 'Nothing to deploy',
@@ -188,6 +194,7 @@ export default function ProductEditorForm({
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const [images, setImages] = useState<ImageItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<EditorTab>('general')
 
   useEffect(() => {
     if (!productId) return
@@ -223,10 +230,12 @@ export default function ProductEditorForm({
     const priceIdr = Number(draft.priceIdr)
     const durationDays = Number(draft.durationDays)
     if (!draft.name.trim()) {
+      setTab('general')
       toast.error('Name is required')
       return
     }
     if (!Number.isInteger(priceIdr) || priceIdr < 0) {
+      setTab('pricing')
       toast.error('Price must be a whole number of rupiah, 0 or more')
       return
     }
@@ -235,16 +244,19 @@ export default function ProductEditorForm({
       isSubscription &&
       (!Number.isInteger(durationDays) || durationDays < 1)
     ) {
+      setTab('pricing')
       toast.error('Duration must be a whole number of days, 1 or more')
       return
     }
 
     const deploys = isSubscription && draft.deployment === 'dockerCompose'
     if (deploys && !draft.settings.projectId) {
+      setTab('delivery')
       toast.error('Choose the Dokploy project to deploy into')
       return
     }
     if (deploys && !draft.settings.composeFile.trim()) {
+      setTab('delivery')
       toast.error('The compose file is empty')
       return
     }
@@ -259,6 +271,7 @@ export default function ProductEditorForm({
           const count = check.issues.filter(
             (issue) => issue.severity === 'error',
           ).length
+          setTab('delivery')
           toast.error(
             `Fix ${count} ${count === 1 ? 'problem' : 'problems'} in the deployment first`,
           )
@@ -347,209 +360,247 @@ export default function ProductEditorForm({
         <p className={hintClassName}>This product could not be loaded.</p>
       ) : (
         <form
-          className="space-y-10"
+          className="space-y-8"
           onSubmit={(event) => void handleSave(event)}
         >
-          <section className="space-y-5">
-            <fieldset className="space-y-1.5">
-              <legend className={`mb-1 ${sectionTitleClassName}`}>Type</legend>
-              {isNew ? (
-                <div className="flex flex-wrap gap-x-5 gap-y-2">
-                  {(['subscription', 'oneTime'] as const).map((kind) => (
-                    <label
-                      key={kind}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="radio"
-                        name="product-kind"
-                        checked={draft.kind === kind}
-                        onChange={() => setDraft({ ...draft, kind })}
-                      />
-                      {PRODUCT_KIND_LABELS[kind]}
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm">
-                  {PRODUCT_KIND_LABELS[draft.kind]}
-                  <span className={`block text-xs ${hintClassName}`}>
-                    The type cannot be changed once the product exists.
-                  </span>
-                </p>
-              )}
-            </fieldset>
+          <Tabs
+            value={tab}
+            onValueChange={(value) => setTab(value as EditorTab)}
+          >
+            <TabsList className="mb-6">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
+              <TabsTrigger value="content">Description</TabsTrigger>
+              <TabsTrigger value="delivery">
+                {draft.kind === 'oneTime' ? 'Access' : 'Deployment'}
+              </TabsTrigger>
+            </TabsList>
 
-            <ProductImagesField value={images} onChange={setImages} />
+            <TabsContent
+              value="general"
+              forceMount
+              className={tabPanelClassName}
+            >
+              <fieldset className="space-y-1.5">
+                <legend className={`mb-1 ${sectionTitleClassName}`}>
+                  Type
+                </legend>
+                {isNew ? (
+                  <div className="flex flex-wrap gap-x-5 gap-y-2">
+                    {(['subscription', 'oneTime'] as const).map((kind) => (
+                      <label
+                        key={kind}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="radio"
+                          name="product-kind"
+                          checked={draft.kind === kind}
+                          onChange={() => setDraft({ ...draft, kind })}
+                        />
+                        {PRODUCT_KIND_LABELS[kind]}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm">
+                    {PRODUCT_KIND_LABELS[draft.kind]}
+                    <span className={`block text-xs ${hintClassName}`}>
+                      The type cannot be changed once the product exists.
+                    </span>
+                  </p>
+                )}
+              </fieldset>
 
-            <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-              <div className="space-y-1.5">
-                <Label htmlFor="product-name">Name</Label>
-                <Input
-                  id="product-name"
-                  value={draft.name}
-                  maxLength={60}
-                  onChange={(event) =>
-                    setDraft({ ...draft, name: event.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="product-color">Color</Label>
-                <input
-                  id="product-color"
-                  type="color"
-                  value={draft.color}
-                  onChange={(event) =>
-                    setDraft({ ...draft, color: event.target.value })
-                  }
-                  className="block h-9 w-16 cursor-pointer rounded-md border border-[var(--line)] bg-white p-1"
-                />
-              </div>
-            </div>
-          </section>
+              <ProductImagesField value={images} onChange={setImages} />
 
-          <section className="space-y-5">
-            <h2 className={sectionTitleClassName}>Pricing</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="product-price">Price charged (IDR)</Label>
-                <Input
-                  id="product-price"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  step={1}
-                  value={draft.priceIdr}
-                  onChange={(event) =>
-                    setDraft({ ...draft, priceIdr: event.target.value })
-                  }
-                />
-              </div>
-              {draft.kind === 'subscription' ? (
+              <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                 <div className="space-y-1.5">
-                  <Label htmlFor="product-duration">Days per checkout</Label>
+                  <Label htmlFor="product-name">Name</Label>
                   <Input
-                    id="product-duration"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    step={1}
-                    value={draft.durationDays}
+                    id="product-name"
+                    value={draft.name}
+                    maxLength={60}
                     onChange={(event) =>
-                      setDraft({ ...draft, durationDays: event.target.value })
+                      setDraft({ ...draft, name: event.target.value })
                     }
                   />
                 </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="product-pricing-text">Pricing text</Label>
-              <Input
-                id="product-pricing-text"
-                value={draft.pricingText}
-                maxLength={120}
-                placeholder="Rp 99.000 / month"
-                onChange={(event) =>
-                  setDraft({ ...draft, pricingText: event.target.value })
-                }
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="product-description">Description</Label>
-              <Textarea
-                id="product-description"
-                value={draft.description}
-                maxLength={4000}
-                rows={5}
-                placeholder={
-                  'What the buyer gets.\n\n- **Bold**, _italic_, [links](https://…)\n- Lists, headings (## Title), tables'
-                }
-                onChange={(event) =>
-                  setDraft({ ...draft, description: event.target.value })
-                }
-              />
-              <p className={hintClassName}>Supports Markdown.</p>
-            </div>
-
-            <NoticesField
-              value={draft.notices}
-              onChange={(notices) => setDraft({ ...draft, notices })}
-            />
-
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={draft.showOnPricingPage}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    showOnPricingPage: event.target.checked,
-                  })
-                }
-              />
-              <span>
-                Show in the shop. Hidden products can still be extended.
-              </span>
-            </label>
-          </section>
-
-          {draft.kind === 'oneTime' ? (
-            <section className="space-y-1.5">
-              <Label htmlFor="product-access-url">Access link</Label>
-              <Input
-                id="product-access-url"
-                type="url"
-                value={draft.accessUrl}
-                placeholder="https://…"
-                onChange={(event) =>
-                  setDraft({ ...draft, accessUrl: event.target.value })
-                }
-              />
-              <p className={`text-xs ${hintClassName}`}>
-                Only owners see it, on their profile. Optional.
-              </p>
-            </section>
-          ) : (
-            <section id="product-deployment" className="scroll-mt-20 space-y-5">
-              <fieldset className="space-y-1.5">
-                <legend className={`mb-1 ${sectionTitleClassName}`}>
-                  Deployment
-                </legend>
-                <p className={`text-xs ${hintClassName}`}>
-                  What a subscriber gets deployed.
-                </p>
-                <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
-                  {(['none', 'dockerCompose'] as const).map((choice) => (
-                    <label
-                      key={choice}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="radio"
-                        name="product-deployment"
-                        checked={draft.deployment === choice}
-                        onChange={() =>
-                          setDraft({ ...draft, deployment: choice })
-                        }
-                      />
-                      {DEPLOYMENT_LABELS[choice]}
-                    </label>
-                  ))}
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-color">Color</Label>
+                  <input
+                    id="product-color"
+                    type="color"
+                    value={draft.color}
+                    onChange={(event) =>
+                      setDraft({ ...draft, color: event.target.value })
+                    }
+                    className="block h-9 w-16 cursor-pointer rounded-md border border-[var(--line)] bg-white p-1"
+                  />
                 </div>
-              </fieldset>
+              </div>
+            </TabsContent>
 
-              {draft.deployment === 'dockerCompose' ? (
-                <DeploymentFields
-                  value={draft.settings}
-                  onChange={(settings) => setDraft({ ...draft, settings })}
+            <TabsContent
+              value="pricing"
+              forceMount
+              className={tabPanelClassName}
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-price">Price charged (IDR)</Label>
+                  <Input
+                    id="product-price"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1}
+                    value={draft.priceIdr}
+                    onChange={(event) =>
+                      setDraft({ ...draft, priceIdr: event.target.value })
+                    }
+                  />
+                </div>
+                {draft.kind === 'subscription' ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="product-duration">Days per checkout</Label>
+                    <Input
+                      id="product-duration"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      step={1}
+                      value={draft.durationDays}
+                      onChange={(event) =>
+                        setDraft({ ...draft, durationDays: event.target.value })
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="product-pricing-text">Pricing text</Label>
+                <Input
+                  id="product-pricing-text"
+                  value={draft.pricingText}
+                  maxLength={120}
+                  placeholder="Rp 99.000 / month"
+                  onChange={(event) =>
+                    setDraft({ ...draft, pricingText: event.target.value })
+                  }
                 />
-              ) : null}
-            </section>
-          )}
+              </div>
+
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={draft.showOnPricingPage}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      showOnPricingPage: event.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  Show in the shop. Hidden products can still be extended.
+                </span>
+              </label>
+            </TabsContent>
+
+            <TabsContent
+              value="content"
+              forceMount
+              className={tabPanelClassName}
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="product-description">Description</Label>
+                <Textarea
+                  id="product-description"
+                  value={draft.description}
+                  maxLength={4000}
+                  rows={5}
+                  placeholder={
+                    'What the buyer gets.\n\n- **Bold**, _italic_, [links](https://…)\n- Lists, headings (## Title), tables'
+                  }
+                  onChange={(event) =>
+                    setDraft({ ...draft, description: event.target.value })
+                  }
+                />
+                <p className={hintClassName}>Supports Markdown.</p>
+              </div>
+
+              <NoticesField
+                value={draft.notices}
+                onChange={(notices) => setDraft({ ...draft, notices })}
+              />
+            </TabsContent>
+
+            <TabsContent
+              value="delivery"
+              forceMount
+              className={tabPanelClassName}
+            >
+              {draft.kind === 'oneTime' ? (
+                <section className="space-y-1.5">
+                  <Label htmlFor="product-access-url">Access link</Label>
+                  <Input
+                    id="product-access-url"
+                    type="url"
+                    value={draft.accessUrl}
+                    placeholder="https://…"
+                    onChange={(event) =>
+                      setDraft({ ...draft, accessUrl: event.target.value })
+                    }
+                  />
+                  <p className={`text-xs ${hintClassName}`}>
+                    Only owners see it, on their profile. Optional.
+                  </p>
+                </section>
+              ) : (
+                <section
+                  id="product-deployment"
+                  className="scroll-mt-20 space-y-5"
+                >
+                  <fieldset className="space-y-1.5">
+                    <legend className={`mb-1 ${sectionTitleClassName}`}>
+                      Deployment
+                    </legend>
+                    <p className={`text-xs ${hintClassName}`}>
+                      What a subscriber gets deployed.
+                    </p>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                      {(['none', 'dockerCompose'] as const).map((choice) => (
+                        <label
+                          key={choice}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <input
+                            type="radio"
+                            name="product-deployment"
+                            checked={draft.deployment === choice}
+                            onChange={() =>
+                              setDraft({ ...draft, deployment: choice })
+                            }
+                          />
+                          {DEPLOYMENT_LABELS[choice]}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  {draft.deployment === 'dockerCompose' ? (
+                    <DeploymentFields
+                      value={draft.settings}
+                      onChange={(settings) => setDraft({ ...draft, settings })}
+                    />
+                  ) : null}
+                </section>
+              )}
+            </TabsContent>
+          </Tabs>
 
           <div className="flex justify-end gap-2 border-t border-[var(--line)] pt-5">
             <Button asChild variant="outline">

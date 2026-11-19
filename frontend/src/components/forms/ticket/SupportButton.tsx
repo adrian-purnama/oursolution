@@ -56,7 +56,13 @@ export default function SupportButton() {
   const unread = useUnreadTickets()
 
   return (
-    <Button asChild variant="outline" size="sm" className="relative">
+    <Button
+      asChild
+      variant="outline"
+      size="sm"
+      className="relative"
+      data-tour="tickets"
+    >
       <Link
         to="/support"
         className="no-underline"

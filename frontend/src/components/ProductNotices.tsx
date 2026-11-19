@@ -19,12 +19,15 @@ export default function ProductNotices({
   children,
   className,
   placement = 'bottom',
+  tabTour,
 }: {
   notices: ProductNotice[]
   /** The card the tab attaches to. */
   children: ReactNode
   className?: string
   placement?: 'bottom' | 'top'
+  /** Marks the tab for a guided tour. */
+  tabTour?: string
 }) {
   const [open, setOpen] = useState(false)
   const drawerId = useId()
@@ -102,6 +105,7 @@ export default function ProductNotices({
       type="button"
       aria-expanded={open}
       aria-controls={drawerId}
+      data-tour={tabTour}
       onClick={() => setOpen((value) => !value)}
       className={cn(
         'relative z-30 inline-flex items-center gap-1.5 border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--muted)] transition-colors hover:text-[var(--ink)]',

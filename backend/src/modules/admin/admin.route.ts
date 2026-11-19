@@ -7,6 +7,7 @@ import { DokployController } from "../dokploy/dokploy.controller";
 import { PaymentController } from "../payment/payment.controller";
 import { ProductController } from "../product/product.controller";
 import { PurchaseController } from "../purchase/purchase.controller";
+import { RedeemCodeController } from "../redeemCode/redeemCode.controller";
 import { TicketController } from "../ticket/ticket.controller";
 import { UserProductController } from "../userProduct/userProduct.controller";
 import { MAX_TICKET_IMAGE_BYTES } from "../../utils/ticketImage";
@@ -21,6 +22,7 @@ const userProductController = new UserProductController();
 const purchaseController = new PurchaseController();
 const paymentController = new PaymentController();
 const ticketController = new TicketController();
+const redeemCodeController = new RedeemCodeController();
 
 // Everything under /admin is admin-only.
 router.use(requireUser, requireAdmin);
@@ -105,5 +107,9 @@ router.post("/users/:id/payments", paymentController.createForUser);
 router.get("/payments", paymentController.listAll);
 router.get("/payments/:paymentId", paymentController.getAny);
 router.get("/payments/:paymentId/invoice.pdf", paymentController.invoiceAny);
+
+router.get("/redeem-codes", redeemCodeController.list);
+router.post("/redeem-codes", redeemCodeController.create);
+router.delete("/redeem-codes/:id", redeemCodeController.remove);
 
 export default router;

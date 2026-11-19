@@ -1,0 +1,9 @@
+{
+  "deployment": {
+    "name": "plane-${USERNAME}",
+    "variables": [
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [{ "serviceName": "proxy", "subdomain": "plane-${USERNAME}", "port": 80 }]
+  }
+}

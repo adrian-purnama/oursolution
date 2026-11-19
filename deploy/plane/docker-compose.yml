@@ -1,0 +1,413 @@
+# Plane (project management) hosting — one stack per customer, deployed by
+# Dokploy. Based on Plane's own v1.5.0 Docker Compose. AGPL-3.0: hosting it
+# unchanged for customers is allowed; keep its branding and notices.
+#
+# Product settings: deploy/plane/product.json
+# Data: /mnt/nas-sda/plane/<username>/ (database, uploads, queue and this
+# customer's generated keys).
+#
+# Plane's own proxy routes /api, /auth, /god-mode, /spaces, /live and
+# /uploads to the right service, so the domain points at it on port 80 and
+# TLS ends before it.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+# Read by the backend services: everything but the keys, which come from
+# /secrets through the plane_env config.
+x-app-env: &app-env
+  TZ: ${TIMEZONE}
+  WEB_URL: https://plane-${USERNAME}.${DOMAIN}
+  CORS_ALLOWED_ORIGINS: https://plane-${USERNAME}.${DOMAIN}
+  DEBUG: "0"
+  GUNICORN_WORKERS: "2"
+  REDIS_URL: redis://plane-redis:6379/
+  USE_MINIO: "1"
+  MINIO_ENDPOINT_SSL: "0"
+  AWS_REGION: ""
+  AWS_S3_ENDPOINT_URL: http://plane-minio:9000
+  AWS_S3_BUCKET_NAME: uploads
+  FILE_SIZE_LIMIT: "5242880"
+  API_KEY_RATE_LIMIT: 60/minute
+  AUTHENTICATION_RATE_LIMIT: 10/minute
+
+configs:
+  # Turns this customer's generated keys into the variables Plane reads.
+  plane_env:
+    content: |
+      SECRET_KEY="$$(cat /secrets/secret_key)"
+      LIVE_SERVER_SECRET_KEY="$$(cat /secrets/live_secret)"
+      DATABASE_URL="postgresql://plane:$$(cat /secrets/db_password)@plane-db:5432/plane"
+      AMQP_URL="amqp://plane:$$(cat /secrets/mq_password)@plane-mq:5672/plane"
+      AWS_ACCESS_KEY_ID="$$(cat /secrets/s3_access_key)"
+      AWS_SECRET_ACCESS_KEY="$$(cat /secrets/s3_secret_key)"
+      export SECRET_KEY LIVE_SERVER_SECRET_KEY DATABASE_URL AMQP_URL
+      export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+services:
+  # Makes this customer's own random keys on the first start and keeps them.
+  # Nobody types or sees them; a reset deletes them with the data.
+  secrets-init:
+    image: busybox:1.36
+    restart: "no"
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cd /secrets
+        [ -s secret_key ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 64 > secret_key
+        for name in live_secret db_password mq_password s3_access_key s3_secret_key; do
+          [ -s "$$name" ] || tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > "$$name"
+        done
+        chmod 444 secret_key live_secret db_password mq_password s3_access_key s3_secret_key
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets
+
+  plane-db:
+    image: postgres:15.7-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=plane
+      - POSTGRES_DB=plane
+      - POSTGRES_PASSWORD_FILE=/secrets/db_password
+      - TZ=${TIMEZONE}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=100
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/postgres:/var/lib/postgresql/data
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plane -d plane"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    shm_size: 128mb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 128M
+    logging: *logging
+
+  plane-redis:
+    image: valkey/valkey:7.2.11-alpine
+    restart: unless-stopped
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/redis:/data
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+          pids: 64
+    logging: *logging
+
+  plane-mq:
+    image: rabbitmq:3.13.6-management-alpine
+    restart: unless-stopped
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        RABBITMQ_DEFAULT_PASS="$$(cat /secrets/mq_password)"
+        export RABBITMQ_DEFAULT_PASS
+        exec docker-entrypoint.sh rabbitmq-server
+    environment:
+      - RABBITMQ_DEFAULT_USER=plane
+      - RABBITMQ_DEFAULT_VHOST=plane
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/rabbitmq:/var/lib/rabbitmq
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+          pids: 256
+    logging: *logging
+
+  # S3-compatible storage for uploads (the MinIO fork Plane ships with).
+  plane-minio:
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    restart: unless-stopped
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        MINIO_ROOT_USER="$$(cat /secrets/s3_access_key)"
+        MINIO_ROOT_PASSWORD="$$(cat /secrets/s3_secret_key)"
+        export MINIO_ROOT_USER MINIO_ROOT_PASSWORD
+        exec /usr/bin/docker-entrypoint.sh server /export --console-address :9090
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/uploads:/export
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+          pids: 128
+    logging: *logging
+
+  # Applies database migrations, then exits. The api waits for it.
+  migrator:
+    image: makeplane/plane-backend:v1.5.0
+    restart: on-failure
+    command:
+      - sh
+      - -ec
+      - |
+        . /usr/local/bin/plane-env.sh
+        exec ./bin/docker-entrypoint-migrator.sh
+    configs:
+      - source: plane_env
+        target: /usr/local/bin/plane-env.sh
+    environment:
+      <<: *app-env
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 128
+    logging: *logging
+
+  api:
+    image: makeplane/plane-backend:v1.5.0
+    restart: unless-stopped
+    command:
+      - sh
+      - -ec
+      - |
+        . /usr/local/bin/plane-env.sh
+        exec ./bin/docker-entrypoint-api.sh
+    configs:
+      - source: plane_env
+        target: /usr/local/bin/plane-env.sh
+    environment:
+      <<: *app-env
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_started
+      plane-mq:
+        condition: service_started
+      plane-minio:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+          pids: 256
+        reservations:
+          memory: 256M
+    logging: *logging
+
+  worker:
+    image: makeplane/plane-backend:v1.5.0
+    restart: unless-stopped
+    command:
+      - sh
+      - -ec
+      - |
+        . /usr/local/bin/plane-env.sh
+        exec ./bin/docker-entrypoint-worker.sh
+    configs:
+      - source: plane_env
+        target: /usr/local/bin/plane-env.sh
+    environment:
+      <<: *app-env
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+          pids: 256
+    logging: *logging
+
+  beat-worker:
+    image: makeplane/plane-backend:v1.5.0
+    restart: unless-stopped
+    command:
+      - sh
+      - -ec
+      - |
+        . /usr/local/bin/plane-env.sh
+        exec ./bin/docker-entrypoint-beat.sh
+    configs:
+      - source: plane_env
+        target: /usr/local/bin/plane-env.sh
+    environment:
+      <<: *app-env
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+          pids: 64
+    logging: *logging
+
+  # Real-time collaboration for pages.
+  live:
+    image: makeplane/plane-live:v1.5.0
+    restart: unless-stopped
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        LIVE_SERVER_SECRET_KEY="$$(cat /secrets/live_secret)"
+        export LIVE_SERVER_SECRET_KEY
+        exec docker-entrypoint.sh node apps/live
+    environment:
+      - TZ=${TIMEZONE}
+      - API_BASE_URL=http://api:8000
+      - REDIS_URL=redis://plane-redis:6379/
+    volumes:
+      - /mnt/nas-sda/plane/${USERNAME}/secrets:/secrets:ro
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+          pids: 128
+    logging: *logging
+
+  web:
+    image: makeplane/plane-frontend:v1.5.0
+    restart: unless-stopped
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+          pids: 64
+    logging: *logging
+
+  space:
+    image: makeplane/plane-space:v1.5.0
+    restart: unless-stopped
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+          pids: 64
+    logging: *logging
+
+  admin:
+    image: makeplane/plane-admin:v1.5.0
+    restart: unless-stopped
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+          pids: 64
+    logging: *logging
+
+  proxy:
+    image: makeplane/plane-proxy:v1.5.0
+    restart: unless-stopped
+    environment:
+      - APP_DOMAIN=plane-${USERNAME}.${DOMAIN}
+      - SITE_ADDRESS=:80
+      - FILE_SIZE_LIMIT=5242880
+      - BUCKET_NAME=uploads
+      - TRUSTED_PROXIES=private_ranges
+      # CERT_EMAIL, CERT_ACME_CA and CERT_ACME_DNS stay unset: TLS ends
+      # before this proxy, and an empty CERT_ACME_CA would replace the
+      # Caddyfile's default and stop Caddy from starting.
+    expose:
+      - "80"
+    depends_on:
+      - web
+      - space
+      - admin
+      - api
+      - live
+      - plane-minio
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+          pids: 64
+    logging: *logging
