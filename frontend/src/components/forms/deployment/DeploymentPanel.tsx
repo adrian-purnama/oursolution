@@ -25,6 +25,11 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { ProductMark } from '#/components/ProductBadge'
 import ProductNotices from '#/components/ProductNotices'
+import PanelTour, {
+  EXAMPLE_NOTICE,
+  ExamplePowerControls,
+  ExampleSettings,
+} from '#/components/forms/tour/PanelTour'
 import {
   BeatBar,
   CHECK_COLOR,
@@ -65,6 +70,7 @@ import type {
 } from '#/lib/deployment'
 import { formatDateTime } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { useTourStage } from '#/lib/tours'
 import { cn } from '#/lib/utils'
 
 const POLL_MS = 3000
@@ -206,6 +212,7 @@ export default function DeploymentPanel({
   const [startingCommand, setStartingCommand] = useState<string | null>(null)
   /** Set after trying to start with required settings empty. */
   const [showMissing, setShowMissing] = useState(false)
+  const [tourStage, setTourStage] = useTourStage('firstService')
 
   const url = `${apiBase}/${productId}`
 
@@ -408,6 +415,8 @@ export default function DeploymentPanel({
   const wipe = admin ? deployment.internal?.wipe : undefined
   const locked = busy || starting !== null || startingCommand !== null
   const expiry = expiryOf(deployment)
+  /** The first-service tour's control panel part, for the customer. */
+  const touring = !admin && tourStage === 'panel'
   /** Customers can renew from here; admins grant time elsewhere. */
   const extendable = !admin && expiry !== null
 
@@ -467,7 +476,15 @@ export default function DeploymentPanel({
 
   return (
     <div className="space-y-6">
-      <ProductNotices notices={deployment.notices}>
+      {touring ? <PanelTour onEnd={() => setTourStage('done')} /> : null}
+      <ProductNotices
+        notices={
+          touring && deployment.notices.length === 0
+            ? [EXAMPLE_NOTICE]
+            : deployment.notices
+        }
+        tabTour="notices"
+      >
         <section className={`${cardClassName} overflow-hidden`}>
           <header className="flex flex-wrap items-start gap-4 p-5">
             <ProductMark
@@ -494,7 +511,7 @@ export default function DeploymentPanel({
                 {subscriptionLine(deployment)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2" data-tour="actions">
               {extendable && expiry.kind === 'expired' ? (
                 <Button
                   type="button"
@@ -525,6 +542,7 @@ export default function DeploymentPanel({
                 <Button
                   type="button"
                   disabled={locked}
+                  data-tour="turn-on"
                   onClick={() => attempt(primary, () => void start(primary))}
                 >
                   {starting === primary ? (
@@ -592,7 +610,10 @@ export default function DeploymentPanel({
             </ul>
           ) : null}
 
-          <dl className="grid grid-cols-2 gap-px border-t border-[var(--line)] bg-[var(--line)] sm:grid-cols-4">
+          <dl
+            data-tour="uptime"
+            className="grid grid-cols-2 gap-px border-t border-[var(--line)] bg-[var(--line)] sm:grid-cols-4"
+          >
             <Stat label="Status">
               <span className="inline-flex items-center gap-2">
                 {check ? (
@@ -670,7 +691,7 @@ export default function DeploymentPanel({
       ) : null}
 
       {editable.length > 0 || shown.length > 0 ? (
-        <section className="space-y-3">
+        <section className="space-y-3" data-tour="settings">
           <div>
             <h3 className="text-sm font-medium">Settings</h3>
             <p className={`text-xs ${hintClassName}`}>
@@ -862,8 +883,14 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
+      {touring && editable.length === 0 && shown.length === 0 ? (
+        <ExampleSettings />
+      ) : null}
+
+      {touring && secondary.length === 0 ? <ExamplePowerControls /> : null}
+
       {secondary.length > 0 ? (
-        <section className="space-y-3">
+        <section className="space-y-3" data-tour="power">
           <h3 className="text-sm font-medium">Manage</h3>
           <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
             {secondary.map((action) => {

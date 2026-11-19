@@ -70,6 +70,7 @@ function CardShell({
     return (
       <button
         type="button"
+        data-tour="service"
         className={CARD_CLASS}
         onClick={() => onSelect(deployment.product.id)}
       >
@@ -81,6 +82,7 @@ function CardShell({
     <Link
       to="/dashboard/deployments/$productId"
       params={{ productId: deployment.product.id }}
+      data-tour="service"
       className={CARD_CLASS}
     >
       {children}

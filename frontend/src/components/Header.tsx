@@ -237,6 +237,7 @@ export default function Header() {
             )}
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
+            data-tour="profile-mobile"
             onClick={openMenu}
           >
             <Menu className="size-6" aria-hidden />
@@ -435,6 +436,7 @@ export default function Header() {
                       <Link
                         to="/profile"
                         onClick={closeMenu}
+                        data-tour="profile-drawer"
                         className="mb-3 flex items-center gap-3 rounded-[var(--radius-sm)] px-1 py-1 text-sm text-[var(--muted)] no-underline transition hover:bg-[var(--surface)]"
                       >
                         <UserAvatar email={user.email} />
@@ -714,6 +716,7 @@ function AccountMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Account menu (${email})`}
+        data-tour="profile"
         className="group inline-flex cursor-pointer items-center gap-1 rounded-full border-0 bg-transparent p-1 outline-none transition hover:bg-[var(--surface)] focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
       >
         <UserAvatar email={email} />

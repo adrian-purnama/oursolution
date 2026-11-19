@@ -4,6 +4,7 @@ import UnpaidNotice from '#/components/forms/billing/UnpaidNotice'
 import ProductsPlansForm from '#/components/forms/profile/ProductsPlansForm'
 import ProfileForm from '#/components/forms/profile/ProfileForm'
 import RedeemCodeForm from '#/components/forms/profile/RedeemCodeForm'
+import TourReplay from '#/components/forms/profile/TourReplay'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { privatePage } from '#/lib/seo'
 
@@ -44,6 +45,7 @@ function ProfilePage() {
         <TabsContent value="account" className="space-y-4">
           <ProfileForm />
           <RedeemCodeForm />
+          <TourReplay />
         </TabsContent>
         <TabsContent value="products">
           <ProductsPlansForm />
