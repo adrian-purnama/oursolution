@@ -58,7 +58,8 @@ export class PurchaseService {
     productId: string,
     origin:
       | { source: "admin"; grantedBy: string }
-      | { source: "checkout"; paymentId: string },
+      | { source: "checkout"; paymentId: string }
+      | { source: "redeem"; redeemCodeId: string },
   ): Promise<string> {
     try {
       const created = await PurchaseModel.create({
@@ -67,7 +68,9 @@ export class PurchaseService {
         source: origin.source,
         ...(origin.source === "admin"
           ? { grantedBy: new Types.ObjectId(origin.grantedBy) }
-          : { paymentId: new Types.ObjectId(origin.paymentId) }),
+          : origin.source === "checkout"
+            ? { paymentId: new Types.ObjectId(origin.paymentId) }
+            : { redeemCodeId: new Types.ObjectId(origin.redeemCodeId) }),
       });
       return created.id as string;
     } catch (error) {

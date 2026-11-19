@@ -4,6 +4,7 @@ import {
   PlanScheduleError,
   activePeriod,
   assertDeletable,
+  assertFree,
   liveSchedule,
   planAppend,
   planEndNow,
@@ -174,6 +175,30 @@ describe("assertDeletable", () => {
     // Ending exactly now counts as ended.
     assert.throws(
       () => assertDeletable(period("edge", at(1), at(10)), at(10)),
+      PlanScheduleError,
+    );
+  });
+});
+
+describe("assertFree", () => {
+  const booked = [period("a", at(9), at(12))];
+
+  it("allows a period that starts when another ends", () => {
+    assert.doesNotThrow(() =>
+      assertFree(booked, { startsAt: at(12), endsAt: at(15) }),
+    );
+  });
+
+  it("refuses a period that overlaps", () => {
+    assert.throws(
+      () => assertFree(booked, { startsAt: at(11), endsAt: at(15) }),
+      PlanScheduleError,
+    );
+  });
+
+  it("refuses an endless period before a booked one", () => {
+    assert.throws(
+      () => assertFree(booked, { startsAt: at(6), endsAt: null }),
       PlanScheduleError,
     );
   });

@@ -18,12 +18,29 @@ import { toProductSummary } from "../product/product.service";
 import { purchaseService } from "../purchase/purchase.service";
 import {
   assertDeletable,
+  assertFree,
   planAppend,
   planEndNow,
   planOverride,
   type AppendPlan,
   type PeriodLike,
 } from "./userProduct.planner";
+
+/** Where a period came from. */
+export type PeriodOrigin =
+  | { source: Extract<ProductPeriodSource, "admin">; createdBy: string }
+  | { source: Extract<ProductPeriodSource, "checkout">; paymentId: string }
+  | { source: Extract<ProductPeriodSource, "redeem">; redeemCodeId: string };
+
+function originFields(origin: PeriodOrigin) {
+  if (origin.source === "admin") {
+    return { createdBy: new Types.ObjectId(origin.createdBy) };
+  }
+  if (origin.source === "checkout") {
+    return { paymentId: new Types.ObjectId(origin.paymentId) };
+  }
+  return { redeemCodeId: new Types.ObjectId(origin.redeemCodeId) };
+}
 
 /** Finished periods shown per user, newest kept. */
 const HISTORY_LIMIT = 50;
@@ -314,9 +331,7 @@ export class UserProductService {
     userId: string,
     productId: string,
     plan: AppendPlan,
-    origin:
-      | { source: Extract<ProductPeriodSource, "admin">; createdBy: string }
-      | { source: Extract<ProductPeriodSource, "checkout">; paymentId: string },
+    origin: PeriodOrigin,
   ): Promise<string> {
     const created = await UserProductPeriodModel.create({
       userId,
@@ -324,11 +339,25 @@ export class UserProductService {
       startsAt: plan.startsAt,
       endsAt: plan.endsAt,
       source: origin.source,
-      ...(origin.source === "admin"
-        ? { createdBy: new Types.ObjectId(origin.createdBy) }
-        : { paymentId: new Types.ObjectId(origin.paymentId) }),
+      ...originFields(origin),
     });
     return created.id as string;
+  }
+
+  /**
+   * Store a period at fixed times. Throws a PlanScheduleError when it would
+   * overlap a running or scheduled period of the same product.
+   */
+  async grantAt(
+    userId: string,
+    productId: string,
+    plan: AppendPlan,
+    origin: PeriodOrigin,
+    now: Date = new Date(),
+  ): Promise<string> {
+    const periods = await this.loadLive(userId, productId, now);
+    assertFree(periods.map(toPeriodLike), plan);
+    return this.grant(userId, productId, plan, origin);
   }
 
   /** Running or scheduled periods of one product for one user, earliest first. */

@@ -30,3 +30,5 @@ export const credentialRateLimit = limiter(20);
  * (deployment.rules.ts); this only keeps a script from hammering the route.
  */
 export const deploymentRateLimit = limiter(60);
+/** Redeeming codes: low, so codes cannot be found by trying many. */
+export const redeemRateLimit = limiter(10);

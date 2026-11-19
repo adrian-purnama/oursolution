@@ -3,6 +3,7 @@ import BillingHistory from '#/components/forms/billing/BillingHistory'
 import UnpaidNotice from '#/components/forms/billing/UnpaidNotice'
 import ProductsPlansForm from '#/components/forms/profile/ProductsPlansForm'
 import ProfileForm from '#/components/forms/profile/ProfileForm'
+import RedeemCodeForm from '#/components/forms/profile/RedeemCodeForm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { privatePage } from '#/lib/seo'
 
@@ -40,8 +41,9 @@ function ProfilePage() {
           <TabsTrigger value="products">Products & plans</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
         </TabsList>
-        <TabsContent value="account">
+        <TabsContent value="account" className="space-y-4">
           <ProfileForm />
+          <RedeemCodeForm />
         </TabsContent>
         <TabsContent value="products">
           <ProductsPlansForm />

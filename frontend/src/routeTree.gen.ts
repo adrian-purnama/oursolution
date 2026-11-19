@@ -27,6 +27,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAppConfigRouteImport } from './routes/admin/app-config'
 import { Route as AdminDeploymentsRouteImport } from './routes/admin/deployments'
 import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
+import { Route as AdminRedeemCodesRouteImport } from './routes/admin/redeem-codes'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
 import { Route as ServicesSlugRouteImport } from './routes/services/$slug'
@@ -133,6 +134,11 @@ const AdminDeploymentsRoute = AdminDeploymentsRouteImport.update({
 const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
   id: '/payments',
   path: '/payments',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminRedeemCodesRoute = AdminRedeemCodesRouteImport.update({
+  id: '/redeem-codes',
+  path: '/redeem-codes',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
@@ -255,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
   '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/redeem-codes': typeof AdminRedeemCodesRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/services/$slug': typeof ServicesSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -291,6 +298,7 @@ export interface FileRoutesByTo {
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
   '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/redeem-codes': typeof AdminRedeemCodesRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/services/$slug': typeof ServicesSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
   '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/redeem-codes': typeof AdminRedeemCodesRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/services/$slug': typeof ServicesSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -370,6 +379,7 @@ export interface FileRouteTypes {
     | '/admin/app-config'
     | '/admin/deployments'
     | '/admin/payments'
+    | '/admin/redeem-codes'
     | '/products/$productId'
     | '/services/$slug'
     | '/admin/'
@@ -406,6 +416,7 @@ export interface FileRouteTypes {
     | '/admin/app-config'
     | '/admin/deployments'
     | '/admin/payments'
+    | '/admin/redeem-codes'
     | '/products/$productId'
     | '/services/$slug'
     | '/admin'
@@ -445,6 +456,7 @@ export interface FileRouteTypes {
     | '/admin/app-config'
     | '/admin/deployments'
     | '/admin/payments'
+    | '/admin/redeem-codes'
     | '/products/$productId'
     | '/services/$slug'
     | '/admin/'
@@ -610,6 +622,13 @@ declare module '@tanstack/react-router' {
       path: '/payments'
       fullPath: '/admin/payments'
       preLoaderRoute: typeof AdminPaymentsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/redeem-codes': {
+      id: '/admin/redeem-codes'
+      path: '/redeem-codes'
+      fullPath: '/admin/redeem-codes'
+      preLoaderRoute: typeof AdminRedeemCodesRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/products/$productId': {
@@ -796,6 +815,7 @@ interface AdminRouteRouteChildren {
   AdminAppConfigRoute: typeof AdminAppConfigRoute
   AdminDeploymentsRoute: typeof AdminDeploymentsRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
+  AdminRedeemCodesRoute: typeof AdminRedeemCodesRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminProductsProductIdRoute: typeof AdminProductsProductIdRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
@@ -810,6 +830,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAppConfigRoute: AdminAppConfigRoute,
   AdminDeploymentsRoute: AdminDeploymentsRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
+  AdminRedeemCodesRoute: AdminRedeemCodesRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminProductsProductIdRoute: AdminProductsProductIdRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,

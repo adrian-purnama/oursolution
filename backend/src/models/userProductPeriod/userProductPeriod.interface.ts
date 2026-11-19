@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 
-export const PRODUCT_PERIOD_SOURCES = ["admin", "checkout"] as const;
+export const PRODUCT_PERIOD_SOURCES = ["admin", "checkout", "redeem"] as const;
 export type ProductPeriodSource = (typeof PRODUCT_PERIOD_SOURCES)[number];
 
 /**
@@ -19,6 +19,8 @@ export interface UserProductPeriodInterface {
   createdBy?: Types.ObjectId;
   /** The payment that bought it, when source is "checkout". */
   paymentId?: Types.ObjectId;
+  /** The code that was redeemed for it, when source is "redeem". */
+  redeemCodeId?: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
 }

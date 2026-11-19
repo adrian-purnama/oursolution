@@ -31,7 +31,11 @@ export default function PurchaseList({
           <div className="min-w-0 flex-1">
             <ProductBadge product={purchase.product} />
             <p className={`mt-0.5 text-[11px] ${hintClassName}`}>
-              {purchase.source === 'admin' ? 'Given' : 'Bought'}{' '}
+              {purchase.source === 'admin'
+                ? 'Given'
+                : purchase.source === 'redeem'
+                  ? 'Redeemed'
+                  : 'Bought'}{' '}
               {formatDateTime(purchase.purchasedAt)}
             </p>
           </div>

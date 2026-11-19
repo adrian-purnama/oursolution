@@ -39,6 +39,11 @@ const userProductPeriodSchema = new Schema<UserProductPeriodInterface>(
       ref: "Payment",
       required: false,
     },
+    redeemCodeId: {
+      type: Schema.Types.ObjectId,
+      ref: "RedeemCode",
+      required: false,
+    },
   },
   { timestamps: true },
 );
