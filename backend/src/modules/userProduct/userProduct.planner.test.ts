@@ -9,6 +9,8 @@ import {
   planAppend,
   planEndNow,
   planOverride,
+  planSwitch,
+  variantChange,
   type PeriodLike,
 } from "./userProduct.planner";
 
@@ -199,6 +201,131 @@ describe("assertFree", () => {
   it("refuses an endless period before a booked one", () => {
     assert.throws(
       () => assertFree(booked, { startsAt: at(6), endsAt: null }),
+      PlanScheduleError,
+    );
+  });
+});
+
+describe("variantChange", () => {
+  const on = (variantId: string, p: PeriodLike) => ({ ...p, variantId });
+
+  it("finds the running period and the first later one on another variant", () => {
+    const periods = [
+      on("small", period("a", at(0), at(10))),
+      on("small", period("b", at(10), at(20))),
+      on("big", period("c", at(20), at(23))),
+    ];
+    const { current, next } = variantChange(periods, at(5));
+    assert.equal(current?.id, "a");
+    assert.equal(next?.id, "c");
+  });
+
+  it("has no next when every later period is on the same variant", () => {
+    const periods = [
+      on("small", period("a", at(0), at(10))),
+      on("small", period("b", at(10), at(20))),
+    ];
+    assert.equal(variantChange(periods, at(5)).next, null);
+  });
+
+  it("with nothing running, the next is the first scheduled period", () => {
+    const periods = [on("big", period("c", at(20), at(23)))];
+    const { current, next } = variantChange(periods, at(5));
+    assert.equal(current, null);
+    assert.equal(next?.id, "c");
+  });
+});
+
+describe("planSwitch", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const day = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * DAY);
+  const on = (variantId: string, id: string, from: number, to: number) => ({
+    id,
+    startsAt: day(from),
+    endsAt: day(to),
+    variantId,
+  });
+  // A: 50k / 30 days, B: 100k / 30 days.
+  const prices: Record<string, number> = { a: 50_000 / 30, b: 100_000 / 30 };
+  const priceOf = (id: string) => prices[id] ?? null;
+
+  it("turns 15 days left of A into 7.5 days of B, on top of the days bought", () => {
+    const plan = planSwitch(
+      [on("a", "p1", 0, 30)],
+      day(15),
+      priceOf,
+      prices.b,
+      30,
+    );
+    assert.equal(plan.truncateId, "p1");
+    assert.deepEqual(plan.deleteIds, []);
+    assert.equal(plan.startsAt.getTime(), day(15).getTime());
+    assert.equal(plan.creditIdr, 25_000);
+    assert.equal(plan.bonusMs, 7.5 * DAY);
+    assert.equal(plan.endsAt.getTime(), day(15 + 37.5).getTime());
+  });
+
+  it("gives more days when switching to a cheaper variant", () => {
+    const plan = planSwitch(
+      [on("b", "p1", 0, 30)],
+      day(15),
+      priceOf,
+      prices.a,
+      30,
+    );
+    assert.equal(plan.bonusMs, 30 * DAY);
+  });
+
+  it("counts scheduled periods too, and replaces them", () => {
+    const plan = planSwitch(
+      [on("a", "p1", 0, 30), on("a", "p2", 30, 60)],
+      day(15),
+      priceOf,
+      prices.b,
+      30,
+    );
+    assert.deepEqual(plan.deleteIds, ["p2"]);
+    // 45 days of A = 75k = 22.5 days of B.
+    assert.equal(plan.bonusMs, 22.5 * DAY);
+  });
+
+  it("with nothing running, is just the days bought from now", () => {
+    const plan = planSwitch([], day(3), priceOf, prices.b, 30);
+    assert.equal(plan.truncateId, null);
+    assert.equal(plan.creditIdr, 0);
+    assert.equal(plan.endsAt.getTime(), day(33).getTime());
+  });
+
+  it("keeps the time left as it is when the new variant is free", () => {
+    const plan = planSwitch([on("a", "p1", 0, 30)], day(20), priceOf, 0, 30);
+    assert.equal(plan.bonusMs, 10 * DAY);
+  });
+
+  it("values a removed variant's time at nothing", () => {
+    const plan = planSwitch(
+      [on("gone", "p1", 0, 30)],
+      day(15),
+      priceOf,
+      prices.b,
+      30,
+    );
+    assert.equal(plan.bonusMs, 0);
+  });
+
+  it("refuses a subscription without an end, or no days", () => {
+    assert.throws(
+      () =>
+        planSwitch(
+          [{ id: "p1", startsAt: day(0), endsAt: null, variantId: "a" }],
+          day(1),
+          priceOf,
+          prices.b,
+          30,
+        ),
+      PlanScheduleError,
+    );
+    assert.throws(
+      () => planSwitch([], day(1), priceOf, prices.b, 0),
       PlanScheduleError,
     );
   });

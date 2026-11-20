@@ -5,6 +5,7 @@ import type {
   CheckoutInDto,
   CheckoutItemInDto,
   CheckoutLineOutDto,
+  CheckoutSwitchOutDto,
   CheckoutOutDto,
   CheckoutQuoteOutDto,
   PaymentListOutDto,
@@ -15,6 +16,7 @@ import { logger } from "../../logger/logger";
 import { nextSequence } from "../../models/counter/counter.model";
 import type {
   PaymentInterface,
+  CheckoutPlacement,
   PaymentItem,
   PaymentSource,
   PaymentStatus,
@@ -29,6 +31,15 @@ import {
   AlreadyOwnedError,
   purchaseService,
 } from "../purchase/purchase.service";
+import type { VariantApplyMode } from "../../models/userProductPeriod/userProductPeriod.interface";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+import {
+  lineName,
+  variantIdOf,
+  variantOf,
+  variantsOf,
+} from "../product/product.variants";
 import { PlanScheduleError } from "../userProduct/userProduct.planner";
 import { userProductService } from "../userProduct/userProduct.service";
 import {
@@ -118,7 +129,12 @@ type Deps = {
   products: Pick<typeof productService, "get">;
   userProducts: Pick<
     typeof userProductService,
-    "planAppendFor" | "grant" | "hasLivePeriod"
+    | "planAppendFor"
+    | "grant"
+    | "hasLivePeriod"
+    | "planSwitchFor"
+    | "switchNow"
+    | "latestVariantOf"
   >;
   purchases: Pick<typeof purchaseService, "owns" | "grant">;
   store: PaymentStore;
@@ -250,6 +266,7 @@ export function toPaymentOut(
       unitPriceIdr: item.unitPriceIdr,
       quantity: item.quantity,
       durationDays: item.durationDays,
+      variantId: item.variantId ?? null,
       amountIdr: item.amountIdr,
     })),
     provider: payment.provider,
@@ -311,12 +328,27 @@ export class PaymentService {
     const { products, userProducts, purchases, store } = this.deps;
     const items = mergeDuplicateItems(rawItems).slice(0, MAX_CHECKOUT_LINES);
 
-    const found: { product: Product; quantity: number }[] = [];
+    const found: {
+      product: Product;
+      quantity: number;
+      variantId: string | null;
+      applyVariant: VariantApplyMode;
+      placement: CheckoutPlacement;
+    }[] = [];
     for (const item of items) {
       try {
+        const product = await products.get(item.productId);
         found.push({
-          product: await products.get(item.productId),
+          product,
           quantity: item.quantity,
+          // No variant named: extend the one the user is on, else the base.
+          variantId:
+            item.variantId ??
+            (product.kind === "subscription"
+              ? await userProducts.latestVariantOf(userId, item.productId, now)
+              : null),
+          applyVariant: item.applyVariant ?? "auto",
+          placement: item.placement ?? "after",
         });
       } catch {
         // Gone for good: nothing to show or buy.
@@ -335,13 +367,29 @@ export class PaymentService {
     );
 
     const lines: PricedLine[] = [];
-    for (const { product, quantity: wanted } of found) {
+    for (const {
+      product,
+      quantity: wanted,
+      variantId,
+      applyVariant,
+      placement,
+    } of found) {
       const productId = product.id as string;
       const quantity = clampQuantity(product.kind, wanted);
+      const isSubscription = product.kind === "subscription";
+      const variant = isSubscription ? variantOf(product, variantId) : null;
+      // What the line costs: the chosen variant, or the product as it was.
+      const unitPriceIdr = variant?.priceIdr ?? product.priceIdr;
+      const durationDays = isSubscription
+        ? (variant?.durationDays ?? product.durationDays)
+        : null;
       let problem: string | null = null;
+      let switchOut: CheckoutSwitchOutDto | null = null;
 
       if (product.deletedAt) {
         problem = "No longer available";
+      } else if (isSubscription && !variant) {
+        problem = "This variant is no longer available: choose another";
       } else if (
         !product.showOnPricingPage &&
         !(
@@ -350,17 +398,32 @@ export class PaymentService {
         )
       ) {
         problem = "Not available for checkout";
-      } else if (product.kind === "subscription") {
-        if (!product.durationDays) {
+      } else if (isSubscription) {
+        if (!durationDays || !variant) {
           problem = "This subscription has no duration set";
         } else {
           try {
-            await userProducts.planAppendFor(
-              userId,
-              productId,
-              { kind: "days", days: product.durationDays },
-              now,
-            );
+            if (placement === "now") {
+              const plan = await userProducts.planSwitchFor(
+                userId,
+                product,
+                variant.id,
+                durationDays * quantity,
+                now,
+              );
+              switchOut = {
+                creditIdr: plan.creditIdr,
+                bonusDays: Math.round((plan.bonusMs / DAY_MS) * 10) / 10,
+                endsAt: plan.endsAt.toISOString(),
+              };
+            } else {
+              await userProducts.planAppendFor(
+                userId,
+                productId,
+                { kind: "days", days: durationDays },
+                now,
+              );
+            }
           } catch (error) {
             if (!(error instanceof PlanScheduleError)) throw error;
             problem = error.message;
@@ -378,12 +441,24 @@ export class PaymentService {
       lines.push({
         productDoc: product,
         product: toProductSummary(product),
-        unitPriceIdr: product.priceIdr,
+        unitPriceIdr,
         quantity,
         maxQuantity: maxQuantity(product.kind),
-        durationDays:
-          product.kind === "subscription" ? product.durationDays : null,
-        amountIdr: lineAmount(product.priceIdr, quantity),
+        durationDays,
+        amountIdr: lineAmount(unitPriceIdr, quantity),
+        variant: variant ? { id: variant.id, name: variant.name } : null,
+        variants: isSubscription
+          ? variantsOf(product).map((option) => ({
+              id: option.id,
+              name: option.name,
+              specs: option.specs,
+              unitPriceIdr: option.priceIdr,
+              durationDays: option.durationDays,
+            }))
+          : [],
+        applyVariant: isSubscription ? applyVariant : null,
+        placement: isSubscription ? placement : null,
+        switch: switchOut,
         problem,
       });
     }
@@ -417,12 +492,15 @@ export class PaymentService {
       userId,
       lines.map((line) => ({
         productId: line.product.id,
-        name: line.product.name,
+        name: lineName(line.productDoc, line.variant),
         description: null,
         kind: line.product.kind,
         unitPriceIdr: line.unitPriceIdr,
         quantity: line.quantity,
         durationDays: line.durationDays,
+        variantId: line.variant?.id ?? null,
+        applyVariant: line.applyVariant,
+        placement: line.placement,
         amountIdr: line.amountIdr,
       })),
       new Date(now.getTime() + env.paymentTtlMinutes * 60_000),
@@ -495,7 +573,9 @@ export class PaymentService {
       throw new CheckoutError("Add at least one line");
     }
     if (input.lines.length > MAX_CHECKOUT_LINES) {
-      throw new CheckoutError(`At most ${MAX_CHECKOUT_LINES} lines per invoice`);
+      throw new CheckoutError(
+        `At most ${MAX_CHECKOUT_LINES} lines per invoice`,
+      );
     }
     // Fails for an unknown user before anything is stored.
     await this.deps.customerEmail(userId);
@@ -519,6 +599,9 @@ export class PaymentService {
           unitPriceIdr: line.unitPriceIdr,
           quantity: line.quantity,
           durationDays: null,
+          variantId: null,
+          applyVariant: null,
+          placement: null,
           amountIdr: lineAmount(line.unitPriceIdr, line.quantity),
         });
         continue;
@@ -534,8 +617,20 @@ export class PaymentService {
       if (product.deletedAt) {
         throw new CheckoutError(`${product.name}: no longer available`);
       }
-      if (product.kind === "subscription") {
-        if (!product.durationDays) {
+      const isSubscription = product.kind === "subscription";
+      const variant = isSubscription
+        ? variantOf(product, line.variantId ?? null)
+        : null;
+      const durationDays = isSubscription
+        ? (variant?.durationDays ?? null)
+        : null;
+      if (isSubscription) {
+        if (!variant) {
+          throw new CheckoutError(
+            `${product.name}: the product has no such variant`,
+          );
+        }
+        if (!durationDays) {
           throw new CheckoutError(
             `${product.name}: this subscription has no duration set`,
           );
@@ -544,7 +639,7 @@ export class PaymentService {
           await userProducts.planAppendFor(
             userId,
             productId,
-            { kind: "days", days: product.durationDays },
+            { kind: "days", days: durationDays },
             now,
           );
         } catch (error) {
@@ -564,16 +659,21 @@ export class PaymentService {
       }
 
       const quantity = clampQuantity(product.kind, line.quantity);
-      const unitPriceIdr = line.unitPriceIdr ?? product.priceIdr;
+      const unitPriceIdr =
+        line.unitPriceIdr ?? variant?.priceIdr ?? product.priceIdr;
       lines.push({
         productId,
-        name: product.name,
+        name: lineName(product, variant),
         description: line.description,
         kind: product.kind,
         unitPriceIdr,
         quantity,
-        durationDays:
-          product.kind === "subscription" ? product.durationDays : null,
+        durationDays,
+        variantId: variant?.id ?? null,
+        // An admin's invoice adds time after what the user has, and
+        // applies a new variant by itself.
+        applyVariant: isSubscription ? "auto" : null,
+        placement: isSubscription ? "after" : null,
         amountIdr: lineAmount(unitPriceIdr, quantity),
       });
     }
@@ -730,7 +830,7 @@ export class PaymentService {
    * grants at a time.
    */
   async grant(paymentId: string, now: Date = new Date()): Promise<void> {
-    const { store, userProducts, purchases } = this.deps;
+    const { store, userProducts, purchases, products } = this.deps;
     const payment = await store.claimGrant(paymentId, now);
     if (!payment) return;
 
@@ -748,17 +848,41 @@ export class PaymentService {
         const productId = item.productId.toString();
         if (item.kind === "subscription") {
           const periodIds = await store.periodIdsFrom(paymentId, productId);
+          const variant = {
+            variantId: variantIdOf(item.variantId),
+            applyVariant: item.applyVariant ?? "auto",
+          };
           try {
-            while (periodIds.length < item.quantity) {
+            if (item.placement === "now") {
+              // One period for every unit bought, worked out as of now.
+              if (periodIds.length === 0) {
+                periodIds.push(
+                  await userProducts.switchNow(
+                    userId,
+                    await products.get(productId),
+                    (item.durationDays ?? 1) * item.quantity,
+                    { source: "checkout", paymentId },
+                    variant,
+                  ),
+                );
+              }
+            }
+            while (
+              item.placement !== "now" &&
+              periodIds.length < item.quantity
+            ) {
               const plan = await userProducts.planAppendFor(userId, productId, {
                 kind: "days",
                 days: item.durationDays ?? 1,
               });
               periodIds.push(
-                await userProducts.grant(userId, productId, plan, {
-                  source: "checkout",
-                  paymentId,
-                }),
+                await userProducts.grant(
+                  userId,
+                  productId,
+                  plan,
+                  { source: "checkout", paymentId },
+                  variant,
+                ),
               );
             }
           } catch (error) {

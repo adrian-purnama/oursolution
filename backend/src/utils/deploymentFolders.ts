@@ -72,7 +72,7 @@ function splitMount(mount: string): string[] {
  * written: each service's volume sources, and the host folder behind a
  * named volume (`driver_opts.device`).
  */
-function mountSources(composeFile: string): string[] {
+export function mountSources(composeFile: string): string[] {
   let doc: unknown;
   try {
     doc = parse(composeFile, { merge: true });

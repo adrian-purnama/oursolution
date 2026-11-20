@@ -2,6 +2,7 @@ import type {
   ProductDeployment,
   ProductKind,
   ProductNotice,
+  ProductVariant,
 } from "../models/product/product.interface";
 import type {
   DeploymentCheckResult,
@@ -36,6 +37,11 @@ export interface ProductOutDto {
   durationDays: number | null;
   /** Subscription only; admin-only. */
   deployment: ProductDeployment | null;
+  /** Subscription only: the base variant's own name; "" uses the product's. */
+  variantName: string;
+  variantSpecs: string;
+  /** Subscription only: variants besides the base one. */
+  variants: ProductVariant[];
   /** One-time only; admins and owners see it, the pricing page never does. */
   accessUrl: string | null;
   showOnPricingPage: boolean;
@@ -56,6 +62,23 @@ export interface PricingProductOutDto {
   pricingText: string;
   description: string;
   notices: ProductNotice[];
+  durationDays: number | null;
+  /**
+   * Subscription only: every variant, the base one first. Just the base
+   * when the product has no others.
+   */
+  variants: PricingVariantOutDto[];
+}
+
+/**
+ * A variant as the public sees it: no compose file. Its price is shown so
+ * customers can compare variants; checkout charges the same.
+ */
+export interface PricingVariantOutDto {
+  id: string;
+  name: string;
+  specs: string;
+  priceIdr: number;
   durationDays: number | null;
 }
 
@@ -79,6 +102,9 @@ export interface CreateProductDto {
   priceIdr: number;
   durationDays: number | null;
   deployment: ProductDeployment | null;
+  variantName: string;
+  variantSpecs: string;
+  variants: ProductVariant[];
   accessUrl: string | null;
   showOnPricingPage: boolean;
 }

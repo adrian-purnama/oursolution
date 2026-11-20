@@ -1,5 +1,7 @@
+import { VARIANT_APPLY_MODES } from "../userProductPeriod/userProductPeriod.interface";
 import { model, Schema } from "mongoose";
 import {
+  CHECKOUT_PLACEMENTS,
   PAYMENT_ITEM_KINDS,
   PAYMENT_SOURCES,
   PAYMENT_STATUSES,
@@ -16,6 +18,9 @@ const paymentItemSchema = new Schema<PaymentItem>(
     unitPriceIdr: { type: Number, required: true, min: 0 },
     quantity: { type: Number, required: true, min: 1 },
     durationDays: { type: Number, default: null, min: 1 },
+    variantId: { type: String, default: null },
+    applyVariant: { type: String, enum: VARIANT_APPLY_MODES, default: null },
+    placement: { type: String, enum: CHECKOUT_PLACEMENTS, default: null },
     amountIdr: { type: Number, required: true, min: 0 },
     periodIds: {
       type: [{ type: Schema.Types.ObjectId, ref: "UserProductPeriod" }],

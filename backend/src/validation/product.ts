@@ -5,6 +5,8 @@ import {
   DEPLOYMENT_TYPES,
   MAX_DEPLOYMENT_COMMANDS,
   MAX_PRODUCT_IMAGES,
+  MAX_PRODUCT_VARIANTS,
+  type ProductVariant,
   NOTICE_TONES,
   PRODUCT_KINDS,
   type NoticeTone,
@@ -24,7 +26,11 @@ import type {
   UpdateProductDto,
 } from "../dto/product.dto";
 import { env } from "../environment/env";
-import { checkDeployment, type DeploymentDraft } from "../utils/deployment";
+import {
+  checkDeployment,
+  checkErrorMessage,
+  type DeploymentDraft,
+} from "../utils/deployment";
 import type { AssignProductDto, PeriodEndSpec } from "../dto/userProduct.dto";
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -46,6 +52,8 @@ const MAX_VARIABLE_VALUE_LENGTH = 4000;
 const MAX_COMMAND_LABEL_LENGTH = 60;
 const MAX_COMMAND_LENGTH = 2000;
 const COMMAND_ID = /^[A-Za-z0-9_-]{1,40}$/;
+const VARIANT_ID = /^[A-Za-z0-9_-]{1,40}$/;
+const MAX_SPECS_LENGTH = 300;
 
 function asRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -323,16 +331,8 @@ function parseDeployment(value: unknown): ProductDeployment | null {
   }
   const draft = parseDeploymentDraft(raw);
   const check = checkDeployment(draft, env.deployDomain ?? undefined);
-  const errors = check.issues.filter((issue) => issue.severity === "error");
-  if (errors.length > 0) {
-    const [first] = errors;
-    const where =
-      first.file === "settings"
-        ? ""
-        : `Compose file${first.line ? ` line ${first.line}` : ""}: `;
-    const more = errors.length > 1 ? ` (and ${errors.length - 1} more)` : "";
-    throw new Error(`${where}${first.message}${more}`);
-  }
+  const problem = checkErrorMessage(check.issues);
+  if (problem) throw new Error(problem);
   return {
     type: raw.type as DeploymentType,
     projectId: raw.projectId,
@@ -342,6 +342,47 @@ function parseDeployment(value: unknown): ProductDeployment | null {
     domains: draft.domains,
     commands: parseCommands(raw.commands, check.services),
   };
+}
+
+/** One variant's shape; `fitVariants` checks it against the product. */
+function parseVariant(value: unknown, index: number): ProductVariant {
+  const raw = asRecord(value);
+  const where = `Variant ${index + 1}`;
+  const id =
+    raw.id === undefined || raw.id === null || raw.id === ""
+      ? randomBytes(6).toString("hex")
+      : raw.id;
+  if (typeof id !== "string" || !VARIANT_ID.test(id)) {
+    throw new Error(`${where} has an invalid id`);
+  }
+  const name = parseText(
+    raw.name ?? "",
+    `${where}'s name`,
+    MAX_NAME_LENGTH,
+  ).trim();
+  if (!name) throw new Error(`${where} needs a name`);
+  const composeFile =
+    raw.composeFile === undefined ||
+    raw.composeFile === null ||
+    raw.composeFile === ""
+      ? null
+      : parseText(
+          raw.composeFile,
+          `${where}'s compose file`,
+          MAX_COMPOSE_LENGTH,
+        );
+  return {
+    id,
+    name,
+    specs: parseText(raw.specs ?? "", `${where}'s specs`, MAX_SPECS_LENGTH),
+    priceIdr: parsePriceIdr(raw.priceIdr),
+    durationDays: parseDays(raw.durationDays, `${where}'s durationDays`),
+    composeFile,
+  };
+}
+
+function parseVariants(value: unknown): ProductVariant[] {
+  return parseList(value, "variants", MAX_PRODUCT_VARIANTS).map(parseVariant);
 }
 
 function parseBoolean(value: unknown, field: string): boolean {
@@ -379,6 +420,19 @@ export function parseCreateProductDto(body: unknown): CreateProductDto {
         : null,
     deployment:
       kind === "subscription" ? parseDeployment(raw.deployment ?? null) : null,
+    variantName:
+      kind === "subscription"
+        ? parseText(
+            raw.variantName ?? "",
+            "variantName",
+            MAX_NAME_LENGTH,
+          ).trim()
+        : "",
+    variantSpecs:
+      kind === "subscription"
+        ? parseText(raw.variantSpecs ?? "", "variantSpecs", MAX_SPECS_LENGTH)
+        : "",
+    variants: kind === "subscription" ? parseVariants(raw.variants) : [],
     accessUrl:
       kind === "oneTime" ? parseAccessUrl(raw.accessUrl ?? null) : null,
     showOnPricingPage: parseBoolean(
@@ -415,6 +469,23 @@ export function parseUpdateProductDto(
   }
   if ("deployment" in raw && kind === "subscription") {
     patch.deployment = parseDeployment(raw.deployment);
+  }
+  if (kind === "subscription") {
+    if ("variantName" in raw) {
+      patch.variantName = parseText(
+        raw.variantName,
+        "variantName",
+        MAX_NAME_LENGTH,
+      ).trim();
+    }
+    if ("variantSpecs" in raw) {
+      patch.variantSpecs = parseText(
+        raw.variantSpecs,
+        "variantSpecs",
+        MAX_SPECS_LENGTH,
+      );
+    }
+    if ("variants" in raw) patch.variants = parseVariants(raw.variants);
   }
   if ("accessUrl" in raw && kind === "oneTime") {
     patch.accessUrl = parseAccessUrl(raw.accessUrl);
@@ -464,7 +535,19 @@ export function parseAssignProductDto(body: unknown): AssignProductDto {
     end = { kind: "currentEnd" };
   }
 
-  return { productId, end };
+  let variantId: string | null = null;
+  if (
+    raw.variantId !== undefined &&
+    raw.variantId !== null &&
+    raw.variantId !== ""
+  ) {
+    if (typeof raw.variantId !== "string" || !VARIANT_ID.test(raw.variantId)) {
+      throw new Error("variantId is not a valid variant");
+    }
+    variantId = raw.variantId;
+  }
+
+  return { productId, end, variantId };
 }
 
 /** Body: `{ productId }`. */

@@ -47,6 +47,7 @@ const deploymentSchema = new Schema<DeploymentInterface>(
     name: { type: String, default: null },
     routedHosts: { type: [String], default: [] },
     dokploy: { type: dokploySchema, default: null },
+    deployedVariantId: { type: String, default: null },
     monitors: { type: [monitorSchema], default: [] },
   },
   { timestamps: true },

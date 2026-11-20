@@ -45,6 +45,23 @@ export function upcomingPeriods(
   return periods.filter((p) => p.startsAt > now).sort(byStart);
 }
 
+/**
+ * The period running at `now`, and the first one after it that is on
+ * another variant: when the service will change variant next. With
+ * nothing running, the next is simply the first scheduled period.
+ */
+export function variantChange<T extends PeriodLike & { variantId: string }>(
+  periods: T[],
+  now: Date,
+): { current: T | null; next: T | null } {
+  const current = (activePeriod(periods, now) as T | null) ?? null;
+  const next =
+    (upcomingPeriods(periods, now) as T[]).find(
+      (period) => !current || period.variantId !== current.variantId,
+    ) ?? null;
+  return { current, next };
+}
+
 /** The running period (if any) followed by the scheduled ones. */
 export function liveSchedule(periods: PeriodLike[], now: Date): PeriodLike[] {
   const current = activePeriod(periods, now);
@@ -105,6 +122,73 @@ export function planOverride(
   }
 
   return { truncateId: current?.id ?? null, startsAt: now, endsAt };
+}
+
+/** A running or scheduled period, with the variant it pays for. */
+export type VariantPeriodLike = PeriodLike & { variantId: string };
+
+export type SwitchPlan = {
+  /** The running period, cut short at `startsAt`; null when none runs. */
+  truncateId: string | null;
+  /** Scheduled periods, replaced by the new one. */
+  deleteIds: string[];
+  startsAt: Date;
+  endsAt: Date;
+  /** What the time left was worth, in whole rupiah. */
+  creditIdr: number;
+  /** Time the credit adds on top of the days bought. */
+  bonusMs: number;
+};
+
+/**
+ * Switch to another variant now: the running period ends now, scheduled
+ * ones go, and one period on the new variant starts now. It lasts the days
+ * bought plus what the time left was worth, priced per day on each
+ * period's own variant and turned into days of the new one. A new variant
+ * that costs nothing keeps the time left as it is.
+ *
+ * `dailyPriceOf` gives a variant's price per day; null for one that is gone,
+ * whose time is worth nothing.
+ */
+export function planSwitch(
+  periods: VariantPeriodLike[],
+  now: Date,
+  dailyPriceOf: (variantId: string) => number | null,
+  targetDailyPriceIdr: number,
+  purchasedDays: number,
+): SwitchPlan {
+  if (purchasedDays <= 0) {
+    throw new PlanScheduleError("A switch needs days to buy");
+  }
+  const live = liveSchedule(periods, now) as VariantPeriodLike[];
+  if (live.some((period) => period.endsAt === null)) {
+    throw new PlanScheduleError(
+      "The subscription has no end date, so its time cannot be moved to another variant",
+    );
+  }
+
+  let credit = 0;
+  let leftMs = 0;
+  for (const period of live) {
+    const from = Math.max(period.startsAt.getTime(), now.getTime());
+    const ms = Math.max(0, (period.endsAt as Date).getTime() - from);
+    leftMs += ms;
+    credit += (ms / DAY_MS) * (dailyPriceOf(period.variantId) ?? 0);
+  }
+  const bonusMs =
+    targetDailyPriceIdr > 0 ? (credit / targetDailyPriceIdr) * DAY_MS : leftMs;
+  // Whole seconds, so the end date reads cleanly.
+  const totalMs = Math.floor((purchasedDays * DAY_MS + bonusMs) / 1000) * 1000;
+
+  const current = activePeriod(live, now);
+  return {
+    truncateId: current?.id ?? null,
+    deleteIds: upcomingPeriods(live, now).map((period) => period.id),
+    startsAt: now,
+    endsAt: new Date(now.getTime() + totalMs),
+    creditIdr: Math.floor(credit),
+    bonusMs: totalMs - purchasedDays * DAY_MS,
+  };
 }
 
 export type AppendPlan = {

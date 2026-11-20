@@ -1,3 +1,4 @@
+import type { VariantApplyMode } from "../models/userProductPeriod/userProductPeriod.interface";
 import type { DeploymentState } from "../models/deployment/deployment.interface";
 import type {
   BulkAction,
@@ -79,6 +80,25 @@ export interface ServiceStatusOutDto {
   beats: ServiceBeatOutDto[];
 }
 
+/** A product variant, by name. */
+export interface VariantRefOutDto {
+  id: string;
+  name: string;
+}
+
+export interface DeploymentVariantOutDto {
+  /** What the running subscription pays for; null when none runs. */
+  current: VariantRefOutDto | null;
+  /** Whose compose file Dokploy has; null before the first deploy. */
+  deployed: VariantRefOutDto | null;
+  /** The service runs another variant than `current`: a redeploy applies it. */
+  pending: boolean;
+  /** Whether that redeploy happens by itself; null when none runs. */
+  applyVariant: VariantApplyMode | null;
+  /** The next scheduled change of variant, if any. */
+  next: (VariantRefOutDto & { startsAt: string }) | null;
+}
+
 export interface DeploymentOutDto {
   product: ProductSummaryDto;
   /** The product's rules and disclaimers, for the customer to read. */
@@ -105,6 +125,8 @@ export interface DeploymentOutDto {
   commandsBlocked: string | null;
   /** Latest first. */
   runs: DeploymentRunOutDto[];
+  /** Which variant of the product it is on, runs and changes to. */
+  variant: DeploymentVariantOutDto;
   /** Admin view only. */
   internal?: {
     name: string | null;

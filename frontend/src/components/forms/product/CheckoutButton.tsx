@@ -51,10 +51,13 @@ export function ProductStatusBadge({
  */
 export default function CheckoutButton({
   product,
+  variantId,
   className,
   size,
 }: {
   product: PricingProduct
+  /** The subscription variant to buy; none extends the user's, else the base. */
+  variantId?: string
   className?: string
   size?: ComponentProps<typeof Button>['size']
 }) {
@@ -65,7 +68,7 @@ export default function CheckoutButton({
   async function add() {
     setAdding(true)
     try {
-      const response = await addToBasket(product.id)
+      const response = await addToBasket(product.id, 1, variantId ?? null)
       if (!response.success) {
         toast.error(response.message || 'Could not add to the basket')
         return
@@ -99,7 +102,10 @@ export default function CheckoutButton({
   if (!isAuthenticated) {
     return (
       <Button asChild size={size} className={primary}>
-        <Link to="/register" search={{ redirect: checkoutPath(product.id) }}>
+        <Link
+          to="/register"
+          search={{ redirect: checkoutPath(product.id, variantId) }}
+        >
           {label}
         </Link>
       </Button>
@@ -109,7 +115,13 @@ export default function CheckoutButton({
   return (
     <>
       <Button asChild size={size} className={primary}>
-        <Link to="/checkout" search={{ productId: product.id }}>
+        <Link
+          to="/checkout"
+          search={{
+            productId: product.id,
+            ...(variantId ? { variantId } : {}),
+          }}
+        >
           {label}
         </Link>
       </Button>

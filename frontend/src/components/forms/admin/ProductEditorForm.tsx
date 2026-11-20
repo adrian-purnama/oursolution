@@ -15,6 +15,12 @@ import ProductImagesField, {
   toImageItems,
 } from '#/components/forms/admin/ProductImagesField'
 import type { ImageItem } from '#/components/forms/admin/ProductImagesField'
+import ProductVariantsField, {
+  EMPTY_VARIANTS,
+  toVariantsBody,
+  toVariantsDraft,
+} from '#/components/forms/admin/ProductVariantsField'
+import type { VariantsDraft } from '#/components/forms/admin/ProductVariantsField'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -34,7 +40,7 @@ import { hintClassName } from '#/lib/ui-classes'
 
 type DeploymentChoice = 'none' | 'dockerCompose'
 
-type EditorTab = 'general' | 'pricing' | 'content' | 'delivery'
+type EditorTab = 'general' | 'pricing' | 'variants' | 'content' | 'delivery'
 
 /** Inactive panels stay mounted so their state and ids survive tab switches. */
 const tabPanelClassName = 'space-y-5 data-[state=inactive]:hidden'
@@ -57,6 +63,7 @@ type Draft = {
   showOnPricingPage: boolean
   deployment: DeploymentChoice
   settings: DeploymentDraft
+  variants: VariantsDraft
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -72,6 +79,7 @@ const EMPTY_DRAFT: Draft = {
   showOnPricingPage: true,
   deployment: 'none',
   settings: EMPTY_DEPLOYMENT,
+  variants: EMPTY_VARIANTS,
 }
 
 function toDraft(product: Product): Draft {
@@ -88,6 +96,7 @@ function toDraft(product: Product): Draft {
     showOnPricingPage: product.showOnPricingPage,
     deployment: product.deployment ? product.deployment.type : 'none',
     settings: toDeploymentDraft(product.deployment),
+    variants: toVariantsDraft(product),
   }
 }
 
@@ -260,6 +269,12 @@ export default function ProductEditorForm({
       toast.error('The compose file is empty')
       return
     }
+    const variants = isSubscription ? toVariantsBody(draft.variants) : null
+    if (variants && 'problem' in variants) {
+      setTab('variants')
+      toast.error(variants.problem)
+      return
+    }
     const notices = draft.notices
       .map((notice) => ({ ...notice, text: notice.text.trim() }))
       .filter((notice) => notice.text)
@@ -294,6 +309,7 @@ export default function ProductEditorForm({
         ...(isSubscription
           ? {
               durationDays,
+              ...(variants && 'body' in variants ? variants.body : {}),
               deployment: deploys
                 ? {
                     type: 'dockerCompose',
@@ -370,6 +386,14 @@ export default function ProductEditorForm({
             <TabsList className="mb-6">
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
+              {draft.kind === 'subscription' ? (
+                <TabsTrigger value="variants">
+                  Variants
+                  {draft.variants.variants.length > 0
+                    ? ` (${draft.variants.variants.length + 1})`
+                    : ''}
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="content">Description</TabsTrigger>
               <TabsTrigger value="delivery">
                 {draft.kind === 'oneTime' ? 'Access' : 'Deployment'}
@@ -509,6 +533,23 @@ export default function ProductEditorForm({
                 </span>
               </label>
             </TabsContent>
+
+            {draft.kind === 'subscription' ? (
+              <TabsContent
+                value="variants"
+                forceMount
+                className={tabPanelClassName}
+              >
+                <ProductVariantsField
+                  value={draft.variants}
+                  onChange={(variants) => setDraft({ ...draft, variants })}
+                  basePriceIdr={draft.priceIdr}
+                  baseDurationDays={draft.durationDays}
+                  deploys={draft.deployment === 'dockerCompose'}
+                  baseComposeFile={draft.settings.composeFile}
+                />
+              </TabsContent>
+            ) : null}
 
             <TabsContent
               value="content"

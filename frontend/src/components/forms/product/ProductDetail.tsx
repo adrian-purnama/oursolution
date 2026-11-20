@@ -10,8 +10,9 @@ import Markdown from '#/components/Markdown'
 import ProductNotices from '#/components/ProductNotices'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
-import { formatDays } from '#/lib/product'
-import type { PricingProduct } from '#/lib/product'
+import { formatDays, formatIdr } from '#/lib/product'
+import type { PricingProduct, PricingVariant } from '#/lib/product'
+import { cn } from '#/lib/utils'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 
 type State =
@@ -94,6 +95,12 @@ export default function ProductDetail({ productId }: { productId: string }) {
 function Detail({ product }: { product: PricingProduct }) {
   const { isActive } = useProductAccess(product)
   const isSubscription = product.kind === 'subscription'
+  const variants = product.variants
+  const choosing = variants.length > 1
+  const [variantId, setVariantId] = useState<string | undefined>(undefined)
+  const chosen = choosing
+    ? (variants.find((variant) => variant.id === variantId) ?? null)
+    : null
 
   return (
     <article>
@@ -119,17 +126,35 @@ function Detail({ product }: { product: PricingProduct }) {
 
           <div className="mt-6 border-t border-[var(--line)] pt-6">
             <p className="font-display text-3xl text-[var(--ink)]">
-              {product.pricingText || 'Contact us'}
+              {chosen
+                ? formatIdr(chosen.priceIdr)
+                : product.pricingText || 'Contact us'}
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              {product.durationDays
-                ? `per ${formatDays(product.durationDays)}${isSubscription ? '. Buy again to extend.' : ''}`
-                : 'One-time, yours to keep.'}
+              {chosen?.durationDays
+                ? `per ${formatDays(chosen.durationDays)}. Buy again to extend.`
+                : product.durationDays
+                  ? `per ${formatDays(product.durationDays)}${isSubscription ? '. Buy again to extend.' : ''}`
+                  : 'One-time, yours to keep.'}
             </p>
           </div>
 
+          {choosing ? (
+            <VariantPicker
+              variants={variants}
+              value={variantId}
+              onChange={setVariantId}
+              active={isActive}
+            />
+          ) : null}
+
           <div className="mt-6 flex flex-wrap gap-2">
-            <CheckoutButton product={product} size="lg" className="flex-1" />
+            <CheckoutButton
+              product={product}
+              variantId={chosen?.id}
+              size="lg"
+              className="flex-1"
+            />
             {isSubscription && isActive ? (
               <Button asChild variant="ghost" size="lg">
                 <Link to="/dashboard">Manage in dashboard</Link>
@@ -150,5 +175,79 @@ function Detail({ product }: { product: PricingProduct }) {
         </section>
       ) : null}
     </article>
+  )
+}
+
+/**
+ * The variants to choose from, as radio cards. Nothing is chosen at first:
+ * a subscriber who picks nothing extends the variant they are on.
+ */
+function VariantPicker({
+  variants,
+  value,
+  onChange,
+  active,
+}: {
+  variants: PricingVariant[]
+  value: string | undefined
+  onChange: (id: string) => void
+  /** The user has this subscription already. */
+  active: boolean
+}) {
+  return (
+    <fieldset className="mt-6">
+      <legend className="mb-2 text-sm font-medium text-[var(--ink)]">
+        Choose a variant
+      </legend>
+      <div className="grid gap-2" role="radiogroup">
+        {variants.map((variant) => {
+          const selected = variant.id === value
+          return (
+            <label
+              key={variant.id}
+              className={cn(
+                'flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-4 py-3 transition-colors focus-within:ring-2 focus-within:ring-[var(--accent)]/40',
+                selected
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/5'
+                  : 'border-[var(--line)] hover:border-[var(--ink)]/30',
+              )}
+            >
+              <span className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="product-variant"
+                  className="mt-1"
+                  checked={selected}
+                  onChange={() => onChange(variant.id)}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-[var(--ink)]">
+                    {variant.name}
+                  </span>
+                  {variant.specs ? (
+                    <span className="block text-xs text-[var(--muted)]">
+                      {variant.specs}
+                    </span>
+                  ) : null}
+                </span>
+              </span>
+              <span className="shrink-0 text-right text-sm tabular-nums">
+                {formatIdr(variant.priceIdr)}
+                {variant.durationDays ? (
+                  <span className="block text-xs text-[var(--muted)]">
+                    per {formatDays(variant.durationDays)}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      <p className="mt-2 text-xs text-[var(--muted)]">
+        {active
+          ? 'Leave it unpicked to extend the variant you are on. At checkout you can switch right away or after your current time.'
+          : 'You can switch to another variant later.'}
+      </p>
+    </fieldset>
   )
 }

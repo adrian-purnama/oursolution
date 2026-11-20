@@ -8,6 +8,7 @@ const redeemCodeSchema = new Schema<RedeemCodeInterface>(
   {
     code: { type: String, required: true },
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    variantId: { type: String, default: null },
     activation: { type: String, required: true, enum: REDEEM_ACTIVATIONS },
     activatesAt: { type: Date, default: null },
     durationDays: { type: Number, default: null },

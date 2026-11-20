@@ -8,6 +8,8 @@ export interface ProductPeriodOutDto {
   endsAt: string | null;
   isCurrent: boolean;
   source: string;
+  /** The product variant it pays for; "default" is the product's own. */
+  variantId: string;
 }
 
 /**
@@ -40,4 +42,6 @@ export type PeriodEndSpec =
 export interface AssignProductDto {
   productId: string;
   end: PeriodEndSpec;
+  /** The variant to give; null is the base one. */
+  variantId: string | null;
 }

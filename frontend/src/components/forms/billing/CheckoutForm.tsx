@@ -11,6 +11,13 @@ import {
 } from 'lucide-react'
 import ProductImage from '#/components/forms/product/ProductImage'
 import { Button } from '#/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select'
 import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
 import type { ApiResponse } from '#/lib/api'
@@ -23,7 +30,8 @@ import type {
   Payment,
   PaymentList,
 } from '#/lib/billing'
-import { PRODUCT_KIND_LABELS } from '#/lib/product'
+import { formatDateTime, PRODUCT_KIND_LABELS } from '#/lib/product'
+import type { CheckoutPlacement, VariantApplyMode } from '#/lib/product'
 import { cn } from '#/lib/utils'
 
 type State =
@@ -35,22 +43,33 @@ type State =
  * The checkout page. Without `productId` it is the user's basket; with it,
  * "Buy now" for that one product, leaving the basket alone.
  */
+/** What a line can change besides its quantity. */
+type LinePatch = {
+  quantity?: number
+  variantId?: string
+  applyVariant?: VariantApplyMode
+  placement?: CheckoutPlacement
+}
+
 export default function CheckoutForm({
   productId,
   quantity = 1,
+  variantId,
 }: {
   productId?: string
   quantity?: number
+  /** Buy now: the subscription variant; none extends the user's. */
+  variantId?: string
 }) {
   const direct = Boolean(productId)
   const navigate = useNavigate()
-  const { refreshAuth } = useAuth()
+  const { refreshAuth, user } = useAuth()
   const [state, setState] = useState<State>({ status: 'loading' })
   const [busyLine, setBusyLine] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
   // Buy now keeps its items here instead of in the basket.
   const directItems = useRef<CheckoutItem[]>(
-    productId ? [{ productId, quantity }] : [],
+    productId ? [{ productId, quantity, variantId }] : [],
   )
 
   function applyQuote(res: ApiResponse<CheckoutQuote>, fallback: string) {
@@ -91,9 +110,9 @@ export default function CheckoutForm({
   }
 
   useEffect(() => {
-    directItems.current = productId ? [{ productId, quantity }] : []
+    directItems.current = productId ? [{ productId, quantity, variantId }] : []
     void load()
-  }, [productId, quantity])
+  }, [productId, quantity, variantId])
 
   // A new checkout voids the user's earlier unpaid one: say so before paying.
   const [openCheckout, setOpenCheckout] = useState<Payment | null>(null)
@@ -112,22 +131,22 @@ export default function CheckoutForm({
     }
   }, [])
 
-  async function setQuantity(line: CheckoutLine, next: number) {
+  async function updateLine(line: CheckoutLine, patch: LinePatch) {
     const id = line.product.id
     setBusyLine(id)
     try {
       if (direct) {
         directItems.current = directItems.current.map((item) =>
-          item.productId === id ? { ...item, quantity: next } : item,
+          item.productId === id ? { ...item, ...patch } : item,
         )
-        applyQuote(await priceDirect(), 'Could not update the quantity')
+        applyQuote(await priceDirect(), 'Could not update the product')
       } else {
         applyQuote(
           await apiFetch<CheckoutQuote>(`/me/basket/items/${id}`, {
             method: 'PATCH',
-            body: JSON.stringify({ quantity: next }),
+            body: JSON.stringify(patch),
           }),
-          'Could not update the quantity',
+          'Could not update the product',
         )
       }
     } catch {
@@ -173,6 +192,13 @@ export default function CheckoutForm({
           items: quote.lines.map((line) => ({
             productId: line.product.id,
             quantity: line.quantity,
+            ...(line.variant
+              ? {
+                  variantId: line.variant.id,
+                  applyVariant: line.applyVariant ?? 'auto',
+                  placement: line.placement ?? 'after',
+                }
+              : {}),
           })),
           fromBasket: !direct,
         }),
@@ -260,8 +286,12 @@ export default function CheckoutForm({
             <CheckoutLineRow
               key={line.product.id}
               line={line}
+              subscribed={
+                user?.products.some((item) => item.id === line.product.id) ??
+                false
+              }
               busy={busyLine === line.product.id || paying}
-              onQuantity={(next) => void setQuantity(line, next)}
+              onChange={(patch) => void updateLine(line, patch)}
               onRemove={() => void remove(line)}
             />
           ))}
@@ -275,6 +305,9 @@ export default function CheckoutForm({
             <div key={line.product.id} className="flex justify-between gap-3">
               <dt className="min-w-0 truncate text-[var(--muted)]">
                 {line.product.name}
+                {line.variants.length > 1 && line.variant
+                  ? ` (${line.variant.name})`
+                  : ''}
                 {line.quantity > 1 ? ` × ${line.quantity}` : ''}
               </dt>
               <dd className="shrink-0 tabular-nums">
@@ -324,17 +357,22 @@ export default function CheckoutForm({
 
 function CheckoutLineRow({
   line,
+  subscribed,
   busy,
-  onQuantity,
+  onChange,
   onRemove,
 }: {
   line: CheckoutLine
+  /** The user has this subscription already. */
+  subscribed: boolean
   busy: boolean
-  onQuantity: (next: number) => void
+  onChange: (patch: LinePatch) => void
   onRemove: () => void
 }) {
   const isSubscription = line.product.kind === 'subscription'
   const period = periodLabel(line.quantity, line.durationDays)
+  const onQuantity = (quantity: number) => onChange({ quantity })
+  const hasVariants = line.variants.length > 1
 
   return (
     <li className="flex gap-4 py-5">
@@ -432,6 +470,15 @@ function CheckoutLineRow({
           </Button>
         </div>
 
+        {isSubscription && hasVariants ? (
+          <VariantChoices
+            line={line}
+            subscribed={subscribed}
+            busy={busy}
+            onChange={onChange}
+          />
+        ) : null}
+
         {line.problem ? (
           <p className={cn('flex items-center gap-1.5 text-sm text-red-600')}>
             <AlertCircle className="size-3.5 shrink-0" aria-hidden />
@@ -440,5 +487,126 @@ function CheckoutLineRow({
         ) : null}
       </div>
     </li>
+  )
+}
+
+/** Radio options in a row, labelled as a group. */
+function ChoiceGroup<T extends string>({
+  name,
+  legend,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  name: string
+  legend: string
+  value: T
+  options: { value: T; label: string }[]
+  disabled: boolean
+  onChange: (value: T) => void
+}) {
+  return (
+    <fieldset disabled={disabled}>
+      <legend className="mb-1 text-xs text-[var(--muted)]">{legend}</legend>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {options.map((option) => (
+          <label key={option.value} className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name={name}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+/**
+ * A subscription line's variant and, for a subscriber, when it starts and
+ * whether their service restarts on it by itself.
+ */
+function VariantChoices({
+  line,
+  subscribed,
+  busy,
+  onChange,
+}: {
+  line: CheckoutLine
+  subscribed: boolean
+  busy: boolean
+  onChange: (patch: LinePatch) => void
+}) {
+  const id = line.product.id
+  const placement = line.placement ?? 'after'
+  const applyVariant = line.applyVariant ?? 'auto'
+
+  return (
+    <div className="space-y-3 rounded-lg bg-[var(--surface)] px-3 py-3">
+      <div className="space-y-1">
+        <label
+          htmlFor={`variant-${id}`}
+          className="block text-xs text-[var(--muted)]"
+        >
+          Variant
+        </label>
+        <Select
+          value={line.variant?.id}
+          disabled={busy}
+          onValueChange={(variantId) => onChange({ variantId })}
+        >
+          <SelectTrigger id={`variant-${id}`} className="w-full bg-white">
+            <SelectValue placeholder="Choose a variant" />
+          </SelectTrigger>
+          <SelectContent>
+            {line.variants.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                {option.name} · {formatIdr(option.unitPriceIdr)}
+                {option.durationDays ? ` / ${option.durationDays} days` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {subscribed ? (
+        <>
+          <ChoiceGroup
+            name={`placement-${id}`}
+            legend="When it starts"
+            value={placement}
+            disabled={busy}
+            options={[
+              { value: 'after', label: 'After my current time' },
+              { value: 'now', label: 'Switch now' },
+            ]}
+            onChange={(next) => onChange({ placement: next })}
+          />
+          {placement === 'now' && line.switch ? (
+            <p className="text-xs text-[var(--muted)]">
+              Your time left is worth {formatIdr(line.switch.creditIdr)}, which
+              adds {line.switch.bonusDays} days. It would run until{' '}
+              {formatDateTime(line.switch.endsAt)}. Worked out again when you
+              pay.
+            </p>
+          ) : null}
+          <ChoiceGroup
+            name={`apply-${id}`}
+            legend="When the variant changes"
+            value={applyVariant}
+            disabled={busy}
+            options={[
+              { value: 'auto', label: 'Restart my service automatically' },
+              { value: 'manual', label: "I'll restart it myself" },
+            ]}
+            onChange={(next) => onChange({ applyVariant: next })}
+          />
+        </>
+      ) : null}
+    </div>
   )
 }

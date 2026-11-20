@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select'
+import { BASE_VARIANT_ID } from '#/lib/product'
+import VariantSelect from '#/components/forms/admin/VariantSelect'
 import { apiFetch } from '#/lib/api'
 import type { Product } from '#/lib/product'
 import { localInputToIso } from '#/lib/redeem'
@@ -42,6 +44,7 @@ export default function CreateRedeemCodesDialog({
 }) {
   const [products, setProducts] = useState<Product[]>([])
   const [productId, setProductId] = useState('')
+  const [variantId, setVariantId] = useState(BASE_VARIANT_ID)
   const [activation, setActivation] = useState<RedeemActivation>('onRedeem')
   const [activatesAt, setActivatesAt] = useState('')
   const [endChoice, setEndChoice] = useState<EndChoice>('days')
@@ -91,6 +94,7 @@ export default function CreateRedeemCodesDialog({
 
   function pickProduct(id: string) {
     setProductId(id)
+    setVariantId(BASE_VARIANT_ID)
     const next = products.find((item) => item.id === id)
     if (next?.durationDays) setDays(String(next.durationDays))
     if (next?.kind === 'oneTime') setActivation('onRedeem')
@@ -110,6 +114,7 @@ export default function CreateRedeemCodesDialog({
 
     const body: Record<string, unknown> = {
       productId: product.id,
+      ...(isSubscription ? { variantId } : {}),
       activation: isSubscription ? activation : 'onRedeem',
       validUntil: localInputToIso(validUntil),
       quantity: count,
@@ -239,6 +244,16 @@ export default function CreateRedeemCodesDialog({
                 </p>
               ) : null}
             </div>
+
+            <VariantSelect
+              id="redeem-variant"
+              product={product}
+              value={variantId}
+              onChange={(next, variantDays) => {
+                setVariantId(next)
+                if (variantDays) setDays(String(variantDays))
+              }}
+            />
 
             {isSubscription ? (
               <>

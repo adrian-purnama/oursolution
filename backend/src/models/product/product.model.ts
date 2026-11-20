@@ -9,6 +9,7 @@ import {
   ProductNotice,
   ProductDeployment,
   ProductInterface,
+  ProductVariant,
   VARIABLE_VISIBILITIES,
 } from "./product.interface";
 
@@ -62,6 +63,18 @@ const deploymentSchema = new Schema<ProductDeployment>(
   { _id: false },
 );
 
+const variantSchema = new Schema<ProductVariant>(
+  {
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    specs: { type: String, default: "" },
+    priceIdr: { type: Number, required: true, min: 0 },
+    durationDays: { type: Number, required: true, min: 1 },
+    composeFile: { type: String, default: null },
+  },
+  { _id: false },
+);
+
 const productSchema = new Schema<ProductInterface>(
   {
     name: {
@@ -109,6 +122,19 @@ const productSchema = new Schema<ProductInterface>(
     deployment: {
       type: deploymentSchema,
       default: null,
+    },
+    // The base variant is the product's own price, days and compose file.
+    variantName: {
+      type: String,
+      default: "",
+    },
+    variantSpecs: {
+      type: String,
+      default: "",
+    },
+    variants: {
+      type: [variantSchema],
+      default: [],
     },
     accessUrl: {
       type: String,

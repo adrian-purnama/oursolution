@@ -4,7 +4,7 @@ import type { CheckoutQuoteOutDto } from "../../dto/payment.dto";
 import { parseParam } from "../../validation/parseParam";
 import {
   parseBasketAddInDto,
-  parseBasketQuantityInDto,
+  parseBasketLinePatchInDto,
 } from "../../validation/payment";
 import { basketService } from "./basket.service";
 
@@ -43,11 +43,10 @@ export class BasketController {
 
   add = async (req: Request, res: Response) => {
     try {
-      const { productId, quantity } = parseBasketAddInDto(req.body);
       return ok(
         res,
         "Added to basket",
-        await basketService.add(req.user!.id, productId, quantity),
+        await basketService.add(req.user!.id, parseBasketAddInDto(req.body)),
       );
     } catch (error) {
       return fail(res, error, "Could not add to the basket");
@@ -59,10 +58,10 @@ export class BasketController {
       return ok(
         res,
         "Basket updated",
-        await basketService.setQuantity(
+        await basketService.updateLine(
           req.user!.id,
           productIdParam(req),
-          parseBasketQuantityInDto(req.body),
+          parseBasketLinePatchInDto(req.body),
         ),
       );
     } catch (error) {

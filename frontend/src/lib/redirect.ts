@@ -36,7 +36,8 @@ export function validateAuthSearch(
   return { redirect: safeRedirect(search.redirect) }
 }
 
-/** The checkout page for one product, as a redirect target. */
-export function checkoutPath(productId: string): string {
-  return `/checkout?productId=${encodeURIComponent(productId)}`
+/** The checkout page for one product (and variant), as a redirect target. */
+export function checkoutPath(productId: string, variantId?: string): string {
+  const path = `/checkout?productId=${encodeURIComponent(productId)}`
+  return variantId ? `${path}&variantId=${encodeURIComponent(variantId)}` : path
 }

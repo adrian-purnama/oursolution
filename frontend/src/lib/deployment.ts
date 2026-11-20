@@ -90,6 +90,23 @@ export type ServiceStatus = {
   beats: { state: ServiceCheckState; at: string }[]
 }
 
+/** A product variant by name. */
+export type VariantRef = { id: string; name: string }
+
+/** Which variant a service is on, runs, and changes to next. */
+export type DeploymentVariant = {
+  /** What the running subscription pays for; null when none runs. */
+  current: VariantRef | null
+  /** Whose compose file was last deployed; null before the first deploy. */
+  deployed: VariantRef | null
+  /** It runs another variant than `current`: a redeploy applies it. */
+  pending: boolean
+  /** Whether that redeploy happens by itself. */
+  applyVariant: 'auto' | 'manual' | null
+  /** The next scheduled change of variant. */
+  next: (VariantRef & { startsAt: string }) | null
+}
+
 export type Deployment = {
   product: ProductSummary
   /** The product's rules and disclaimers. */
@@ -113,6 +130,7 @@ export type Deployment = {
   commandsBlocked: string | null
   /** Latest first. */
   runs: DeploymentRun[]
+  variant: DeploymentVariant
   /** Admin view only. */
   internal?: {
     name: string | null

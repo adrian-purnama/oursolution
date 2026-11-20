@@ -419,6 +419,10 @@ export default function DeploymentPanel({
   const touring = !admin && tourStage === 'panel'
   /** Customers can renew from here; admins grant time elsewhere. */
   const extendable = !admin && expiry !== null
+  /** The variant it is on, when it is not just named after the product. */
+  const current = deployment.variant.current
+  const variantName =
+    current && current.name !== deployment.product.name ? current.name : null
 
   const check = live ? overallCheckState(deployment.status) : null
   const uptimes = deployment.status.flatMap((item) =>
@@ -509,6 +513,7 @@ export default function DeploymentPanel({
                 )}
               >
                 {subscriptionLine(deployment)}
+                {variantName ? ` · ${variantName}` : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2" data-tour="actions">
@@ -568,6 +573,14 @@ export default function DeploymentPanel({
               ) : null}
             </div>
           </header>
+
+          <VariantNotice
+            deployment={deployment}
+            admin={admin}
+            locked={locked}
+            starting={starting === 'redeploy'}
+            onApply={() => attempt('redeploy', () => void start('redeploy'))}
+          />
 
           {deployment.hosts.length > 0 ? (
             <ul className="border-t border-[var(--line)] px-5 py-3">
@@ -1251,4 +1264,62 @@ export default function DeploymentPanel({
       </Dialog>
     </div>
   )
+}
+
+/**
+ * When the service runs another variant than the subscription pays for:
+ * what happens next, and a button to apply it now. Also says when a
+ * scheduled change of variant starts.
+ */
+function VariantNotice({
+  deployment,
+  admin,
+  locked,
+  starting,
+  onApply,
+}: {
+  deployment: Deployment
+  admin: boolean
+  locked: boolean
+  starting: boolean
+  onApply: () => void
+}) {
+  const variant = deployment.variant
+  const canApply = deployment.actions.includes('redeploy')
+
+  if (variant.pending && variant.current) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 border-t border-[var(--line)] bg-amber-50 px-5 py-3 text-sm text-amber-900">
+        <p className="min-w-0 flex-1">
+          {admin ? 'The subscription' : 'Your subscription'} is now on{' '}
+          <strong className="font-medium">{variant.current.name}</strong>, but
+          the service still runs{' '}
+          {variant.deployed ? variant.deployed.name : 'the old variant'}.{' '}
+          {variant.applyVariant === 'auto'
+            ? 'It restarts on the new variant within a few minutes.'
+            : 'Restart it when you are ready to switch.'}
+        </p>
+        {canApply ? (
+          <Button type="button" size="sm" disabled={locked} onClick={onApply}>
+            {starting ? (
+              <LoaderCircle className="animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw aria-hidden />
+            )}
+            Apply now
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
+
+  if (variant.next) {
+    return (
+      <p className={`border-t border-[var(--line)] px-5 py-3 ${hintClassName}`}>
+        Switches to {variant.next.name} on{' '}
+        {formatDateTime(variant.next.startsAt)}.
+      </p>
+    )
+  }
+  return null
 }

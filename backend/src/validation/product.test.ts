@@ -253,7 +253,10 @@ describe("product notices", () => {
       parseCreateProductDto({ ...base, notices: [{ tone: "x", text: "a" }] }),
     );
     assert.throws(() =>
-      parseCreateProductDto({ ...base, notices: [{ tone: "info", text: " " }] }),
+      parseCreateProductDto({
+        ...base,
+        notices: [{ tone: "info", text: " " }],
+      }),
     );
     assert.throws(() => parseCreateProductDto({ ...base, notices: "a" }));
   });
@@ -262,6 +265,54 @@ describe("product notices", () => {
     assert.deepEqual(
       parseUpdateProductDto({ notices: [] }, "subscription").notices,
       [],
+    );
+  });
+});
+
+describe("variants", () => {
+  const big = { name: "4 cores", priceIdr: 100_000, durationDays: 30 };
+
+  it("gives a new variant an id and keeps one it already has", () => {
+    const dto = parseCreateProductDto({
+      ...base,
+      variantName: " 2 cores ",
+      variants: [big, { ...big, id: "keep-me", name: "8 cores" }],
+    });
+    assert.equal(dto.variantName, "2 cores");
+    assert.match(dto.variants[0].id, /^[0-9a-f]{12}$/);
+    assert.equal(dto.variants[0].composeFile, null);
+    assert.equal(dto.variants[1].id, "keep-me");
+  });
+
+  it("drops variants from a one-time product", () => {
+    const dto = parseCreateProductDto({
+      ...base,
+      kind: "oneTime",
+      variants: [big],
+    });
+    assert.deepEqual(dto.variants, []);
+  });
+
+  it("rejects a variant without a name, price or duration", () => {
+    for (const bad of [
+      { ...big, name: "" },
+      { ...big, priceIdr: -1 },
+      { ...big, durationDays: 0 },
+      { ...big, id: "has space" },
+    ]) {
+      assert.throws(() => parseCreateProductDto({ ...base, variants: [bad] }));
+    }
+  });
+
+  it("updates variants of a subscription only", () => {
+    assert.equal(
+      parseUpdateProductDto({ variants: [big] }, "subscription").variants
+        ?.length,
+      1,
+    );
+    assert.throws(
+      () => parseUpdateProductDto({ variants: [big] }, "oneTime"),
+      /No valid fields/,
     );
   });
 });

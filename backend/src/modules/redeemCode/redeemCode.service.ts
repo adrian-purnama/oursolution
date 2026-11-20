@@ -13,6 +13,7 @@ import type { RedeemCodeInterface } from "../../models/redeemCode/redeemCode.int
 import { RedeemCodeModel } from "../../models/redeemCode/redeemCode.model";
 import { UserModel } from "../../models/user/user.model";
 import { toProductSummary } from "../product/product.service";
+import { variantIdOf, variantOf } from "../product/product.variants";
 import {
   AlreadyOwnedError,
   purchaseService,
@@ -97,10 +98,25 @@ export class RedeemCodeService {
     } else if (input.durationDays === null && !input.endsAt) {
       throw new Error("Choose how long the subscription lasts");
     }
+    if (product.kind === "oneTime" && input.variantId) {
+      throw new Error("A one-time product has no variants");
+    }
+    const variant =
+      product.kind === "subscription"
+        ? variantOf(product, input.variantId)
+        : null;
+    if (product.kind === "subscription" && !variant) {
+      throw new Error("The product has no such variant");
+    }
+    // Stored only when it is not the base, so old and new codes read alike.
+    const fitted = {
+      ...input,
+      variantId: variant && !variant.isBase ? variant.id : null,
+    };
 
     const created: RedeemCodeDoc[] = [];
     for (let i = 0; i < input.quantity; i += 1) {
-      created.push(await this.createOne(input, actorId));
+      created.push(await this.createOne(fitted, actorId));
     }
     return this.toOut(created);
   }
@@ -196,10 +212,32 @@ export class RedeemCodeService {
       }
 
       const plan = await this.planFor(claimed, userId, productId, now);
+      if (!variantOf(product, claimed.variantId)) {
+        throw new PlanScheduleError(
+          "This code's variant is no longer available",
+        );
+      }
+      const variant = {
+        variantId: variantIdOf(claimed.variantId),
+        applyVariant: "auto" as const,
+      };
       if (claimed.activation === "date") {
-        await userProductService.grantAt(userId, productId, plan, origin, now);
+        await userProductService.grantAt(
+          userId,
+          productId,
+          plan,
+          origin,
+          now,
+          variant,
+        );
       } else {
-        await userProductService.grant(userId, productId, plan, origin);
+        await userProductService.grant(
+          userId,
+          productId,
+          plan,
+          origin,
+          variant,
+        );
       }
       return {
         product: toProductSummary(product),
@@ -266,6 +304,7 @@ export class RedeemCodeService {
         return await RedeemCodeModel.create({
           code: generateCode(),
           productId: input.productId,
+          variantId: input.variantId,
           activation: input.activation,
           activatesAt: input.activatesAt,
           durationDays: input.durationDays,
@@ -314,6 +353,13 @@ export class RedeemCodeService {
         id: doc.id as string,
         code: doc.code,
         product: product ? toProductSummary(product) : null,
+        variant:
+          product && doc.variantId
+            ? {
+                id: doc.variantId,
+                name: variantOf(product, doc.variantId)?.name ?? doc.variantId,
+              }
+            : null,
         activation: doc.activation,
         activatesAt: doc.activatesAt?.toISOString() ?? null,
         durationDays: doc.durationDays,

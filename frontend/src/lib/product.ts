@@ -121,6 +121,39 @@ export type DeploymentCheck = {
   }
 }
 
+/** The id of a subscription's base variant: the product's own price and compose. */
+export const BASE_VARIANT_ID = 'default'
+
+/**
+ * Another way to buy the same subscription, e.g. more CPU and memory. It
+ * shares the product's settings and data, so customers can switch.
+ */
+export type ProductVariant = {
+  /** Empty for a new one; the server gives it an id on save. */
+  id: string
+  name: string
+  specs: string
+  priceIdr: number
+  durationDays: number
+  /** null uses the product's compose file. */
+  composeFile: string | null
+}
+
+/** A variant as customers see it; the base one comes first. */
+export type PricingVariant = {
+  id: string
+  name: string
+  specs: string
+  priceIdr: number
+  durationDays: number | null
+}
+
+/** Whether a change of variant redeploys the service by itself. */
+export type VariantApplyMode = 'auto' | 'manual'
+
+/** When a subscription bought at checkout starts. */
+export type CheckoutPlacement = 'after' | 'now'
+
 /** A rule or disclaimer; text is Markdown. Warnings are drawn in amber. */
 export type ProductNotice = {
   tone: 'info' | 'warning'
@@ -138,6 +171,11 @@ export type Product = ProductSummary & {
   durationDays: number | null
   /** Subscription only. */
   deployment: ProductDeployment | null
+  /** Subscription only: the base variant's name; "" uses the product's. */
+  variantName: string
+  variantSpecs: string
+  /** Subscription only: variants besides the base one. */
+  variants: ProductVariant[]
   /** One-time only: where buyers get what they bought. */
   accessUrl: string | null
   showOnPricingPage: boolean
@@ -152,6 +190,8 @@ export type PricingProduct = ProductSummary & {
   description: string
   notices: ProductNotice[]
   durationDays: number | null
+  /** Subscription only: every variant, the base one first. */
+  variants: PricingVariant[]
 }
 
 /** A one-time product a user owns. */
@@ -171,6 +211,8 @@ export type ProductPeriod = {
   endsAt: string | null
   isCurrent: boolean
   source: string
+  /** The variant it pays for; BASE_VARIANT_ID is the product's own. */
+  variantId: string
 }
 
 /** One subscription's row in a user's plan: its periods, oldest first. */

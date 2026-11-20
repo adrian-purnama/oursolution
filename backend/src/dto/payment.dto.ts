@@ -1,15 +1,51 @@
 import type {
+  CheckoutPlacement,
   PaymentItemKind,
   PaymentSource,
   PaymentStatus,
 } from "../models/payment/payment.interface";
 import type { ProductKind } from "../models/product/product.interface";
+import type { VariantApplyMode } from "../models/userProductPeriod/userProductPeriod.interface";
 import type { ProductSummaryDto } from "./product.dto";
 
 /** One product the user means to buy. */
 export interface CheckoutItemInDto {
   productId: string;
   quantity: number;
+  /** Subscription only: the variant; null or missing is the base one. */
+  variantId?: string | null;
+  /** Subscription only: apply a change of variant by itself; default auto. */
+  applyVariant?: VariantApplyMode;
+  /** Subscription only: when its time starts; default after. */
+  placement?: CheckoutPlacement;
+}
+
+/** A change to one basket line; only the fields given change. */
+export interface BasketLinePatchInDto {
+  quantity?: number;
+  /** Null is the base variant. */
+  variantId?: string | null;
+  applyVariant?: VariantApplyMode;
+  placement?: CheckoutPlacement;
+}
+
+/** What switching now does, worked out when quoted (redone when paid). */
+export interface CheckoutSwitchOutDto {
+  /** What the time left is worth, in whole rupiah. */
+  creditIdr: number;
+  /** Days of the new variant that credit gives, on top of those bought. */
+  bonusDays: number;
+  /** When the new variant would run until. */
+  endsAt: string;
+}
+
+/** A variant the line could be switched to, priced now. */
+export interface CheckoutVariantOptionOutDto {
+  id: string;
+  name: string;
+  specs: string;
+  unitPriceIdr: number;
+  durationDays: number | null;
 }
 
 export interface CheckoutInDto {
@@ -31,6 +67,16 @@ export interface CheckoutLineOutDto {
   maxQuantity: number;
   durationDays: number | null;
   amountIdr: number;
+  /** Subscription only: the variant this line buys; else null. */
+  variant: { id: string; name: string } | null;
+  /** Subscription only: every variant it could buy, the base first. */
+  variants: CheckoutVariantOptionOutDto[];
+  /** Subscription only: how a change of variant applies; else null. */
+  applyVariant: VariantApplyMode | null;
+  /** Subscription only: when its time starts; else null. */
+  placement: CheckoutPlacement | null;
+  /** Switching now: what it does. Null otherwise, or when it cannot. */
+  switch: CheckoutSwitchOutDto | null;
   /** Why this line cannot be bought now, or null. */
   problem: string | null;
 }
@@ -60,6 +106,8 @@ export type AdminInvoiceLineInDto =
       type: "product";
       productId: string;
       quantity: number;
+      /** Subscription only: the variant; null or missing is the base one. */
+      variantId?: string | null;
       /** Overrides the store price; null keeps it. */
       unitPriceIdr: number | null;
       /** Extra detail on the invoice line. */
@@ -91,6 +139,7 @@ export interface PaymentItemOutDto {
   unitPriceIdr: number;
   quantity: number;
   durationDays: number | null;
+  variantId: string | null;
   amountIdr: number;
 }
 

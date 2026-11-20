@@ -3,9 +3,37 @@ import { getToken } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
 import type { ApiResponse } from '#/lib/api'
 import { API_BASE_URL } from '#/lib/config'
-import type { ProductKind, ProductSummary } from '#/lib/product'
+import type {
+  CheckoutPlacement,
+  ProductKind,
+  ProductSummary,
+  VariantApplyMode,
+} from '#/lib/product'
 
-export type CheckoutItem = { productId: string; quantity: number }
+export type CheckoutItem = {
+  productId: string
+  quantity: number
+  /** Subscription only: null or missing is the base variant. */
+  variantId?: string | null
+  applyVariant?: VariantApplyMode
+  placement?: CheckoutPlacement
+}
+
+/** A variant a checkout line could buy, priced now. */
+export type CheckoutVariantOption = {
+  id: string
+  name: string
+  specs: string
+  unitPriceIdr: number
+  durationDays: number | null
+}
+
+/** What switching now does, as quoted; worked out again when paid. */
+export type CheckoutSwitch = {
+  creditIdr: number
+  bonusDays: number
+  endsAt: string
+}
 
 /** One product in the basket or checkout, priced now. */
 export type CheckoutLine = {
@@ -16,6 +44,14 @@ export type CheckoutLine = {
   maxQuantity: number
   durationDays: number | null
   amountIdr: number
+  /** Subscription only: the variant it buys. */
+  variant: { id: string; name: string } | null
+  /** Subscription only: every variant it could buy, the base first. */
+  variants: CheckoutVariantOption[]
+  applyVariant: VariantApplyMode | null
+  placement: CheckoutPlacement | null
+  /** Switching now: what it does. */
+  switch: CheckoutSwitch | null
   /** Why it cannot be bought now, or null. */
   problem: string | null
 }
@@ -59,6 +95,7 @@ export type PaymentItem = {
   unitPriceIdr: number
   quantity: number
   durationDays: number | null
+  variantId: string | null
   amountIdr: number
 }
 
@@ -201,13 +238,15 @@ export async function refreshBasket(): Promise<void> {
   }
 }
 
+/** Add a product; another variant of one already there replaces it. */
 export async function addToBasket(
   productId: string,
   quantity = 1,
+  variantId: string | null = null,
 ): Promise<ApiResponse<CheckoutQuote>> {
   const res = await apiFetch<CheckoutQuote>('/me/basket/items', {
     method: 'POST',
-    body: JSON.stringify({ productId, quantity }),
+    body: JSON.stringify({ productId, quantity, variantId }),
   })
   if (res.success && res.data) syncBasket(res.data)
   return res

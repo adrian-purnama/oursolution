@@ -49,6 +49,12 @@ export interface DeploymentInterface {
   /** Hosts this deployment owns in Cloudflare (route and DNS record). */
   routedHosts: string[];
   dokploy: DokployLink | null;
+  /**
+   * The product variant whose compose file was last pushed to Dokploy.
+   * Null before the first push, and for deployments pushed before variants
+   * existed, which run the base variant.
+   */
+  deployedVariantId: string | null;
   /** Paused while the service is off, so being off is not downtime. */
   monitors: DeploymentMonitor[];
   createdAt?: Date;
