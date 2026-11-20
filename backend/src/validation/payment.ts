@@ -2,11 +2,51 @@ import { Types } from "mongoose";
 import type {
   AdminInvoiceInDto,
   AdminInvoiceLineInDto,
+  BasketLinePatchInDto,
   CheckoutInDto,
   CheckoutItemInDto,
   CheckoutQuoteInDto,
 } from "../dto/payment.dto";
+import {
+  CHECKOUT_PLACEMENTS,
+  type CheckoutPlacement,
+} from "../models/payment/payment.interface";
+import {
+  VARIANT_APPLY_MODES,
+  type VariantApplyMode,
+} from "../models/userProductPeriod/userProductPeriod.interface";
 import { MAX_CHECKOUT_LINES } from "../modules/payment/checkout.rules";
+
+const VARIANT_ID = /^[A-Za-z0-9_-]{1,40}$/;
+
+/** A variant id, or null for the base variant. */
+function parseVariantId(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !VARIANT_ID.test(value)) {
+    throw new Error("variantId is not a valid variant");
+  }
+  return value;
+}
+
+function parsePlacement(value: unknown): CheckoutPlacement {
+  if (value === undefined || value === null) return "after";
+  if (!CHECKOUT_PLACEMENTS.includes(value as CheckoutPlacement)) {
+    throw new Error(
+      `placement must be one of ${CHECKOUT_PLACEMENTS.join(", ")}`,
+    );
+  }
+  return value as CheckoutPlacement;
+}
+
+function parseApplyVariant(value: unknown): VariantApplyMode {
+  if (value === undefined || value === null) return "auto";
+  if (!VARIANT_APPLY_MODES.includes(value as VariantApplyMode)) {
+    throw new Error(
+      `applyVariant must be one of ${VARIANT_APPLY_MODES.join(", ")}`,
+    );
+  }
+  return value as VariantApplyMode;
+}
 
 function asRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -41,11 +81,14 @@ function parseItems(value: unknown): CheckoutItemInDto[] {
     return {
       productId: parseProductId(raw.productId),
       quantity: parseQuantity(raw.quantity, 1),
+      variantId: parseVariantId(raw.variantId),
+      applyVariant: parseApplyVariant(raw.applyVariant),
+      placement: parsePlacement(raw.placement),
     };
   });
 }
 
-/** Body: `{ items: [{ productId, quantity }], fromBasket? }`. */
+/** Body: `{ items: [{ productId, quantity, variantId?, applyVariant? }], fromBasket? }`. */
 export function parseCheckoutInDto(body: unknown): CheckoutInDto {
   const raw = asRecord(body);
   return {
@@ -59,18 +102,30 @@ export function parseCheckoutQuoteInDto(body: unknown): CheckoutQuoteInDto {
   return { items: parseItems(asRecord(body).items) };
 }
 
-/** Body: `{ productId, quantity? }`. */
+/** Body: `{ productId, quantity?, variantId?, applyVariant? }`. */
 export function parseBasketAddInDto(body: unknown): CheckoutItemInDto {
   const raw = asRecord(body);
   return {
     productId: parseProductId(raw.productId),
     quantity: parseQuantity(raw.quantity, 1),
+    variantId: parseVariantId(raw.variantId),
+    applyVariant: parseApplyVariant(raw.applyVariant),
+    placement: parsePlacement(raw.placement),
   };
 }
 
-/** Body: `{ quantity }`. */
-export function parseBasketQuantityInDto(body: unknown): number {
-  return parseQuantity(asRecord(body).quantity);
+/** Body: any of `{ quantity, variantId, applyVariant, placement }`. */
+export function parseBasketLinePatchInDto(body: unknown): BasketLinePatchInDto {
+  const raw = asRecord(body);
+  const patch: BasketLinePatchInDto = {};
+  if ("quantity" in raw) patch.quantity = parseQuantity(raw.quantity);
+  if ("variantId" in raw) patch.variantId = parseVariantId(raw.variantId);
+  if ("applyVariant" in raw) {
+    patch.applyVariant = parseApplyVariant(raw.applyVariant);
+  }
+  if ("placement" in raw) patch.placement = parsePlacement(raw.placement);
+  if (Object.keys(patch).length === 0) throw new Error("Nothing to change");
+  return patch;
 }
 
 /** Largest price on one invoice line, in rupiah (Rp 1 billion). */
@@ -107,6 +162,7 @@ function parseInvoiceLine(entry: unknown): AdminInvoiceLineInDto {
       type: "product",
       productId: parseProductId(raw.productId),
       quantity: parseQuantity(raw.quantity, 1),
+      variantId: parseVariantId(raw.variantId),
       unitPriceIdr:
         raw.unitPriceIdr === undefined || raw.unitPriceIdr === null
           ? null

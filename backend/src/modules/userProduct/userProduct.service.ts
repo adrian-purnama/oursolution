@@ -6,15 +6,23 @@ import type {
   UserPlanOutDto,
   UserProductRowOutDto,
 } from "../../dto/userProduct.dto";
+import { BASE_VARIANT_ID } from "../../models/product/product.interface";
 import { ProductModel } from "../../models/product/product.model";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
 import type {
   ProductPeriodSource,
   UserProductPeriodInterface,
+  VariantApplyMode,
 } from "../../models/userProductPeriod/userProductPeriod.interface";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
 import { toProductSummary } from "../product/product.service";
+import {
+  dailyPriceIdr,
+  variantIdOf,
+  variantOf,
+  type VariantHost,
+} from "../product/product.variants";
 import { purchaseService } from "../purchase/purchase.service";
 import {
   assertDeletable,
@@ -22,8 +30,12 @@ import {
   planAppend,
   planEndNow,
   planOverride,
+  planSwitch,
+  PlanScheduleError,
+  variantChange,
   type AppendPlan,
   type PeriodLike,
+  type SwitchPlan,
 } from "./userProduct.planner";
 
 /** Where a period came from. */
@@ -42,6 +54,48 @@ function originFields(origin: PeriodOrigin) {
   return { redeemCodeId: new Types.ObjectId(origin.redeemCodeId) };
 }
 
+/** Which variant a new period pays for, and how it is applied. */
+export interface PeriodVariant {
+  variantId: string;
+  applyVariant: VariantApplyMode;
+}
+
+const DEFAULT_PERIOD_VARIANT: PeriodVariant = {
+  variantId: BASE_VARIANT_ID,
+  applyVariant: "auto",
+};
+
+/** `planSwitch` for these stored periods, priced on the product's variants. */
+function switchPlanOf(
+  product: VariantHost,
+  periods: PeriodDoc[],
+  variantId: string,
+  purchasedDays: number,
+  now: Date,
+): SwitchPlan {
+  const target = variantOf(product, variantId);
+  if (!target) throw new PlanScheduleError("The product has no such variant");
+  return planSwitch(
+    periods.map((doc) => ({
+      ...toPeriodLike(doc),
+      variantId: variantIdOf(doc.variantId),
+    })),
+    now,
+    (id) => {
+      const variant = variantOf(product, id);
+      return variant ? dailyPriceIdr(variant) : null;
+    },
+    dailyPriceIdr(target),
+    purchasedDays,
+  );
+}
+
+/** See `UserProductService.variantSchedule`. */
+export interface VariantSchedule {
+  current: { variantId: string; applyVariant: VariantApplyMode } | null;
+  next: { variantId: string; startsAt: Date } | null;
+}
+
 /** Finished periods shown per user, newest kept. */
 const HISTORY_LIMIT = 50;
 
@@ -58,6 +112,7 @@ function toPeriodOut(doc: PeriodDoc, now: Date): ProductPeriodOutDto {
     endsAt: doc.endsAt?.toISOString() ?? null,
     isCurrent: doc.startsAt <= now && (doc.endsAt === null || doc.endsAt > now),
     source: doc.source,
+    variantId: variantIdOf(doc.variantId),
   };
 }
 
@@ -150,6 +205,35 @@ export class UserProductService {
     return end;
   }
 
+  /**
+   * Which variant the subscription is on at `now`, how a change to it is
+   * applied, and the next scheduled period on another variant. Periods
+   * saved before variants existed are on the base one.
+   */
+  async variantSchedule(
+    userId: string,
+    productId: string,
+    now: Date = new Date(),
+  ): Promise<VariantSchedule> {
+    const periods = await this.loadLive(userId, productId, now);
+    const { current, next } = variantChange(
+      periods.map((doc) => ({
+        ...toPeriodLike(doc),
+        variantId: variantIdOf(doc.variantId),
+        applyVariant: doc.applyVariant ?? "auto",
+      })),
+      now,
+    );
+    return {
+      current: current
+        ? { variantId: current.variantId, applyVariant: current.applyVariant }
+        : null,
+      next: next
+        ? { variantId: next.variantId, startsAt: next.startsAt }
+        : null,
+    };
+  }
+
   /** The user's plan: one row per product with its recent, running and scheduled periods. */
   async getPlan(
     userId: string,
@@ -183,6 +267,7 @@ export class UserProductService {
           endsAt: null,
           isCurrent: true,
           source: purchase.source,
+          variantId: BASE_VARIANT_ID,
         },
       ]),
     );
@@ -222,7 +307,10 @@ export class UserProductService {
     now: Date = new Date(),
   ): Promise<UserPlanOutDto> {
     await this.requireUser(userId);
-    await this.requireProduct(input.productId);
+    const variantId = await this.requireVariant(
+      input.productId,
+      input.variantId,
+    );
 
     const periods = await this.loadLive(userId, input.productId, now);
     const plan = planOverride(periods.map(toPeriodLike), now, input.end);
@@ -242,6 +330,8 @@ export class UserProductService {
             productId: input.productId,
             startsAt: plan.startsAt,
             endsAt: plan.endsAt,
+            variantId,
+            applyVariant: "auto",
             source: "admin",
             createdBy: new Types.ObjectId(actorId),
           },
@@ -261,7 +351,10 @@ export class UserProductService {
     now: Date = new Date(),
   ): Promise<UserPlanOutDto> {
     await this.requireUser(userId);
-    await this.requireProduct(input.productId);
+    const variantId = await this.requireVariant(
+      input.productId,
+      input.variantId,
+    );
 
     const plan = await this.planAppendFor(
       userId,
@@ -269,10 +362,13 @@ export class UserProductService {
       input.end,
       now,
     );
-    await this.grant(userId, input.productId, plan, {
-      source: "admin",
-      createdBy: actorId,
-    });
+    await this.grant(
+      userId,
+      input.productId,
+      plan,
+      { source: "admin", createdBy: actorId },
+      { variantId, applyVariant: "auto" },
+    );
 
     return this.getPlan(userId);
   }
@@ -326,18 +422,115 @@ export class UserProductService {
     return planAppend(periods.map(toPeriodLike), now, end);
   }
 
-  /** Store a period worked out by `planAppendFor`. */
+  /**
+   * The variant of the user's last running or scheduled period of this
+   * product: what buying more without naming a variant extends. Null when
+   * they have none.
+   */
+  async latestVariantOf(
+    userId: string,
+    productId: string,
+    now: Date = new Date(),
+  ): Promise<string | null> {
+    const last = (await this.loadLive(userId, productId, now)).at(-1);
+    return last ? variantIdOf(last.variantId) : null;
+  }
+
+  /**
+   * What switching this product to `variantId` now would do, buying
+   * `purchasedDays` of it. Throws a PlanScheduleError when it cannot.
+   */
+  async planSwitchFor(
+    userId: string,
+    product: VariantHost & { id: string },
+    variantId: string,
+    purchasedDays: number,
+    now: Date = new Date(),
+  ): Promise<SwitchPlan> {
+    const periods = await this.loadLive(userId, product.id, now);
+    return switchPlanOf(product, periods, variantId, purchasedDays, now);
+  }
+
+  /**
+   * Switch the product to another variant now (see `planSwitch`), worked
+   * out afresh and stored in one transaction. Returns the new period's id.
+   */
+  async switchNow(
+    userId: string,
+    product: VariantHost & { id: string },
+    purchasedDays: number,
+    origin: PeriodOrigin,
+    variant: PeriodVariant,
+    now: Date = new Date(),
+  ): Promise<string> {
+    let createdId = "";
+    await mongoose.connection.transaction(async (session) => {
+      const periods = await UserProductPeriodModel.find({
+        userId,
+        productId: product.id,
+        ...liveFilter(now),
+      })
+        .sort({ startsAt: 1 })
+        .session(session)
+        .exec();
+      const plan = switchPlanOf(
+        product,
+        periods,
+        variant.variantId,
+        purchasedDays,
+        now,
+      );
+      if (plan.truncateId) {
+        await UserProductPeriodModel.updateOne(
+          { _id: plan.truncateId },
+          { $set: { endsAt: plan.startsAt } },
+          { session },
+        );
+      }
+      if (plan.deleteIds.length > 0) {
+        await UserProductPeriodModel.deleteMany(
+          { _id: { $in: plan.deleteIds } },
+          { session },
+        );
+      }
+      const [created] = await UserProductPeriodModel.create(
+        [
+          {
+            userId,
+            productId: product.id,
+            startsAt: plan.startsAt,
+            endsAt: plan.endsAt,
+            variantId: variant.variantId,
+            applyVariant: variant.applyVariant,
+            source: origin.source,
+            ...originFields(origin),
+          },
+        ],
+        { session },
+      );
+      createdId = created.id as string;
+    });
+    return createdId;
+  }
+
+  /**
+   * Store a period worked out by `planAppendFor`, on `variant` (default:
+   * the base one, applied by itself).
+   */
   async grant(
     userId: string,
     productId: string,
     plan: AppendPlan,
     origin: PeriodOrigin,
+    variant: PeriodVariant = DEFAULT_PERIOD_VARIANT,
   ): Promise<string> {
     const created = await UserProductPeriodModel.create({
       userId,
       productId,
       startsAt: plan.startsAt,
       endsAt: plan.endsAt,
+      variantId: variant.variantId,
+      applyVariant: variant.applyVariant,
       source: origin.source,
       ...originFields(origin),
     });
@@ -354,10 +547,11 @@ export class UserProductService {
     plan: AppendPlan,
     origin: PeriodOrigin,
     now: Date = new Date(),
+    variant: PeriodVariant = DEFAULT_PERIOD_VARIANT,
   ): Promise<string> {
     const periods = await this.loadLive(userId, productId, now);
     assertFree(periods.map(toPeriodLike), plan);
-    return this.grant(userId, productId, plan, origin);
+    return this.grant(userId, productId, plan, origin, variant);
   }
 
   /** Running or scheduled periods of one product for one user, earliest first. */
@@ -381,6 +575,18 @@ export class UserProductService {
   }
 
   /** Only subscriptions live on the plan timeline. */
+  /** `requireProduct`, then the variant's id (null: the base one). */
+  private async requireVariant(
+    productId: string,
+    variantId: string | null,
+  ): Promise<string> {
+    await this.requireProduct(productId);
+    const product = await ProductModel.findById(productId).exec();
+    const variant = product ? variantOf(product, variantId) : null;
+    if (!variant) throw new Error("The product has no such variant");
+    return variant.id;
+  }
+
   private async requireProduct(productId: string): Promise<void> {
     const product = await ProductModel.findById(productId).exec();
     if (!product) throw new Error("Product not found");

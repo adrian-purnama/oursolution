@@ -23,8 +23,9 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 import { useAuth } from '#/context/authContext'
+import VariantSelect from '#/components/forms/admin/VariantSelect'
 import { apiFetch } from '#/lib/api'
-import { formatDateTime } from '#/lib/product'
+import { formatDateTime, BASE_VARIANT_ID } from '#/lib/product'
 import type {
   Product,
   ProductPeriod,
@@ -47,6 +48,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
 
   const [productId, setProductId] = useState('')
+  const [variantId, setVariantId] = useState(BASE_VARIANT_ID)
   const [mode, setMode] = useState<Mode>('now')
   const [endChoice, setEndChoice] = useState<EndChoice>('days')
   const [days, setDays] = useState('30')
@@ -108,6 +110,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
 
   function pickProduct(id: string) {
     setProductId(id)
+    setVariantId(BASE_VARIANT_ID)
     const product = products.find((item) => item.id === id)
     if (product) setDays(String(product.durationDays))
   }
@@ -119,7 +122,7 @@ export default function UserProductsForm({ userId }: { userId: string }) {
       return
     }
 
-    const body: Record<string, unknown> = { productId }
+    const body: Record<string, unknown> = { productId, variantId }
     if (effectiveEndChoice === 'days') {
       const count = Number(days)
       if (!Number.isInteger(count) || count < 1) {
@@ -299,6 +302,16 @@ export default function UserProductsForm({ userId }: { userId: string }) {
             </p>
           ) : null}
         </div>
+
+        <VariantSelect
+          id="assign-variant"
+          product={products.find((item) => item.id === productId) ?? null}
+          value={variantId}
+          onChange={(next, variantDays) => {
+            setVariantId(next)
+            if (variantDays) setDays(String(variantDays))
+          }}
+        />
 
         <fieldset className="space-y-2">
           <legend className="sr-only">When</legend>

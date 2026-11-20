@@ -10,6 +10,8 @@ import {
   shouldAutoTurnOff,
   syncedState,
   wipeBlocker,
+  shouldAutoApplyVariant,
+  variantPending,
 } from "./deployment.rules";
 
 describe("syncedState", () => {
@@ -273,5 +275,61 @@ describe("command limits", () => {
     assert.equal(next?.toISOString(), "2026-01-01T12:55:00.000Z");
     // Commands do not use up deploys.
     assert.equal(nextAllowedStart("deploy", starts, now), null);
+  });
+});
+
+describe("variantPending", () => {
+  it("is pending when a running service runs another variant", () => {
+    assert.equal(variantPending("running", true, "small", "big"), true);
+    assert.equal(variantPending("failed", true, "small", "big"), true);
+    assert.equal(variantPending("running", true, "big", "big"), false);
+  });
+
+  it("reads a service pushed before variants as the base variant", () => {
+    assert.equal(variantPending("running", true, null, "default"), false);
+    assert.equal(variantPending("running", true, null, "big"), true);
+  });
+
+  it("is not pending while off, never pushed, or with nothing running", () => {
+    assert.equal(variantPending("stopped", true, "small", "big"), false);
+    assert.equal(variantPending("running", false, null, "big"), false);
+    assert.equal(variantPending("running", true, "small", null), false);
+  });
+});
+
+describe("shouldAutoApplyVariant", () => {
+  const run = (
+    action: "redeploy" | "deploy",
+    automatic: boolean,
+    failed: boolean,
+  ) => ({
+    action,
+    automatic,
+    failed,
+  });
+
+  it("applies a pending variant when the customer chose auto", () => {
+    assert.equal(shouldAutoApplyVariant(true, "auto", null), true);
+    assert.equal(
+      shouldAutoApplyVariant(true, "auto", run("redeploy", false, true)),
+      true,
+    );
+  });
+
+  it("leaves it to the customer when they chose manual, or nothing is pending", () => {
+    assert.equal(shouldAutoApplyVariant(true, "manual", null), false);
+    assert.equal(shouldAutoApplyVariant(false, "auto", null), false);
+    assert.equal(shouldAutoApplyVariant(true, null, null), false);
+  });
+
+  it("does not retry after its own automatic redeploy failed", () => {
+    assert.equal(
+      shouldAutoApplyVariant(true, "auto", run("redeploy", true, true)),
+      false,
+    );
+    assert.equal(
+      shouldAutoApplyVariant(true, "auto", run("redeploy", true, false)),
+      true,
+    );
   });
 });

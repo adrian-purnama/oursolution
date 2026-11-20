@@ -10,7 +10,9 @@ import type {
   DeploymentSyncItemOutDto,
   DeploymentSyncOutDto,
   DeploymentVariableOutDto,
+  DeploymentVariantOutDto,
   ServiceStatusOutDto,
+  VariantRefOutDto,
 } from "../../dto/deployment.dto";
 import { env } from "../../environment/env";
 import { logger } from "../../logger/logger";
@@ -59,8 +61,16 @@ import { entitlementService } from "../entitlement/entitlement.service";
 import { mailer } from "../mail/mail.service";
 import { notificationService } from "../notification/notification.service";
 import { noticesOf, toProductSummary } from "../product/product.service";
+import {
+  variantIdOf,
+  variantOf,
+  type ResolvedVariant,
+} from "../product/product.variants";
 import { uptimeKumaService } from "../uptimeKuma/uptimeKuma.service";
-import { userProductService } from "../userProduct/userProduct.service";
+import {
+  userProductService,
+  type VariantSchedule,
+} from "../userProduct/userProduct.service";
 import {
   ACTION_LABELS,
   allowedActions,
@@ -71,12 +81,14 @@ import {
   mayBeRunning,
   nextAllowedStart,
   PIPELINES,
+  shouldAutoApplyVariant,
   shouldAutoTurnOff,
   START_HISTORY_MS,
   STATE_AFTER,
   syncedState,
   wipeBlocker,
   STATE_DURING,
+  variantPending,
   type ActualContainers,
 } from "./deployment.rules";
 
@@ -120,6 +132,18 @@ const OWNER_MESSAGES: Partial<
       "Everything stored in your service was erased and the service was removed. Turn it on to start afresh.",
     failed: (name) => `${name}'s data could not be erased`,
   },
+};
+
+/**
+ * What the customer is told about an automatic redeploy: only the variant
+ * sweep starts one, to put the service on the variant they now pay for.
+ */
+const VARIANT_MESSAGES = {
+  done: (name: string, variant: string | null) =>
+    variant ? `${name} switched to ${variant}` : `${name} switched variant`,
+  doneBody:
+    "Your service was restarted on the variant your subscription is on now, and is running.",
+  failed: (name: string) => `${name} could not switch variant`,
 };
 
 const SOURCE = "modules/deployment/deployment.service.ts";
@@ -214,6 +238,39 @@ function toRunOut(run: RunDoc, view: DeploymentView): DeploymentRunOutDto {
   };
 }
 
+/** A variant by id and name; one removed since shows its id. */
+function variantRef(product: ProductDoc, id: string): VariantRefOutDto {
+  return { id, name: variantOf(product, id)?.name ?? id };
+}
+
+function variantOut(
+  product: ProductDoc,
+  deployment: DeploymentDoc | null,
+  schedule: VariantSchedule,
+): DeploymentVariantOutDto {
+  const pushed = Boolean(deployment?.dokploy);
+  const deployedId = pushed ? variantIdOf(deployment?.deployedVariantId) : null;
+  return {
+    current: schedule.current
+      ? variantRef(product, schedule.current.variantId)
+      : null,
+    deployed: deployedId ? variantRef(product, deployedId) : null,
+    pending: variantPending(
+      deployment?.state ?? "notDeployed",
+      pushed,
+      deployment?.deployedVariantId ?? null,
+      schedule.current?.variantId ?? null,
+    ),
+    applyVariant: schedule.current?.applyVariant ?? null,
+    next: schedule.next
+      ? {
+          ...variantRef(product, schedule.next.variantId),
+          startsAt: schedule.next.startsAt.toISOString(),
+        }
+      : null,
+  };
+}
+
 /** What a pipeline's steps share while it runs. */
 interface RunContext {
   run: RunDoc;
@@ -224,6 +281,8 @@ interface RunContext {
   environmentId: string | null;
   /** Erase and wipe: the folders the check step found safe to empty. */
   resetFolders: string[];
+  /** Deploy and redeploy: the variant the check step found to deploy. */
+  variant: ResolvedVariant | null;
 }
 
 /**
@@ -650,19 +709,10 @@ export class DeploymentService {
     for (const deployment of candidates) {
       const userId = String(deployment.userId);
       const productId = String(deployment.productId);
-      const [entitled, latest] = await Promise.all([
+      const [entitled, latestRun] = await Promise.all([
         entitlementService.canRunService(userId, productId, now),
-        DeploymentRunModel.findOne({ deploymentId: deployment._id })
-          .sort({ startedAt: -1 })
-          .exec(),
+        this.latestRunOf(deployment),
       ]);
-      const latestRun = latest
-        ? {
-            action: latest.action,
-            automatic: latest.startedBy === null,
-            failed: latest.status === "failed",
-          }
-        : null;
       if (!shouldAutoTurnOff(deployment.state, entitled, latestRun)) continue;
       try {
         await this.launch(deployment, "turnOff", null);
@@ -678,6 +728,76 @@ export class DeploymentService {
       }
     }
     return started;
+  }
+
+  /**
+   * Redeploys running services onto the variant their subscription is on
+   * now, when the customer chose to have that done by itself: a switch
+   * that starts at once, or a period on another variant that has begun.
+   * A service that failed is left for an admin. Returns how many
+   * redeploys it started.
+   */
+  async applyPendingVariants(now: Date = new Date()): Promise<number> {
+    const candidates = await DeploymentModel.find({
+      state: "running",
+      dokploy: { $ne: null },
+    }).exec();
+    let started = 0;
+    for (const deployment of candidates) {
+      const schedule = await userProductService.variantSchedule(
+        String(deployment.userId),
+        String(deployment.productId),
+        now,
+      );
+      const current = schedule.current;
+      const pending = variantPending(
+        deployment.state,
+        true,
+        deployment.deployedVariantId ?? null,
+        current?.variantId ?? null,
+      );
+      // Most services have nothing pending: skip the run lookup for them.
+      if (!pending || current?.applyVariant !== "auto") continue;
+      const latestRun = await this.latestRunOf(deployment);
+      if (!shouldAutoApplyVariant(pending, current.applyVariant, latestRun)) {
+        continue;
+      }
+      try {
+        await this.launch(deployment, "redeploy", null);
+        started++;
+        logger.info(
+          `Variant changed: redeploying deployment ${deployment.id} on ${current.variantId}`,
+          SOURCE,
+          "applyPendingVariants",
+        );
+      } catch (error) {
+        // Busy: something else is running on it; the next sweep checks again.
+        if (!(error instanceof DeploymentBusyError)) throw error;
+      }
+    }
+    return started;
+  }
+
+  /** The deployment's latest run, as the sweep rules read it. */
+  private async latestRunOf(
+    deployment: DeploymentDoc,
+  ): Promise<{
+    action: RunAction;
+    automatic: boolean;
+    failed: boolean;
+  } | null> {
+    const latest = await DeploymentRunModel.findOne({
+      deploymentId: deployment._id,
+    })
+      .sort({ startedAt: -1 })
+      .exec();
+    return latest
+      ? {
+          action: latest.action,
+          automatic: latest.startedBy === null,
+          failed: latest.status === "failed",
+        }
+      : null;
   }
 
   /**
@@ -1104,6 +1224,7 @@ export class DeploymentService {
       resolved: null,
       environmentId: null,
       resetFolders: [],
+      variant: null,
     };
 
     for (const step of run.steps) {
@@ -1131,7 +1252,7 @@ export class DeploymentService {
       { $set: { state: STATE_AFTER[run.action] } },
     ).exec();
     await this.syncMonitors(context);
-    await this.notifyOwner(run, true, product.name);
+    await this.notifyOwner(run, true, product.name, context.variant?.name);
   }
 
   /**
@@ -1259,6 +1380,18 @@ export class DeploymentService {
       throw new Error("The subscription is no longer active");
     }
     this.assertFilled(product, deployment);
+    // The variant the subscription is on now decides the compose file.
+    const schedule = await userProductService.variantSchedule(
+      user.id,
+      product.id,
+    );
+    const variant = variantOf(product, schedule.current?.variantId);
+    if (!variant?.composeFile) {
+      throw new Error(
+        `The subscription is on variant "${schedule.current?.variantId}", which the product no longer has`,
+      );
+    }
+    context.variant = variant;
 
     const username = await this.ensureUsername(user);
     const resolved = resolveDeployment(
@@ -1360,8 +1493,9 @@ export class DeploymentService {
   private async stepDokploy(context: RunContext): Promise<void> {
     const { deployment, product, run } = context;
     const config = product.deployment;
-    const resolved = context.resolved;
-    if (!config || !resolved || !context.environmentId) {
+    const { resolved, variant } = context;
+    const composeFile = variant?.composeFile;
+    if (!config || !resolved || !context.environmentId || !composeFile) {
       throw new Error("The check step did not finish");
     }
 
@@ -1369,7 +1503,7 @@ export class DeploymentService {
       const compose = await dokployService.createCompose({
         environmentId: context.environmentId,
         name: resolved.name,
-        composeFile: config.composeFile,
+        composeFile,
       });
       deployment.dokploy = {
         projectId: config.projectId,
@@ -1383,9 +1517,15 @@ export class DeploymentService {
 
     const { composeId } = deployment.dokploy;
     await dokployService.updateCompose(composeId, {
-      composeFile: config.composeFile,
+      composeFile,
       env: toEnvFile(resolved.env),
     });
+    // Dokploy has this variant's compose now, even if the deploy fails.
+    deployment.deployedVariantId = variant.id;
+    await DeploymentModel.updateOne(
+      { _id: deployment._id },
+      { $set: { deployedVariantId: variant.id } },
+    ).exec();
     await dokployService.syncDomains(composeId, resolved.domains);
     await dokployService.deployAndWait(
       composeId,
@@ -1696,8 +1836,16 @@ export class DeploymentService {
     run: RunDoc,
     succeeded: boolean,
     productName?: string,
+    variantName?: string,
   ): Promise<void> {
-    const messages = OWNER_MESSAGES[run.action];
+    const messages =
+      run.action === "redeploy" && run.startedBy === null
+        ? {
+            ...VARIANT_MESSAGES,
+            done: (name: string) =>
+              VARIANT_MESSAGES.done(name, variantName ?? null),
+          }
+        : OWNER_MESSAGES[run.action];
     if (!messages) return;
     try {
       const name =
@@ -1871,7 +2019,7 @@ export class DeploymentService {
           .exec()
       : [];
 
-    const [status, endsAt, cameUp] = await Promise.all([
+    const [status, endsAt, cameUp, schedule] = await Promise.all([
       this.statusOf(deployment),
       entitled ? userProductService.runsUntil(user.id, product.id) : null,
       deployment && state === "running"
@@ -1884,6 +2032,7 @@ export class DeploymentService {
             .select("finishedAt")
             .exec()
         : null,
+      userProductService.variantSchedule(user.id, product.id),
     ]);
 
     const reset: CustomerFolders =
@@ -1920,6 +2069,7 @@ export class DeploymentService {
       })),
       commandsBlocked: commandBlocker(state, entitled),
       runs: runs.map((run) => toRunOut(run, view)),
+      variant: variantOut(product, deployment, schedule),
       ...(view === "admin"
         ? {
             internal: {

@@ -189,6 +189,24 @@ export function toEnvFile(env: Readonly<Record<string, string>>): string {
 }
 
 /**
+ * One line on what blocks saving: the first error and how many more there
+ * are. Null when there are only warnings.
+ */
+export function checkErrorMessage(
+  issues: readonly ComposeIssue[],
+): string | null {
+  const errors = issues.filter((issue) => issue.severity === "error");
+  if (errors.length === 0) return null;
+  const [first] = errors;
+  const where =
+    first.file === "settings"
+      ? ""
+      : `Compose file${first.line ? ` line ${first.line}` : ""}: `;
+  const more = errors.length > 1 ? ` (and ${errors.length - 1} more)` : "";
+  return `${where}${first.message}${more}`;
+}
+
+/**
  * Checks everything a product needs to deploy: the compose file, the
  * environment variables it uses, the per-customer name and the domains.
  * `domain` is the base domain hosts end with (DEPLOY_DOMAIN).

@@ -116,6 +116,39 @@ export interface ProductNotice {
 /** How many images one product may have. */
 export const MAX_PRODUCT_IMAGES = 10;
 
+/**
+ * The id of a subscription's base variant: the product's own price,
+ * duration and compose file. Records without a variant id are on it.
+ */
+export const BASE_VARIANT_ID = "default";
+
+/** How many variants a subscription may have besides its base one. */
+export const MAX_PRODUCT_VARIANTS = 10;
+
+/**
+ * Another way to buy the same subscription, e.g. more CPU and memory. It
+ * shares everything else with the product (name in Dokploy, variables,
+ * domains, commands, data), so a customer can switch between variants and
+ * keep their service.
+ */
+export interface ProductVariant {
+  /** Stable across edits; periods and deployments point at it. */
+  id: string;
+  /** What customers pick, e.g. "4 cores / 4 GB". */
+  name: string;
+  /** Public, short: what this variant gives. */
+  specs: string;
+  /** Amount charged per checkout, in whole rupiah. */
+  priceIdr: number;
+  /** How long one checkout keeps it active. */
+  durationDays: number;
+  /**
+   * Its own compose file, or null to use the product's. It must mount the
+   * same sources as the product's, so switching keeps the customer's data.
+   */
+  composeFile: string | null;
+}
+
 /** Something a user can have: a subscription or a one-time purchase. */
 export interface ProductInterface {
   name: string;
@@ -135,6 +168,12 @@ export interface ProductInterface {
   durationDays: number | null;
   /** Subscription only: what to deploy for a subscriber. Admin-only. */
   deployment: ProductDeployment | null;
+  /** Subscription only: the base variant's name, e.g. "2 cores / 2 GB". */
+  variantName: string;
+  /** Subscription only: the base variant's specs. */
+  variantSpecs: string;
+  /** Subscription only: variants besides the base one, in display order. */
+  variants: ProductVariant[];
   /** One-time only: where buyers get what they bought. Never shown publicly. */
   accessUrl: string | null;
   /** Listed on the public pricing page, and so open to checkout. */

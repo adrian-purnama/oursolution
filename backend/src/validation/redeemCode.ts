@@ -98,8 +98,24 @@ export function parseCreateRedeemCodesDto(
     );
   }
 
+  let variantId: string | null = null;
+  if (
+    raw.variantId !== undefined &&
+    raw.variantId !== null &&
+    raw.variantId !== ""
+  ) {
+    if (
+      typeof raw.variantId !== "string" ||
+      !/^[A-Za-z0-9_-]{1,40}$/.test(raw.variantId)
+    ) {
+      throw new Error("variantId is not a valid variant");
+    }
+    variantId = raw.variantId;
+  }
+
   return {
     productId: raw.productId,
+    variantId,
     activation: activation as RedeemActivation,
     activatesAt,
     durationDays,

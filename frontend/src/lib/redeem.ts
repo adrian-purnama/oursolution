@@ -19,6 +19,8 @@ export type RedeemCode = {
   code: string
   /** null when the product was erased. */
   product: ProductSummary | null
+  /** Subscriptions: the variant given; null is the base one. */
+  variant: { id: string; name: string } | null
   activation: RedeemActivation
   activatesAt: string | null
   durationDays: number | null

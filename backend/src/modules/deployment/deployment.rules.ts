@@ -3,6 +3,8 @@ import type {
   BulkAction,
   RunAction,
 } from "../../models/deploymentRun/deploymentRun.interface";
+import type { VariantApplyMode } from "../../models/userProductPeriod/userProductPeriod.interface";
+import { variantIdOf } from "../product/product.variants";
 
 /** States in which a run is in progress, so nothing else may start. */
 export const BUSY_STATES: readonly DeploymentState[] = [
@@ -126,6 +128,24 @@ export function mayBeRunning(state: DeploymentState): boolean {
 }
 
 /**
+ * Whether the service runs another variant than the subscription is on
+ * now, so a redeploy is needed to apply it. Not while it is off or never
+ * pushed: turning it on deploys the current variant anyway. A deployment
+ * pushed before variants existed runs the base variant.
+ */
+export function variantPending(
+  state: DeploymentState,
+  pushed: boolean,
+  deployedVariantId: string | null,
+  currentVariantId: string | null,
+): boolean {
+  if (!pushed || currentVariantId === null || !mayBeRunning(state)) {
+    return false;
+  }
+  return variantIdOf(deployedVariantId) !== currentVariantId;
+}
+
+/**
  * Whether the sweep should turn a deployment off now. Not after its own
  * automatic turn-off failed: admins were emailed, and retrying every few
  * minutes would only repeat the email. An admin takes it from there.
@@ -139,6 +159,27 @@ export function shouldAutoTurnOff(
   return !(
     latestRun &&
     latestRun.action === "turnOff" &&
+    latestRun.automatic &&
+    latestRun.failed
+  );
+}
+
+/**
+ * Whether the sweep should redeploy a service onto the variant its
+ * subscription is on now: only when the customer chose "auto", and not
+ * after its own automatic redeploy failed (admins were emailed; retrying
+ * every few minutes would only repeat that). "manual" waits for the
+ * customer, or for the next time the service is turned on.
+ */
+export function shouldAutoApplyVariant(
+  pending: boolean,
+  applyVariant: VariantApplyMode | null,
+  latestRun: { action: RunAction; automatic: boolean; failed: boolean } | null,
+): boolean {
+  if (!pending || applyVariant !== "auto") return false;
+  return !(
+    latestRun &&
+    latestRun.action === "redeploy" &&
     latestRun.automatic &&
     latestRun.failed
   );

@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import type { ProductKind } from "../product/product.interface";
+import type { VariantApplyMode } from "../userProductPeriod/userProductPeriod.interface";
 
 /**
  * - pending: waiting for the user to pay (until `expiresAt`).
@@ -18,8 +19,21 @@ export const PAYMENT_STATUSES = [
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 /** A store product, or "custom": a line an admin wrote, granting nothing. */
-export const PAYMENT_ITEM_KINDS = ["subscription", "oneTime", "custom"] as const;
+export const PAYMENT_ITEM_KINDS = [
+  "subscription",
+  "oneTime",
+  "custom",
+] as const;
 export type PaymentItemKind = ProductKind | "custom";
+
+/**
+ * When a subscription line's time starts:
+ * - "after": after everything the user already has of the product;
+ * - "now": a switch of variant that starts at once, the time left turned
+ *   into days of the new variant by what it was worth.
+ */
+export const CHECKOUT_PLACEMENTS = ["after", "now"] as const;
+export type CheckoutPlacement = (typeof CHECKOUT_PLACEMENTS)[number];
 
 /** Who made the invoice: the user at checkout, or an admin for them. */
 export const PAYMENT_SOURCES = ["checkout", "admin"] as const;
@@ -38,6 +52,15 @@ export interface PaymentItem {
   quantity: number;
   /** Subscription only: days one period adds. */
   durationDays: number | null;
+  /**
+   * Subscription only: the variant bought, priced as it was. Null for other
+   * lines, and on subscription lines made before variants: the base.
+   */
+  variantId: string | null;
+  /** Subscription only: how the periods it grants apply their variant. */
+  applyVariant: VariantApplyMode | null;
+  /** Subscription only: when its time starts; null (older lines) is after. */
+  placement: CheckoutPlacement | null;
   amountIdr: number;
   /** What was granted once paid. */
   periodIds: Types.ObjectId[];

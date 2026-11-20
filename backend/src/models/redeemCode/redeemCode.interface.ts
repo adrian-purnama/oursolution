@@ -13,6 +13,8 @@ export interface RedeemCodeInterface {
   /** Stored as XXXX-XXXX-XXXX, upper case. */
   code: string;
   productId: Types.ObjectId;
+  /** Subscriptions: the variant it gives; null is the base one. */
+  variantId: string | null;
   activation: RedeemActivation;
   /** When activation is "date". */
   activatesAt: Date | null;

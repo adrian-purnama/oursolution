@@ -23,6 +23,14 @@ import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
 import { env } from "../../environment/env";
 import { normalizeImage } from "../../utils/image";
+import { DeploymentModel } from "../../models/deployment/deployment.model";
+import { RedeemCodeModel } from "../../models/redeemCode/redeemCode.model";
+import {
+  fitVariants,
+  removedVariantIds,
+  variantsOf,
+  type VariantHost,
+} from "./product.variants";
 
 export type ProductDoc = HydratedDocument<ProductInterface>;
 
@@ -80,7 +88,33 @@ export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
     description: product.description,
     notices: noticesOf(product),
     durationDays: product.durationDays,
+    variants:
+      product.kind === "subscription"
+        ? variantsOf(product).map(
+            ({ id, name, specs, priceIdr, durationDays }) => ({
+              id,
+              name,
+              specs,
+              priceIdr,
+              durationDays,
+            }),
+          )
+        : [],
   };
+}
+
+/** Plain copies: products saved before variants existed have none. */
+function variantListOf(product: ProductDoc) {
+  return (product.variants ?? []).map(
+    ({ id, name, specs, priceIdr, durationDays, composeFile }) => ({
+      id,
+      name,
+      specs,
+      priceIdr,
+      durationDays,
+      composeFile: composeFile ?? null,
+    }),
+  );
 }
 
 export function toProductOut(product: ProductDoc): ProductOutDto {
@@ -122,6 +156,9 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
           ),
         }
       : null,
+    variantName: product.variantName ?? "",
+    variantSpecs: product.variantSpecs ?? "",
+    variants: variantListOf(product),
     accessUrl: product.accessUrl,
     showOnPricingPage: product.showOnPricingPage,
     deletedAt: product.deletedAt?.toISOString() ?? null,
@@ -287,8 +324,9 @@ export class ProductService {
   }
 
   async create(input: CreateProductDto): Promise<ProductOutDto> {
+    const variants = fitVariants(input, env.deployDomain ?? undefined);
     try {
-      return toProductOut(await ProductModel.create(input));
+      return toProductOut(await ProductModel.create({ ...input, variants }));
     } catch (error) {
       rethrowDuplicate(error);
     }
@@ -296,13 +334,73 @@ export class ProductService {
 
   async update(id: string, patch: UpdateProductDto): Promise<ProductOutDto> {
     const product = await this.get(id);
+    const before = variantListOf(product);
     product.set(patch);
+    const host: VariantHost = {
+      kind: product.kind,
+      name: product.name,
+      priceIdr: product.priceIdr,
+      durationDays: product.durationDays,
+      deployment: product.deployment,
+      variantName: product.variantName ?? "",
+      variantSpecs: product.variantSpecs ?? "",
+      variants: variantListOf(product),
+    };
+    // Checked on every save: a new compose file for the product must still
+    // mount what its variants mount.
+    product.variants = fitVariants(host, env.deployDomain ?? undefined);
+    await this.assertVariantsUnused(
+      product,
+      removedVariantIds(before, product.variants),
+    );
     try {
       await product.save();
     } catch (error) {
       rethrowDuplicate(error);
     }
     return toProductOut(product);
+  }
+
+  /**
+   * A variant that someone is on, or will be, or that a service runs,
+   * cannot be removed: nothing would say what they have.
+   */
+  private async assertVariantsUnused(
+    product: ProductDoc,
+    ids: string[],
+    now: Date = new Date(),
+  ): Promise<void> {
+    if (ids.length === 0) return;
+    const [periods, deployments, invoices, codes] = await Promise.all([
+      UserProductPeriodModel.countDocuments({
+        productId: product._id,
+        variantId: { $in: ids },
+        ...liveFilter(now),
+      }).exec(),
+      DeploymentModel.countDocuments({
+        productId: product._id,
+        deployedVariantId: { $in: ids },
+      }).exec(),
+      // Paying one later would grant a variant that no longer exists.
+      PaymentModel.countDocuments({
+        status: "pending",
+        expiresAt: { $gt: now },
+        items: {
+          $elemMatch: { productId: product._id, variantId: { $in: ids } },
+        },
+      }).exec(),
+      RedeemCodeModel.countDocuments({
+        productId: product._id,
+        variantId: { $in: ids },
+        redeemedAt: null,
+        $or: [{ validUntil: null }, { validUntil: { $gt: now } }],
+      }).exec(),
+    ]);
+    if (periods + deployments + invoices + codes > 0) {
+      throw new Error(
+        `A removed variant is still used by ${periods} running or scheduled period(s), ${deployments} service(s), ${invoices} unpaid invoice(s) and ${codes} unused redeem code(s). Move or let them finish first.`,
+      );
+    }
   }
 
   /** Add an image after the others; the first one stays the cover. */

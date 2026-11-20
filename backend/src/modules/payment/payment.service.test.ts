@@ -90,10 +90,23 @@ function setup(
     cannotSchedule?: boolean;
     owned?: boolean;
     subscribed?: boolean;
+    /** The variant of the user's last period of the product. */
+    latestVariant?: string;
   } = {},
 ) {
   const payments = new Map<string, PaymentRecord>();
-  const periods: { paymentId: string; productId: string; id: string }[] = [];
+  const periods: {
+    paymentId: string;
+    productId: string;
+    id: string;
+    variantId?: string;
+    applyVariant?: string;
+  }[] = [];
+  /** Days asked of each planAppendFor call. */
+  const plannedDays: number[] = [];
+  /** Each switchNow call: the days bought and the variant. */
+  const switches: { days: number; variantId: string; applyVariant: string }[] =
+    [];
   const purchases: { productId: string; paymentId: string; id: string }[] = [];
   const granted: string[] = [];
   const products = opts.products ?? { [SUB]: subscription, [ONE]: oneTime };
@@ -168,16 +181,43 @@ function setup(
     },
     userProducts: {
       hasLivePeriod: async () => opts.subscribed ?? false,
-      planAppendFor: async () => {
+      latestVariantOf: async () => opts.latestVariant ?? null,
+      planSwitchFor: async (_userId, _product, _variantId, days) => {
+        if (opts.cannotSchedule) throw new PlanScheduleError("no end");
+        const DAY = 24 * 60 * 60 * 1000;
+        return {
+          truncateId: "running",
+          deleteIds: [],
+          startsAt: new Date(0),
+          endsAt: new Date((days + 7.5) * DAY),
+          creditIdr: 25_000,
+          bonusMs: 7.5 * DAY,
+        };
+      },
+      switchNow: async (_userId, _product, days, origin, variant) => {
+        switches.push({ days, ...variant });
+        const id = new Types.ObjectId().toString();
+        periods.push({
+          paymentId: origin.source === "checkout" ? origin.paymentId : "",
+          productId: SUB,
+          id,
+          ...variant,
+        });
+        return id;
+      },
+      planAppendFor: async (_userId, _productId, end) => {
+        if (end.kind === "days") plannedDays.push(end.days);
         if (opts.cannotSchedule) throw new PlanScheduleError("no end");
         return { startsAt: new Date(0), endsAt: new Date(1) };
       },
-      grant: async (_userId, productId, _plan, origin) => {
+      grant: async (_userId, productId, _plan, origin, variant) => {
         const id = new Types.ObjectId().toString();
         periods.push({
           paymentId: origin.source === "checkout" ? origin.paymentId : "",
           productId,
           id,
+          variantId: variant?.variantId,
+          applyVariant: variant?.applyVariant,
         });
         return id;
       },
@@ -207,7 +247,15 @@ function setup(
     finishUrl: (id) => `https://app.example/billing/${id}`,
   });
 
-  return { service, payments, periods, purchases, granted };
+  return {
+    service,
+    payments,
+    periods,
+    purchases,
+    granted,
+    plannedDays,
+    switches,
+  };
 }
 
 const basket = {
@@ -728,6 +776,210 @@ describe("PaymentService.issueForUser", () => {
         dueDays: 7,
         notify: false,
       }),
+      CheckoutError,
+    );
+  });
+});
+
+describe("PaymentService with variants", () => {
+  const minecraft = {
+    ...subscription,
+    name: "Minecraft",
+    variantName: "2 cores / 2 GB",
+    variantSpecs: "",
+    deployment: null,
+    variants: [
+      {
+        id: "big",
+        name: "4 cores / 4 GB",
+        specs: "",
+        priceIdr: 180_000,
+        durationDays: 15,
+        composeFile: null,
+      },
+    ],
+  };
+  const products = { [SUB]: minecraft };
+
+  it("prices a line by its variant and lists every variant to pick from", async () => {
+    const { service } = setup({ products });
+    const quote = await service.quote(USER, [
+      { productId: SUB, quantity: 2, variantId: "big", applyVariant: "manual" },
+    ]);
+    const [line] = quote.lines;
+    assert.equal(line.unitPriceIdr, 180_000);
+    assert.equal(line.durationDays, 15);
+    assert.equal(line.amountIdr, 360_000);
+    assert.deepEqual(line.variant, { id: "big", name: "4 cores / 4 GB" });
+    assert.equal(line.applyVariant, "manual");
+    assert.deepEqual(
+      line.variants.map((v) => [v.id, v.unitPriceIdr]),
+      [
+        ["default", 99_000],
+        ["big", 180_000],
+      ],
+    );
+  });
+
+  it("buys the base variant when none is given", async () => {
+    const { service } = setup({ products });
+    const [line] = (
+      await service.quote(USER, [{ productId: SUB, quantity: 1 }])
+    ).lines;
+    assert.equal(line.variant?.id, "default");
+    assert.equal(line.unitPriceIdr, 99_000);
+    assert.equal(line.applyVariant, "auto");
+  });
+
+  it("extends the variant the user is on when none is named", async () => {
+    const { service } = setup({ products, latestVariant: "big" });
+    const [line] = (
+      await service.quote(USER, [{ productId: SUB, quantity: 1 }])
+    ).lines;
+    assert.equal(line.variant?.id, "big");
+    assert.equal(line.unitPriceIdr, 180_000);
+  });
+
+  it("flags a variant the product no longer has", async () => {
+    const { service } = setup({ products });
+    const quote = await service.quote(USER, [
+      { productId: SUB, quantity: 1, variantId: "gone" },
+    ]);
+    assert.match(quote.lines[0].problem ?? "", /variant/);
+    assert.equal(quote.canCheckout, false);
+  });
+
+  it("names the invoice line after the variant and grants periods on it", async () => {
+    const { service, payments, periods, plannedDays } = setup({
+      products,
+      provider: allowAllProvider,
+    });
+    const out = await service.checkout(USER, {
+      items: [
+        {
+          productId: SUB,
+          quantity: 2,
+          variantId: "big",
+          applyVariant: "manual",
+        },
+      ],
+      fromBasket: false,
+    });
+    const [item] = payments.get(out.paymentId)!.items;
+    assert.equal(item.name, "Minecraft (4 cores / 4 GB)");
+    assert.equal(item.variantId, "big");
+    assert.equal(item.applyVariant, "manual");
+    assert.equal(periods.length, 2);
+    assert.ok(
+      periods.every(
+        (p) => p.variantId === "big" && p.applyVariant === "manual",
+      ),
+    );
+    // Each period is the variant's length, not the product's.
+    assert.ok(plannedDays.length > 0 && plannedDays.every((d) => d === 15));
+  });
+
+  it("shows what switching now does, and starts after by default", async () => {
+    const { service } = setup({ products });
+    const [later] = (
+      await service.quote(USER, [
+        { productId: SUB, quantity: 1, variantId: "big" },
+      ])
+    ).lines;
+    assert.equal(later.placement, "after");
+    assert.equal(later.switch, null);
+
+    const [now] = (
+      await service.quote(USER, [
+        { productId: SUB, quantity: 2, variantId: "big", placement: "now" },
+      ])
+    ).lines;
+    assert.equal(now.placement, "now");
+    assert.deepEqual(now.switch, {
+      creditIdr: 25_000,
+      bonusDays: 7.5,
+      endsAt: new Date((30 + 7.5) * 24 * 60 * 60 * 1000).toISOString(),
+    });
+  });
+
+  it("flags a switch that cannot be done", async () => {
+    const { service } = setup({ products, cannotSchedule: true });
+    const quote = await service.quote(USER, [
+      { productId: SUB, quantity: 1, variantId: "big", placement: "now" },
+    ]);
+    assert.equal(quote.lines[0].problem, "no end");
+  });
+
+  it("switches once for every unit bought when paid, and not again", async () => {
+    const { service, payments, switches, plannedDays } = setup({
+      products,
+      provider: allowAllProvider,
+    });
+    const out = await service.checkout(USER, {
+      items: [
+        {
+          productId: SUB,
+          quantity: 2,
+          variantId: "big",
+          applyVariant: "manual",
+          placement: "now",
+        },
+      ],
+      fromBasket: false,
+    });
+    assert.deepEqual(switches, [
+      { days: 30, variantId: "big", applyVariant: "manual" },
+    ]);
+    assert.deepEqual(plannedDays, []);
+    const [item] = payments.get(out.paymentId)!.items;
+    assert.equal(item.placement, "now");
+    assert.equal(item.periodIds.length, 1);
+    await service.grant(out.paymentId);
+    assert.equal(switches.length, 1);
+  });
+
+  it("keeps the plain product name when there is no choice of variant", async () => {
+    const { service, payments } = setup();
+    const out = await service.checkout(USER, basket);
+    assert.equal(payments.get(out.paymentId)!.items[0].name, "n8n hosting");
+  });
+
+  it("lets an admin invoice a variant at its price", async () => {
+    const { service, payments } = setup({ products });
+    const out = await service.issueForUser(USER, {
+      lines: [
+        {
+          type: "product",
+          productId: SUB,
+          quantity: 1,
+          variantId: "big",
+          unitPriceIdr: null,
+          description: null,
+        },
+      ],
+      dueDays: 7,
+      notify: false,
+    });
+    const [item] = payments.get(out.paymentId)!.items;
+    assert.equal(item.unitPriceIdr, 180_000);
+    assert.equal(item.durationDays, 15);
+    assert.equal(item.variantId, "big");
+    await assert.rejects(
+      () =>
+        service.issueForUser(USER, {
+          lines: [
+            {
+              type: "product",
+              productId: SUB,
+              quantity: 1,
+              variantId: "gone",
+              unitPriceIdr: null,
+              description: null,
+            },
+          ],
+          dueDays: 7,
+          notify: false,
+        }),
       CheckoutError,
     );
   });

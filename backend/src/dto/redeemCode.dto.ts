@@ -19,6 +19,8 @@ export interface RedeemCodeOutDto {
   code: string;
   /** null when the product was erased. */
   product: ProductSummaryDto | null;
+  /** Subscriptions: the variant given, by name; null is the base one. */
+  variant: { id: string; name: string } | null;
   activation: RedeemActivation;
   activatesAt: string | null;
   durationDays: number | null;
@@ -41,6 +43,8 @@ export interface RedeemCodeListOutDto {
 
 export interface CreateRedeemCodesInDto {
   productId: string;
+  /** Subscriptions: null is the base variant. */
+  variantId: string | null;
   activation: RedeemActivation;
   activatesAt: Date | null;
   durationDays: number | null;

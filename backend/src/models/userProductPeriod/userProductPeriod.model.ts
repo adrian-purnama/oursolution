@@ -1,7 +1,9 @@
 import { model, Schema } from "mongoose";
+import { BASE_VARIANT_ID } from "../product/product.interface";
 import {
   PRODUCT_PERIOD_SOURCES,
   UserProductPeriodInterface,
+  VARIANT_APPLY_MODES,
 } from "./userProductPeriod.interface";
 
 const userProductPeriodSchema = new Schema<UserProductPeriodInterface>(
@@ -23,6 +25,15 @@ const userProductPeriodSchema = new Schema<UserProductPeriodInterface>(
     endsAt: {
       type: Date,
       default: null,
+    },
+    variantId: {
+      type: String,
+      default: BASE_VARIANT_ID,
+    },
+    applyVariant: {
+      type: String,
+      enum: VARIANT_APPLY_MODES,
+      default: "auto",
     },
     source: {
       type: String,
