@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-router'
 import {
   LifeBuoy,
+  Mail,
   Package,
   ReceiptText,
   Server,
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
   { to: '/admin/redeem-codes' as const, label: 'Redeem codes', icon: Ticket },
   { to: '/admin/deployments' as const, label: 'Deployments', icon: Server },
   { to: '/admin/tickets' as const, label: 'Tickets', icon: LifeBuoy },
+  { to: '/admin/emails' as const, label: 'Emails', icon: Mail },
 ]
 
 function breadcrumbFor(pathname: string): string[] {
@@ -61,6 +63,7 @@ function breadcrumbFor(pathname: string): string[] {
   if (pathname.startsWith('/admin/deployments')) {
     return ['Admin', 'Deployments']
   }
+  if (pathname.startsWith('/admin/emails')) return ['Admin', 'Emails']
   if (pathname.startsWith('/admin/tickets/')) {
     return ['Admin', 'Tickets', 'Ticket']
   }

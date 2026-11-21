@@ -260,7 +260,13 @@ class MailService {
   /** A notification sent by email; every value is escaped. */
   async sendNotification(
     to: string,
-    notification: { title: string; body: string; url: string | null },
+    notification: {
+      title: string;
+      body: string;
+      url: string | null;
+      /** The button's text; "Open" when absent. */
+      buttonLabel?: string;
+    },
   ): Promise<boolean> {
     const body = escapeHtml(notification.body).replace(/\n/g, "<br />");
     const button = notification.url
@@ -269,7 +275,7 @@ class MailService {
               <tr>
                 <td align="center">
                   <a href="${escapeHtml(notification.url)}" style="display:inline-block;background-color:${color.navy};color:#ffffff;font-family:${sans};font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:8px;">
-                    Open
+                    ${escapeHtml(notification.buttonLabel || "Open")}
                   </a>
                 </td>
               </tr>

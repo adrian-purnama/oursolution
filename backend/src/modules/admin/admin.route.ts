@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { requireUser } from "../../middleware/requireUser";
 import { uploadSingleImage } from "../../middleware/uploadImage";
+import { BroadcastController } from "../broadcast/broadcast.controller";
 import { DeploymentController } from "../deployment/deployment.controller";
 import { DokployController } from "../dokploy/dokploy.controller";
 import { PaymentController } from "../payment/payment.controller";
@@ -23,6 +24,7 @@ const purchaseController = new PurchaseController();
 const paymentController = new PaymentController();
 const ticketController = new TicketController();
 const redeemCodeController = new RedeemCodeController();
+const broadcastController = new BroadcastController();
 
 // Everything under /admin is admin-only.
 router.use(requireUser, requireAdmin);
@@ -111,5 +113,9 @@ router.get("/payments/:paymentId/invoice.pdf", paymentController.invoiceAny);
 router.get("/redeem-codes", redeemCodeController.list);
 router.post("/redeem-codes", redeemCodeController.create);
 router.delete("/redeem-codes/:id", redeemCodeController.remove);
+
+router.get("/broadcasts", broadcastController.list);
+router.post("/broadcasts", broadcastController.send);
+router.post("/broadcasts/audience", broadcastController.preview);
 
 export default router;
