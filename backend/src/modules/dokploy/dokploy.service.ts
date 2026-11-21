@@ -1,5 +1,8 @@
 import type { DokployProjectOutDto } from "../../dto/dokploy.dto";
 import { env } from "../../environment/env";
+import { logger } from "../../logger/logger";
+
+const SOURCE = "modules/dokploy/dokploy.service.ts";
 
 const TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 5_000;
@@ -41,6 +44,13 @@ function list(value: unknown): Json[] {
 }
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+/** Dokploy's compose.readLogs answers with text, or JSON around it. */
+function logText(body: unknown): string {
+  if (typeof body === "string") return body;
+  if (isRecord(body) && typeof body.data === "string") return body.data;
+  return JSON.stringify(body);
+}
 
 /** Reads the answer of Dokploy's `project.all`, keeping only what we use. */
 export function parseDokployProjects(body: unknown): DokployProjectOutDto[] {
@@ -142,7 +152,8 @@ export function deploymentOutcome(
 
 export type ContainersOutcome =
   | { status: "done" }
-  | { status: "error"; message: string }
+  /** `containerId`: the one that failed, so its log can be read. */
+  | { status: "error"; message: string; containerId?: string }
   | { status: "running" }
   | { status: "missing" };
 
@@ -157,8 +168,11 @@ export function containersOutcome(containers: unknown): ContainersOutcome {
   for (const item of items) {
     const name = text(item.name) ?? "A container";
     const state = text(item.state);
+    const failed = text(item.containerId)
+      ? { containerId: text(item.containerId) as string }
+      : {};
     if (state === "dead") {
-      return { status: "error", message: `${name} died` };
+      return { status: "error", message: `${name} died`, ...failed };
     }
     if (state !== "exited") {
       running = true;
@@ -169,12 +183,14 @@ export function containersOutcome(containers: unknown): ContainersOutcome {
       return {
         status: "error",
         message: `${name} exited, but Dokploy did not say with which code`,
+        ...failed,
       };
     }
     if (code !== "0") {
       return {
         status: "error",
-        message: `${name} exited with code ${code}. See its log in Dokploy`,
+        message: `${name} exited with code ${code}`,
+        ...failed,
       };
     }
   }
@@ -334,6 +350,20 @@ export class DokployService {
     }
   }
 
+  /** The compose file and .env Dokploy holds for the compose, or null. */
+  async composeContent(
+    composeId: string,
+  ): Promise<{ composeFile: string; env: string } | null> {
+    const compose = await this.request("GET", "compose.one", { composeId });
+    if (!isRecord(compose) || typeof compose.composeFile !== "string") {
+      return null;
+    }
+    return {
+      composeFile: compose.composeFile,
+      env: typeof compose.env === "string" ? compose.env : "",
+    };
+  }
+
   /** Whether the compose's containers are up right now. */
   async containersState(appName: string): Promise<ContainersState> {
     return containersState(
@@ -466,7 +496,26 @@ export class DokployService {
         env: "",
       });
       await this.deployAndWait(compose.composeId, input.title);
-      await this.waitForExit(compose.appName || input.name);
+      const failure = await this.waitForExit(compose.appName || input.name);
+      if (failure) {
+        // The compose and its log go below, so keep the log's tail here.
+        // Only in the server log: a command's output may hold secrets.
+        if (failure.containerId) {
+          const tail = await this.request("GET", "compose.readLogs", {
+            composeId: compose.composeId,
+            containerId: failure.containerId,
+            tail: "50",
+          }).catch((error: unknown) => `(log unreadable: ${String(error)})`);
+          logger.warn(
+            `Job ${input.name} failed: ${failure.message}. Last log lines:\n${logText(tail)}`,
+            SOURCE,
+            "runOnce",
+          );
+        }
+        throw new Error(
+          `${failure.message}. Its last log lines are in the backend log`,
+        );
+      }
     } finally {
       await this.deleteCompose(compose.composeId).catch(() => undefined);
     }
@@ -480,8 +529,13 @@ export class DokployService {
     });
   }
 
-  /** Waits until the compose project's containers have all exited with 0. */
-  private async waitForExit(appName: string): Promise<void> {
+  /**
+   * Waits until the compose project's containers have all exited. Returns
+   * nothing when all exited with 0, else what failed.
+   */
+  private async waitForExit(
+    appName: string,
+  ): Promise<{ message: string; containerId?: string } | null> {
     const since = Date.now();
     while (Date.now() - since < RUN_ONCE_TIMEOUT_MS) {
       const outcome = containersOutcome(
@@ -490,8 +544,8 @@ export class DokployService {
           appType: "docker-compose",
         }),
       );
-      if (outcome.status === "done") return;
-      if (outcome.status === "error") throw new Error(outcome.message);
+      if (outcome.status === "done") return null;
+      if (outcome.status === "error") return outcome;
       if (
         outcome.status === "missing" &&
         Date.now() - since > CONTAINER_GRACE_MS

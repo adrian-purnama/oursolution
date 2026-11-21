@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   isCustomerSet,
   isSetOnce,
@@ -151,6 +152,103 @@ export function resolveDeployment(
       port: domain.port,
     })),
   };
+}
+
+/** An admin's overrides of one deployment; see `DeploymentOverrides`. */
+export interface OverridesInput {
+  env: readonly { key: string; value: string }[];
+  composeFile: string | null;
+}
+
+/**
+ * `resolved` with an admin's env overrides on top. Their values may use
+ * `${NAME}` of a built-in, like the product's own values. Name and
+ * domains stay the product's.
+ */
+export function applyOverrides(
+  resolved: ResolvedDeployment,
+  overrides: OverridesInput | null | undefined,
+  builtIns: Readonly<Record<BuiltInVariable, string>>,
+): ResolvedDeployment {
+  const entries = overrides?.env ?? [];
+  if (entries.length === 0) return resolved;
+  const env = { ...resolved.env };
+  for (const { key, value } of entries) {
+    env[key] = renderTemplate(value, builtIns);
+  }
+  return { ...resolved, env };
+}
+
+/** The compose file to push: the admin's replacement, else `fallback`. */
+export function composeFileOf(
+  overrides: OverridesInput | null | undefined,
+  fallback: string,
+): string {
+  return overrides?.composeFile ?? fallback;
+}
+
+/** One difference between two sets of overrides, for the change log. */
+export interface OverrideChange {
+  target: "env" | "compose";
+  key: string | null;
+  before: string | null;
+  after: string | null;
+}
+
+/** What changed from `before` to `after`, env keys in order, compose last. */
+export function diffOverrides(
+  before: OverridesInput,
+  after: OverridesInput,
+): OverrideChange[] {
+  const was = new Map(before.env.map(({ key, value }) => [key, value]));
+  const now = new Map(after.env.map(({ key, value }) => [key, value]));
+  const changes: OverrideChange[] = [];
+  for (const key of [...new Set([...was.keys(), ...now.keys()])].sort()) {
+    const from = was.get(key) ?? null;
+    const to = now.get(key) ?? null;
+    if (from !== to) {
+      changes.push({ target: "env", key, before: from, after: to });
+    }
+  }
+  if (before.composeFile !== after.composeFile) {
+    changes.push({
+      target: "compose",
+      key: null,
+      before: before.composeFile,
+      after: after.composeFile,
+    });
+  }
+  return changes;
+}
+
+/**
+ * Why these overrides cannot be saved, or null. Keys must be variable
+ * names other than the built-ins, values valid templates, and a compose
+ * file free of errors.
+ */
+export function overridesProblem(overrides: OverridesInput): string | null {
+  const seen = new Set<string>();
+  for (const { key, value } of overrides.env) {
+    if (!VARIABLE_NAME.test(key)) {
+      return `${key || "A blank name"} is not a variable name`;
+    }
+    if (isBuiltIn(key)) return `${key} is set by the app and cannot be overridden`;
+    if (seen.has(key)) return `${key} is overridden twice`;
+    seen.add(key);
+    const { error } = scanTemplate(value);
+    if (error) return `${key}: ${error}`;
+  }
+  if (overrides.composeFile !== null) {
+    if (!overrides.composeFile.trim()) return "The compose file is empty";
+    const errors = checkDockerCompose(overrides.composeFile).issues.filter(
+      (issue) => issue.severity === "error",
+    );
+    if (errors.length > 0) {
+      const more = errors.length > 1 ? ` (and ${errors.length - 1} more)` : "";
+      return `Compose file: ${errors[0].message}${more}`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -449,4 +547,37 @@ export function checkDeployment(
       hosts: hostPreviews,
     },
   };
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+/** Fingerprints of a compose file and .env as sent to Dokploy. */
+export function fingerprintOf(
+  composeFile: string,
+  envFile: string,
+): { composeHash: string; envHash: string } {
+  return { composeHash: sha256(composeFile), envHash: sha256(envFile) };
+}
+
+/**
+ * Whether a deployment runs what it would get now. "unknown": nothing is
+ * recorded of what it got. `compose` / `env`: which of the two differ.
+ */
+export type UpdateStatus =
+  | { status: "current" }
+  | { status: "available"; compose: boolean; env: boolean }
+  | { status: "unknown" };
+
+export function updateStatusOf(
+  pushed: { composeHash: string; envHash: string } | null,
+  expected: { composeHash: string; envHash: string },
+): UpdateStatus {
+  if (!pushed) return { status: "unknown" };
+  const compose = pushed.composeHash !== expected.composeHash;
+  const env = pushed.envHash !== expected.envHash;
+  return compose || env
+    ? { status: "available", compose, env }
+    : { status: "current" };
 }

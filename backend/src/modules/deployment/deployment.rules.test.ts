@@ -132,8 +132,27 @@ describe("bulkPlan", () => {
     }
   });
 
+  it("updates only running, subscribed services not known to be current", () => {
+    const available = { status: "available" as const };
+    assert.deepEqual(bulkPlan("update", "running", true, available), {
+      run: "redeploy",
+    });
+    assert.deepEqual(bulkPlan("update", "failed", true, available), {
+      run: "redeploy",
+    });
+    assert.deepEqual(
+      bulkPlan("update", "running", true, { status: "unknown" }),
+      { run: "redeploy" },
+    );
+    assert.ok(
+      "skip" in bulkPlan("update", "running", true, { status: "current" }),
+    );
+    assert.ok("skip" in bulkPlan("update", "stopped", true, available));
+    assert.ok("skip" in bulkPlan("update", "running", false, available));
+  });
+
   it("leaves busy deployments alone", () => {
-    for (const action of ["turnOn", "turnOff", "erase"] as const) {
+    for (const action of ["turnOn", "turnOff", "erase", "update"] as const) {
       assert.ok("skip" in bulkPlan(action, "deploying", true), action);
     }
   });

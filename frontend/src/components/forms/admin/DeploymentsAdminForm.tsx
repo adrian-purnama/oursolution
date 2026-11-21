@@ -30,6 +30,8 @@ import {
   formatUptime,
   runTitle,
   subscriptionLine,
+  updateLabel,
+  updatePending,
 } from '#/lib/deployment'
 import type {
   AdminDeploymentRow,
@@ -48,6 +50,7 @@ const REFRESH_MS = 60_000
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'running', label: 'Running' },
+  { key: 'update', label: 'Update available' },
   { key: 'attention', label: 'Needs attention' },
   { key: 'off', label: 'Off' },
   { key: 'lapsed', label: 'Not subscribed' },
@@ -80,6 +83,8 @@ function matches(row: AdminDeploymentRow, filter: FilterKey): boolean {
       return true
     case 'running':
       return deployment.state === 'running'
+    case 'update':
+      return updatePending(deployment)
     case 'attention':
       return needsAttention(deployment)
     case 'off':
@@ -494,6 +499,11 @@ function DeploymentRow({
               {!deployment.entitled ? (
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
                   Not subscribed
+                </span>
+              ) : null}
+              {updatePending(deployment) && deployment.internal?.update ? (
+                <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-800">
+                  {updateLabel(deployment.internal.update)}
                 </span>
               ) : null}
             </div>

@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { Eraser, LoaderCircle, Power, Rocket, X } from 'lucide-react'
+import {
+  CircleArrowUp,
+  Eraser,
+  LoaderCircle,
+  Power,
+  Rocket,
+  X,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
@@ -28,6 +35,7 @@ const BULK_ICONS: Record<BulkAction, LucideIcon> = {
   turnOn: Rocket,
   turnOff: Power,
   erase: Eraser,
+  update: CircleArrowUp,
 }
 
 /** What each bulk action does and leaves alone, for the confirmation. */
@@ -38,6 +46,8 @@ const BULK_RULES: Record<BulkAction, string> = {
     'Each one is stopped and its address taken offline. Data is kept. Ones already off or busy are left alone.',
   erase:
     'Each one that is off has its data erased for good, and its service removed from Dokploy, Cloudflare and Uptime Kuma. Ones still on are left alone: turn them off first. Every one is checked on its own; this cannot be undone.',
+  update:
+    'Each running one whose product, variables or overrides changed since it was last deployed is redeployed with the current compose file and environment. Data is kept, but a new image may migrate it for good: try one first. Ones up to date, off, busy or without an active subscription are left alone.',
 }
 
 /** The word typed to confirm erasing many at once. */

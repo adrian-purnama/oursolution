@@ -81,6 +81,10 @@ router.put(
   "/users/:id/deployments/:productId/values",
   deploymentController.updateValues,
 );
+router.put(
+  "/users/:id/deployments/:productId/overrides",
+  deploymentController.updateOverrides,
+);
 router.post(
   "/users/:id/deployments/:productId/actions",
   deploymentController.start,

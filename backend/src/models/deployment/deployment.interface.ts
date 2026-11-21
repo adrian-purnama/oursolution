@@ -38,6 +38,29 @@ export interface DeploymentMonitor {
   monitorId: number;
 }
 
+/**
+ * What an admin changed for this one deployment on top of the product.
+ * `env` values win over the product's and the customer's (`${NAME}` of a
+ * built-in is filled, `$$` is a dollar sign); `composeFile`, when set,
+ * replaces the variant's. Everything else still comes from the product.
+ */
+export interface DeploymentOverrides {
+  env: DeploymentValue[];
+  composeFile: string | null;
+}
+
+/**
+ * Fingerprints of the compose file and .env last sent to Dokploy, so a
+ * change in what it would get now (a new product version, a changed
+ * variable or override) shows as an update.
+ */
+export interface PushedFingerprint {
+  composeHash: string;
+  envHash: string;
+  /** When it was sent; null when read back from Dokploy by a sync. */
+  at: Date | null;
+}
+
 /** One customer's deployment of one subscription product. */
 export interface DeploymentInterface {
   userId: Types.ObjectId;
@@ -57,6 +80,10 @@ export interface DeploymentInterface {
   deployedVariantId: string | null;
   /** Paused while the service is off, so being off is not downtime. */
   monitors: DeploymentMonitor[];
+  /** Applied from the next deploy or redeploy on. */
+  overrides: DeploymentOverrides;
+  /** Null until the first push, or until a sync reads it from Dokploy. */
+  pushed: PushedFingerprint | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
