@@ -21,6 +21,7 @@ import type {
   DeploymentMonitor,
 } from "../../models/deployment/deployment.interface";
 import { DeploymentModel } from "../../models/deployment/deployment.model";
+import { DeploymentChangeModel } from "../../models/deploymentChange/deploymentChange.model";
 import type {
   DeploymentRunInterface,
   RunAction,
@@ -37,10 +38,18 @@ import { ProductModel } from "../../models/product/product.model";
 import type { UserInterface } from "../../models/user/user.interface";
 import { UserModel } from "../../models/user/user.model";
 import {
+  applyOverrides,
+  composeFileOf,
+  diffOverrides,
+  fingerprintOf,
   missingValues,
+  overridesProblem,
   renderTemplate,
   resolveDeployment,
   toEnvFile,
+  updateStatusOf,
+  type OverridesInput,
+  type UpdateStatus,
   usernameFromEmail,
   type BuiltInVariable,
   type ResolvedDeployment,
@@ -148,6 +157,8 @@ const VARIANT_MESSAGES = {
 
 const SOURCE = "modules/deployment/deployment.service.ts";
 const RUNS_SHOWN = 5;
+/** How many override changes the admin view lists, newest first. */
+const CHANGES_SHOWN = 50;
 const MAX_SUFFIX = 9999;
 /** How many deployments a sync checks at the same time. */
 const SYNC_CONCURRENCY = 4;
@@ -188,16 +199,80 @@ function builtInsFor(
   };
 }
 
+/** An admin's overrides of a deployment, as plain data. */
+function overridesOf(deployment: DeploymentDoc | null): OverridesInput {
+  return {
+    env: (deployment?.overrides?.env ?? []).map(({ key, value }) => ({
+      key,
+      value,
+    })),
+    composeFile: deployment?.overrides?.composeFile ?? null,
+  };
+}
+
+/** The customer's values, with an admin's overrides counting as filled. */
+function filledValuesOf(
+  deployment: DeploymentDoc | null,
+): Record<string, string> {
+  const values = valuesOf(deployment);
+  for (const { key, value } of overridesOf(deployment).env) values[key] = value;
+  return values;
+}
+
+/**
+ * The deployment as it really runs for the customer: the product's
+ * settings, their values, and an admin's overrides on top.
+ */
+function effectiveOf(
+  config: ProductDeployment,
+  builtIns: Record<BuiltInVariable, string>,
+  deployment: DeploymentDoc | null,
+): ResolvedDeployment {
+  return applyOverrides(
+    resolveDeployment(config, builtIns, valuesOf(deployment)),
+    overridesOf(deployment),
+    builtIns,
+  );
+}
+
+/**
+ * Whether the deployment runs what a redeploy would send now: the compose
+ * file of the variant the subscription is on (or the admin's replacement)
+ * and the .env. Null when it was never pushed or cannot be deployed.
+ */
+function updateOf(
+  user: UserDoc,
+  product: ProductDoc,
+  deployment: DeploymentDoc | null,
+  currentVariantId: string | null | undefined,
+): UpdateStatus | null {
+  const config = product.deployment;
+  if (!config || !deployment?.dokploy) return null;
+  const variantCompose = variantOf(product, currentVariantId)?.composeFile;
+  if (!variantCompose) return null;
+  const builtIns = builtInsFor(
+    user,
+    user.deployUsername ?? usernameFromEmail(user.email),
+  );
+  const expected = fingerprintOf(
+    composeFileOf(overridesOf(deployment), variantCompose),
+    toEnvFile(effectiveOf(config, builtIns, deployment).env),
+  );
+  return updateStatusOf(deployment.pushed, expected);
+}
+
 /** A customer nobody is: "-" can never be a USERNAME or a user ID. */
 const NOBODY = { USERNAME: "-", EMAIL: "-@-", USER_ID: "-" };
 
 /**
  * The host folders that hold this customer's data only, which an erase
- * or a wipe empties. `resolved` is the deployment as resolved for the customer.
+ * or a wipe empties. `resolved` is the deployment as resolved for the
+ * customer, overrides included, and `composeFile` the one that runs.
  */
 function resetFoldersOf(
   config: ProductDeployment,
   resolved: ResolvedDeployment,
+  composeFile: string,
 ): CustomerFolders {
   const nobody = resolveDeployment(
     config,
@@ -210,7 +285,7 @@ function resetFoldersOf(
       .map((variable) => variable.key),
   );
   return customerFolders(
-    config.composeFile,
+    composeFile,
     resolved.env,
     nobody.env,
     editable,
@@ -430,11 +505,24 @@ export class DeploymentService {
     );
     const deployment = await this.findOrCreate(userId, productId);
     const merged = valuesOf(deployment);
+    // A customer sees an admin's override as the value. Sending it back
+    // unchanged keeps the override; changing it replaces it, which is logged.
+    const overrides = overridesOf(deployment);
+    const user = view === "customer" ? await UserModel.findById(userId).exec() : null;
+    const builtIns = user
+      ? builtInsFor(user, user.deployUsername ?? usernameFromEmail(user.email))
+      : null;
+    const replaced: { key: string; before: string; after: string }[] = [];
 
     for (const [key, value] of Object.entries(values)) {
       const visibility = visibilityOf.get(key);
       if (!visibility || !isCustomerSet(visibility)) {
         throw new Error(`${key} cannot be changed`);
+      }
+      const override = overrides.env.find((item) => item.key === key);
+      if (override && builtIns && visibility === "editable") {
+        if (value === renderTemplate(override.value, builtIns)) continue;
+        replaced.push({ key, before: override.value, after: value });
       }
       if (visibility === "editable") {
         merged[key] = value;
@@ -459,8 +547,77 @@ export class DeploymentService {
         return visibility !== undefined && isCustomerSet(visibility);
       })
       .map(([key, value]) => ({ key, value }));
+    if (replaced.length > 0) {
+      const gone = new Set(replaced.map(({ key }) => key));
+      deployment.overrides = {
+        env: overrides.env.filter(({ key }) => !gone.has(key)),
+        composeFile: overrides.composeFile,
+      };
+    }
     await deployment.save();
+    if (replaced.length > 0 && user) {
+      const at = new Date();
+      await DeploymentChangeModel.insertMany(
+        replaced.map(({ key, before, after }) => ({
+          deploymentId: deployment._id,
+          byUserId: user._id,
+          byEmail: `${user.email} (customer)`,
+          target: "env",
+          key,
+          before,
+          after: null,
+          at,
+        })),
+      );
+      logger.info(
+        `Deployment ${deployment.id}: customer replaced override(s) ${replaced.map(({ key }) => key).join(", ")}`,
+        SOURCE,
+        "updateValues",
+      );
+    }
     return this.get(userId, productId, view);
+  }
+
+  /**
+   * Admin: replaces the deployment's overrides with `input` and logs each
+   * difference. Removing one is a reset to the product's. They apply from
+   * the next deploy or redeploy; nothing is redeployed now.
+   */
+  async updateOverrides(
+    userId: string,
+    productId: string,
+    input: OverridesInput,
+    adminId: string,
+  ): Promise<DeploymentOutDto> {
+    const problem = overridesProblem(input);
+    if (problem) throw new Error(problem);
+    await this.loadProduct(productId);
+    const deployment = await this.findOrCreate(userId, productId);
+    const changes = diffOverrides(overridesOf(deployment), input);
+    if (changes.length > 0) {
+      const admin = await UserModel.findById(adminId).exec();
+      deployment.overrides = {
+        env: input.env.map(({ key, value }) => ({ key, value })),
+        composeFile: input.composeFile,
+      };
+      await deployment.save();
+      const at = new Date();
+      await DeploymentChangeModel.insertMany(
+        changes.map((change) => ({
+          ...change,
+          deploymentId: deployment._id,
+          byUserId: admin?._id ?? null,
+          byEmail: admin?.email ?? "unknown admin",
+          at,
+        })),
+      );
+      logger.info(
+        `Deployment ${deployment.id}: ${changes.length} override change(s) by ${admin?.email ?? adminId}`,
+        SOURCE,
+        "updateOverrides",
+      );
+    }
+    return this.get(userId, productId, "admin");
   }
 
   /**
@@ -583,7 +740,7 @@ export class DeploymentService {
   private assertFilled(product: ProductDoc, deployment: DeploymentDoc): void {
     const missing = missingValues(
       product.deployment?.variables ?? [],
-      valuesOf(deployment),
+      filledValuesOf(deployment),
     );
     if (missing.length > 0) {
       const them = missing.length === 1 ? "it" : "them";
@@ -638,10 +795,16 @@ export class DeploymentService {
 
     const items: DeploymentBulkItemOutDto[] = [];
     for (const { userId, productId } of targets) {
+      // An update compares with the product's settings, so it needs all.
+      const full = input.action === "update";
       const [record, user, product] = await Promise.all([
         DeploymentModel.findOne({ userId, productId }).exec(),
-        UserModel.findById(userId).select("email").exec(),
-        ProductModel.findById(productId).select("name").exec(),
+        UserModel.findById(userId)
+          .select(full ? "" : "email")
+          .exec(),
+        ProductModel.findById(productId)
+          .select(full ? "" : "name")
+          .exec(),
       ]);
       const item: DeploymentBulkItemOutDto = {
         user: { id: userId, email: user?.email ?? null },
@@ -662,10 +825,20 @@ export class DeploymentService {
         );
         // No record yet: a subscription never deployed, which turning on
         // may deploy for the first time.
+        const update = full
+          ? updateOf(
+              user,
+              product,
+              record,
+              (await userProductService.variantSchedule(userId, productId))
+                .current?.variantId,
+            )
+          : null;
         const plan = bulkPlan(
           input.action,
           record?.state ?? "notDeployed",
           entitled,
+          update,
         );
         if ("skip" in plan) {
           item.message = plan.skip;
@@ -919,6 +1092,22 @@ export class DeploymentService {
           dokployService.containersState(appName),
           dokployService.domainHosts(link.composeId),
         ]);
+        // Pushed before fingerprints were kept: take them from what Dokploy
+        // holds, so its update status is known.
+        if (!record.pushed) {
+          const content = await dokployService.composeContent(link.composeId);
+          if (content) {
+            const pushed = {
+              ...fingerprintOf(content.composeFile, content.env),
+              at: null,
+            };
+            await DeploymentModel.updateOne(
+              { _id: record._id, pushed: null },
+              { $set: { pushed } },
+            ).exec();
+            record.pushed = pushed;
+          }
+        }
       } else if (link || record.state !== "notDeployed") {
         actual = "missing";
         registered = [];
@@ -1394,10 +1583,10 @@ export class DeploymentService {
     context.variant = variant;
 
     const username = await this.ensureUsername(user);
-    const resolved = resolveDeployment(
+    const resolved = effectiveOf(
       config,
       builtInsFor(user, username),
-      valuesOf(deployment),
+      deployment,
     );
     context.resolved = resolved;
 
@@ -1473,12 +1662,16 @@ export class DeploymentService {
         "The subscription is no longer active. Nothing was erased",
       );
     }
-    const resolved = resolveDeployment(
+    const resolved = effectiveOf(
       config,
       builtInsFor(user, user.deployUsername),
-      valuesOf(deployment),
+      deployment,
     );
-    const { folders } = resetFoldersOf(config, resolved);
+    const { folders } = resetFoldersOf(
+      config,
+      resolved,
+      composeFileOf(overridesOf(deployment), config.composeFile),
+    );
     if (folders.length === 0) {
       throw new Error(
         "The compose file mounts no host folder that is this customer's only and inside DEPLOY_DATA_ROOTS, so there is nothing to erase",
@@ -1494,8 +1687,17 @@ export class DeploymentService {
     const { deployment, product, run } = context;
     const config = product.deployment;
     const { resolved, variant } = context;
-    const composeFile = variant?.composeFile;
-    if (!config || !resolved || !context.environmentId || !composeFile) {
+    // An admin's replacement wins over the variant's own.
+    const composeFile = variant?.composeFile
+      ? composeFileOf(overridesOf(deployment), variant.composeFile)
+      : null;
+    if (
+      !config ||
+      !resolved ||
+      !context.environmentId ||
+      !variant ||
+      !composeFile
+    ) {
       throw new Error("The check step did not finish");
     }
 
@@ -1516,15 +1718,15 @@ export class DeploymentService {
     }
 
     const { composeId } = deployment.dokploy;
-    await dokployService.updateCompose(composeId, {
-      composeFile,
-      env: toEnvFile(resolved.env),
-    });
+    const envFile = toEnvFile(resolved.env);
+    await dokployService.updateCompose(composeId, { composeFile, env: envFile });
     // Dokploy has this variant's compose now, even if the deploy fails.
+    const pushed = { ...fingerprintOf(composeFile, envFile), at: new Date() };
     deployment.deployedVariantId = variant.id;
+    deployment.pushed = pushed;
     await DeploymentModel.updateOne(
       { _id: deployment._id },
-      { $set: { deployedVariantId: variant.id } },
+      { $set: { deployedVariantId: variant.id, pushed } },
     ).exec();
     await dokployService.syncDomains(composeId, resolved.domains);
     await dokployService.deployAndWait(
@@ -1667,21 +1869,25 @@ export class DeploymentService {
       const owner = ownerOf.get(String(other.userId));
       const config = product?.deployment;
       if (!product || !config || !owner) continue;
-      const resolved = resolveDeployment(
+      const resolved = effectiveOf(
         config,
         builtInsFor(
           owner,
           owner.deployUsername ?? usernameFromEmail(owner.email),
         ),
-        valuesOf(other),
+        other,
       );
-      const mounted = hostPaths(config.composeFile, resolved.env);
+      const otherCompose = composeFileOf(
+        overridesOf(other),
+        config.composeFile,
+      );
+      const mounted = hostPaths(otherCompose, resolved.env);
       if (mounted === null) {
         throw new Error(
           `Product "${product.name}" mounts a path that cannot be read, so it is not certain the folders to erase are this customer's only`,
         );
       }
-      const theirs = resetFoldersOf(config, resolved).folders;
+      const theirs = resetFoldersOf(config, resolved, otherCompose).folders;
       for (const folder of folders) {
         const clash =
           mounted.find((path) => isInside(path, folder)) ??
@@ -1986,12 +2192,19 @@ export class DeploymentService {
       : null;
 
     const builtIns = builtInsFor(user, username);
+    // Customers see what really runs, an admin's overrides included; the
+    // product's visibility decides whether they may change it. Admins edit
+    // the customer's own values here and the overrides in their section.
+    const shown =
+      view === "customer" && resolved
+        ? applyOverrides(resolved, overridesOf(deployment), builtIns)
+        : resolved;
     const variables: DeploymentVariableOutDto[] = (config?.variables ?? [])
       .filter(
         (variable) => view === "admin" || variable.visibility !== "hidden",
       )
       .map((variable) => {
-        const value = resolved?.env[variable.key] ?? "";
+        const value = shown?.env[variable.key] ?? "";
         const setOnce = isSetOnce(variable.visibility);
         const filled = setOnce && Boolean(value.trim());
         const secret = variable.visibility === "setOnceHidden";
@@ -2035,10 +2248,21 @@ export class DeploymentService {
       userProductService.variantSchedule(user.id, product.id),
     ]);
 
-    const reset: CustomerFolders =
-      config && resolved
-        ? resetFoldersOf(config, resolved)
-        : { folders: [], skipped: [] };
+    const overrides = overridesOf(deployment);
+    const changes =
+      view === "admin" && deployment
+        ? await DeploymentChangeModel.find({ deploymentId: deployment._id })
+            .sort({ at: -1 })
+            .limit(CHANGES_SHOWN)
+            .exec()
+        : [];
+    const reset: CustomerFolders = config
+      ? resetFoldersOf(
+          config,
+          effectiveOf(config, builtInsFor(user, username), deployment),
+          composeFileOf(overrides, config.composeFile),
+        )
+      : { folders: [], skipped: [] };
     const wipeReason = wipeBlocker(state, entitled, reset.folders.length);
     const actions = allowedActions(state, entitled).filter(
       (action) =>
@@ -2059,7 +2283,7 @@ export class DeploymentService {
           : (deployment?.routedHosts ?? []),
       variables,
       missingValues: config
-        ? missingValues(config.variables, valuesOf(deployment))
+        ? missingValues(config.variables, filledValuesOf(deployment))
         : [],
       status,
       actions,
@@ -2087,6 +2311,43 @@ export class DeploymentService {
               monitors: (deployment?.monitors ?? []).map(
                 ({ host, monitorId }) => ({ host, monitorId }),
               ),
+              update: updateOf(
+                user,
+                product,
+                deployment,
+                schedule.current?.variantId,
+              ),
+              pushedAt: deployment?.pushed?.at?.toISOString() ?? null,
+              overrides: {
+                // Every product variable, then overrides of other names.
+                env: [
+                  ...new Set([
+                    ...(config?.variables ?? []).map(({ key }) => key),
+                    ...overrides.env.map(({ key }) => key),
+                  ]),
+                ].map((key) => ({
+                  key,
+                  productValue: resolved?.env[key] ?? null,
+                  override:
+                    overrides.env.find((item) => item.key === key)?.value ??
+                    null,
+                })),
+                composeFile: overrides.composeFile,
+                productComposeFile:
+                  variantOf(product, schedule.current?.variantId)
+                    ?.composeFile ??
+                  config?.composeFile ??
+                  "",
+                changes: changes.map((change) => ({
+                  id: change.id,
+                  at: change.at.toISOString(),
+                  byEmail: change.byEmail,
+                  target: change.target,
+                  key: change.key,
+                  before: change.before,
+                  after: change.after,
+                })),
+              },
             },
           }
         : {}),

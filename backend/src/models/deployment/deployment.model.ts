@@ -3,8 +3,10 @@ import {
   DEPLOYMENT_STATES,
   DeploymentInterface,
   DeploymentMonitor,
+  DeploymentOverrides,
   DeploymentValue,
   DokployLink,
+  PushedFingerprint,
 } from "./deployment.interface";
 
 const valueSchema = new Schema<DeploymentValue>(
@@ -33,6 +35,23 @@ const monitorSchema = new Schema<DeploymentMonitor>(
   { _id: false },
 );
 
+const overridesSchema = new Schema<DeploymentOverrides>(
+  {
+    env: { type: [valueSchema], default: [] },
+    composeFile: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+const pushedSchema = new Schema<PushedFingerprint>(
+  {
+    composeHash: { type: String, required: true },
+    envHash: { type: String, required: true },
+    at: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const deploymentSchema = new Schema<DeploymentInterface>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -49,6 +68,11 @@ const deploymentSchema = new Schema<DeploymentInterface>(
     dokploy: { type: dokploySchema, default: null },
     deployedVariantId: { type: String, default: null },
     monitors: { type: [monitorSchema], default: [] },
+    overrides: {
+      type: overridesSchema,
+      default: () => ({ env: [], composeFile: null }),
+    },
+    pushed: { type: pushedSchema, default: null },
   },
   { timestamps: true },
 );

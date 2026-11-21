@@ -141,7 +141,57 @@ export interface DeploymentOutDto {
     resetSkipped: { path: string; reason: string }[];
     /** Whether "Delete data" may run now, and if not, why. */
     wipe: { allowed: boolean; reason: string | null };
+    /**
+     * Whether a redeploy would send another compose file or .env than the
+     * last one sent; null when never pushed. "unknown" until a sync reads
+     * what Dokploy holds, for deployments pushed before this was kept.
+     */
+    update:
+      | { status: "current" }
+      | { status: "available"; compose: boolean; env: boolean }
+      | { status: "unknown" }
+      | null;
+    /** When the app last sent the compose file and .env. */
+    pushedAt: string | null;
+    overrides: DeploymentOverridesOutDto;
   };
+}
+
+/** One logged change of a deployment's overrides. */
+export interface DeploymentChangeOutDto {
+  id: string;
+  at: string;
+  byEmail: string;
+  target: "env" | "compose";
+  key: string | null;
+  /** Null: no override then (the product's applied). */
+  before: string | null;
+  /** Null: reset to the product's. */
+  after: string | null;
+}
+
+/** Admin: what this deployment changes on top of the product. */
+export interface DeploymentOverridesOutDto {
+  /** Every product variable, then overrides of names the product lacks. */
+  env: {
+    key: string;
+    /** What applies without an override; null when the product has no such variable. */
+    productValue: string | null;
+    /** As typed, may hold `${USERNAME}`; null when not overridden. */
+    override: string | null;
+  }[];
+  /** The replacement compose file, or null to use the product's. */
+  composeFile: string | null;
+  /** The compose file of the variant the subscription is on now. */
+  productComposeFile: string;
+  /** Newest first. */
+  changes: DeploymentChangeOutDto[];
+}
+
+/** Body of PUT .../overrides: the whole new set; leave one out to reset it. */
+export interface UpdateDeploymentOverridesInDto {
+  env: { key: string; value: string }[];
+  composeFile: string | null;
 }
 
 /** One line of the admin overview of every deployment. */

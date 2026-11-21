@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import type {
   DeploymentActionInDto,
   DeploymentBulkInDto,
+  UpdateDeploymentOverridesInDto,
   UpdateDeploymentValuesInDto,
 } from "../dto/deployment.dto";
 import {
@@ -60,6 +61,37 @@ export function parseDeploymentBulkInDto(body: unknown): DeploymentBulkInDto {
       return { userId, productId };
     }),
   };
+}
+
+const MAX_COMPOSE_LENGTH = 100_000;
+
+/**
+ * Body: `{ env: [{ key, value }], composeFile: string | null }`. Keys are
+ * trimmed; values are kept as typed, one line each.
+ */
+export function parseUpdateDeploymentOverridesInDto(
+  body: unknown,
+): UpdateDeploymentOverridesInDto {
+  const { env, composeFile } = asRecord(body);
+  if (!Array.isArray(env)) throw new Error("env must be a list");
+  if (env.length > MAX_VALUES) throw new Error("Too many overrides");
+  const entries = env.map((raw) => {
+    const { key, value } = asRecord(raw);
+    if (typeof key !== "string" || typeof value !== "string") {
+      throw new Error("Each override needs a key and a value");
+    }
+    const name = key.trim();
+    if (value.length > MAX_VALUE_LENGTH) throw new Error(`${name} is too long`);
+    if (/[\r\n]/.test(value)) throw new Error(`${name} must be on one line`);
+    return { key: name, value };
+  });
+  if (composeFile !== null && typeof composeFile !== "string") {
+    throw new Error("composeFile must be text or null");
+  }
+  if (typeof composeFile === "string" && composeFile.length > MAX_COMPOSE_LENGTH) {
+    throw new Error("The compose file is too long");
+  }
+  return { env: entries, composeFile };
 }
 
 /** Body: `{ values: { KEY: "value" } }`, one line each. */

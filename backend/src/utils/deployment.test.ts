@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  applyOverrides,
   checkDeployment,
+  composeFileOf,
+  diffOverrides,
+  fingerprintOf,
+  updateStatusOf,
+  overridesProblem,
   missingValues,
   renderTemplate,
   resolveDeployment,
@@ -281,5 +287,119 @@ describe("toEnvFile", () => {
       toEnvFile({ A: "plain-1.2", B: "has $dollar and space", C: `it's $5` }),
       `A=plain-1.2\nB='has $dollar and space'\nC="it's $$5"\n`,
     );
+  });
+});
+
+describe("overrides", () => {
+  const builtIns = {
+    USERNAME: "jane",
+    EMAIL: "jane@example.com",
+    USER_ID: "u1",
+    DOMAIN: "example.com",
+  };
+  const resolved = {
+    name: "n8n-jane",
+    env: { ...builtIns, DB_NAME: "jane", TZ: "UTC" },
+    domains: [{ serviceName: "n8n", host: "jane.example.com", port: 5678 }],
+  };
+
+  it("puts env overrides on top, filling built-ins, and keeps the rest", () => {
+    const out = applyOverrides(
+      resolved,
+      { env: [{ key: "DB_NAME", value: "${USERNAME}_old" }], composeFile: null },
+      builtIns,
+    );
+    assert.equal(out.env.DB_NAME, "jane_old");
+    assert.equal(out.env.TZ, "UTC");
+    assert.deepEqual(out.domains, resolved.domains);
+    assert.equal(out.name, resolved.name);
+    assert.equal(applyOverrides(resolved, null, builtIns), resolved);
+  });
+
+  it("uses the replacement compose file only when there is one", () => {
+    assert.equal(composeFileOf(null, "base"), "base");
+    assert.equal(composeFileOf({ env: [], composeFile: null }, "base"), "base");
+    assert.equal(composeFileOf({ env: [], composeFile: "mine" }, "base"), "mine");
+  });
+
+  it("lists each set, changed and reset override", () => {
+    const changes = diffOverrides(
+      {
+        env: [
+          { key: "A", value: "1" },
+          { key: "B", value: "2" },
+        ],
+        composeFile: null,
+      },
+      {
+        env: [
+          { key: "B", value: "3" },
+          { key: "C", value: "4" },
+        ],
+        composeFile: "services: {}",
+      },
+    );
+    assert.deepEqual(changes, [
+      { target: "env", key: "A", before: "1", after: null },
+      { target: "env", key: "B", before: "2", after: "3" },
+      { target: "env", key: "C", before: null, after: "4" },
+      { target: "compose", key: null, before: null, after: "services: {}" },
+    ]);
+    assert.deepEqual(
+      diffOverrides(
+        { env: [{ key: "A", value: "1" }], composeFile: "x" },
+        { env: [{ key: "A", value: "1" }], composeFile: "x" },
+      ),
+      [],
+    );
+  });
+
+  it("refuses bad keys, built-ins, duplicates and stray dollars", () => {
+    const one = (key: string, value = "v") =>
+      overridesProblem({ env: [{ key, value }], composeFile: null });
+    assert.equal(one("DB_NAME"), null);
+    assert.match(one("1BAD") ?? "", /not a variable name/);
+    assert.match(one("USERNAME") ?? "", /set by the app/);
+    assert.match(one("A", "pa$s") ?? "", /dollar/);
+    assert.match(
+      overridesProblem({
+        env: [
+          { key: "A", value: "1" },
+          { key: "A", value: "2" },
+        ],
+        composeFile: null,
+      }) ?? "",
+      /twice/,
+    );
+    assert.match(
+      overridesProblem({ env: [], composeFile: "  " }) ?? "",
+      /empty/,
+    );
+  });
+});
+
+describe("updateStatusOf", () => {
+  const v21 = fingerprintOf("services: v21", "A=1");
+
+  it("is current when the same compose and env would be sent", () => {
+    assert.deepEqual(
+      updateStatusOf(v21, fingerprintOf("services: v21", "A=1")),
+      { status: "current" },
+    );
+  });
+
+  it("says which part changed", () => {
+    assert.deepEqual(
+      updateStatusOf(v21, fingerprintOf("services: v22", "A=1")),
+      { status: "available", compose: true, env: false },
+    );
+    assert.deepEqual(
+      updateStatusOf(v21, fingerprintOf("services: v21", "A=2")),
+      { status: "available", compose: false, env: true },
+    );
+  });
+
+  it("is unknown when nothing was recorded", () => {
+    assert.deepEqual(updateStatusOf(null, v21), { status: "unknown" });
   });
 });

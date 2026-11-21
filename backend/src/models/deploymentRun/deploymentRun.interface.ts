@@ -24,7 +24,7 @@ export const RUN_ACTIONS = [
 export type RunAction = (typeof RUN_ACTIONS)[number];
 
 /** What an admin can do to many deployments at once. */
-export const BULK_ACTIONS = ["turnOn", "turnOff", "erase"] as const;
+export const BULK_ACTIONS = ["turnOn", "turnOff", "erase", "update"] as const;
 export type BulkAction = (typeof BULK_ACTIONS)[number];
 
 export const RUN_STATUSES = ["running", "succeeded", "failed"] as const;

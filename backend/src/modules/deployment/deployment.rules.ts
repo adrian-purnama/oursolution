@@ -100,6 +100,8 @@ export function bulkPlan(
   action: BulkAction,
   state: DeploymentState,
   entitled: boolean,
+  /** Update only: whether it runs what a redeploy would send now. */
+  update: { status: "current" | "available" | "unknown" } | null = null,
 ): { run: RunAction } | { skip: string } {
   if (BUSY_STATES.includes(state)) {
     return { skip: "Something is already in progress" };
@@ -119,6 +121,13 @@ export function bulkPlan(
       if (state !== "stopped") return { skip: "Turn it off first" };
       // The customer's erase while subscribed; an admin's wipe after.
       return { run: entitled ? "erase" : "wipe" };
+    case "update":
+      // A service that is off gets the new version when it is turned on.
+      if (!mayBeRunning(state)) return { skip: "Off: updates when turned on" };
+      if (!entitled) return { skip: "The subscription is not active" };
+      if (update?.status === "current") return { skip: "Already up to date" };
+      // "unknown" is updated too: nothing says it runs the latest.
+      return { run: "redeploy" };
   }
 }
 

@@ -145,7 +145,73 @@ export type Deployment = {
     resetSkipped: { path: string; reason: string }[]
     /** Whether "Delete data" may run now, and if not, why. */
     wipe: { allowed: boolean; reason: string | null }
+    /**
+     * Whether a redeploy would send another compose file or .env than the
+     * last one sent; null when never pushed. "unknown" until a sync reads
+     * it from Dokploy, for ones pushed before this was kept.
+     */
+    update: DeploymentUpdate | null
+    /** When the app last sent the compose file and .env. */
+    pushedAt: string | null
+    overrides: DeploymentOverrides
   }
+}
+
+export type DeploymentUpdate =
+  | { status: 'current' }
+  | { status: 'available'; compose: boolean; env: boolean }
+  | { status: 'unknown' }
+
+/** Running, or failed, with something newer to send: what Update takes. */
+export function updatePending(deployment: Deployment): boolean {
+  const update = deployment.internal?.update
+  return (
+    (deployment.state === 'running' || deployment.state === 'failed') &&
+    deployment.entitled &&
+    (update?.status === 'available' || update?.status === 'unknown')
+  )
+}
+
+/** A short line on what an update would change. */
+export function updateLabel(update: DeploymentUpdate): string {
+  if (update.status === 'current') return 'Up to date'
+  if (update.status === 'unknown') return 'Version not known yet'
+  const parts = [
+    ...(update.compose ? ['compose file'] : []),
+    ...(update.env ? ['environment'] : []),
+  ]
+  return `Update available: ${parts.join(' and ')}`
+}
+
+/** One logged change of a deployment's overrides. */
+export type DeploymentChange = {
+  id: string
+  at: string
+  byEmail: string
+  target: 'env' | 'compose'
+  key: string | null
+  /** Null: there was no override. */
+  before: string | null
+  /** Null: reset to the product's. */
+  after: string | null
+}
+
+/** Admin: what one deployment changes on top of its product. */
+export type DeploymentOverrides = {
+  /** Every product variable, then overrides of names the product lacks. */
+  env: {
+    key: string
+    /** What applies without an override; null: not a product variable. */
+    productValue: string | null
+    /** As typed, may hold ${USERNAME}; null when not overridden. */
+    override: string | null
+  }[]
+  /** Replacement compose file, or null to use the product's. */
+  composeFile: string | null
+  /** The compose file of the variant the subscription is on now. */
+  productComposeFile: string
+  /** Newest first. */
+  changes: DeploymentChange[]
 }
 
 /** One line of the admin overview of every deployment. */
@@ -190,12 +256,13 @@ export type DeploymentSync = {
 }
 
 /** What an admin can do to many deployments at once. */
-export type BulkAction = 'turnOn' | 'turnOff' | 'erase'
+export type BulkAction = 'turnOn' | 'turnOff' | 'erase' | 'update'
 
 export const BULK_ACTION_LABELS: Record<BulkAction, string> = {
   turnOn: 'Turn on',
   turnOff: 'Turn off',
   erase: 'Erase data',
+  update: 'Update',
 }
 
 /** How many deployments one bulk action may take. */

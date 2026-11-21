@@ -9,6 +9,7 @@ import type {
 import {
   parseDeploymentActionInDto,
   parseDeploymentBulkInDto,
+  parseUpdateDeploymentOverridesInDto,
   parseUpdateDeploymentValuesInDto,
 } from "../../validation/deployment";
 import { parseParam, parseRouteId } from "../../validation/parseParam";
@@ -133,6 +134,22 @@ export class DeploymentController {
       return ok<DeploymentOutDto>(res, 200, "Settings saved", data);
     } catch (error) {
       return fail(res, error, "Failed to save the settings");
+    }
+  };
+
+  /** Admin: replace the deployment's overrides of the product. */
+  updateOverrides = async (req: Request, res: Response) => {
+    try {
+      const input = parseUpdateDeploymentOverridesInDto(req.body);
+      const data = await deploymentService.updateOverrides(
+        target(req, this.view),
+        productIdOf(req),
+        input,
+        req.user!.id,
+      );
+      return ok<DeploymentOutDto>(res, 200, "Overrides saved", data);
+    } catch (error) {
+      return fail(res, error, "Failed to save the overrides");
     }
   };
 

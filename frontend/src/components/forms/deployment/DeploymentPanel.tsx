@@ -37,6 +37,7 @@ import {
   StateBadge,
   overallCheckState,
 } from '#/components/forms/deployment/ServiceStatus'
+import DeploymentOverridesForm from '#/components/forms/admin/DeploymentOverridesForm'
 import { Button } from '#/components/ui/button'
 import {
   Dialog,
@@ -60,6 +61,7 @@ import {
   formatUptime,
   runTitle,
   subscriptionLine,
+  updateLabel,
 } from '#/lib/deployment'
 import type {
   Deployment,
@@ -1044,6 +1046,24 @@ export default function DeploymentPanel({
             <dd className="font-mono text-[13px] break-all">
               {deployment.internal.composeId ?? 'not created yet'}
             </dd>
+            <dt className={hintClassName}>Version</dt>
+            <dd className="text-[13px]">
+              {deployment.internal.update
+                ? updateLabel(deployment.internal.update)
+                : 'Not deployed yet'}
+              {deployment.internal.pushedAt ? (
+                <span className={hintClassName}>
+                  {' '}
+                  · last sent {formatDateTime(deployment.internal.pushedAt)}
+                </span>
+              ) : null}
+              {deployment.internal.update?.status === 'unknown' ? (
+                <span className={hintClassName}>
+                  {' '}
+                  · run Sync on the deployments page to read it from Dokploy
+                </span>
+              ) : null}
+            </dd>
             <dt className={hintClassName}>USERNAME</dt>
             <dd className="font-mono text-[13px]">
               {deployment.internal.username}
@@ -1078,6 +1098,14 @@ export default function DeploymentPanel({
             </dd>
           </dl>
         </section>
+      ) : null}
+
+      {admin && deployment.internal ? (
+        <DeploymentOverridesForm
+          url={url}
+          overrides={deployment.internal.overrides}
+          onSaved={(next) => accept(next, true)}
+        />
       ) : null}
 
       {history.length > 0 ? (
