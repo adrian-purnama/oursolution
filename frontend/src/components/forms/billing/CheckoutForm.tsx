@@ -271,8 +271,8 @@ export default function CheckoutForm({
   const blocked = quote.lines.some((line) => line.problem)
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
-      <section aria-label="Products">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
+      <section aria-label="Products" className="min-w-0">
         {direct ? (
           <p className="mb-4 text-sm text-[var(--muted)]">
             Buying now. Your basket stays as it is.{' '}
@@ -298,7 +298,7 @@ export default function CheckoutForm({
         </ul>
       </section>
 
-      <aside className="h-fit rounded-xl border border-[var(--line)] bg-white p-5 lg:sticky lg:top-20">
+      <aside className="h-fit min-w-0 rounded-xl border border-[var(--line)] bg-white p-5 lg:sticky lg:top-20">
         <h2 className="text-sm font-semibold text-[var(--ink)]">Summary</h2>
         <dl className="mt-4 space-y-2 text-sm">
           {quote.lines.map((line) => (
@@ -375,7 +375,7 @@ function CheckoutLineRow({
   const hasVariants = line.variants.length > 1
 
   return (
-    <li className="flex gap-4 py-5">
+    <li className="flex gap-3 py-5 sm:gap-4">
       <Link
         to="/products/$productId"
         params={{ productId: line.product.id }}
@@ -480,8 +480,8 @@ function CheckoutLineRow({
         ) : null}
 
         {line.problem ? (
-          <p className={cn('flex items-center gap-1.5 text-sm text-red-600')}>
-            <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+          <p className={cn('flex items-start gap-1.5 text-sm text-red-600')}>
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {line.problem}
           </p>
         ) : null}

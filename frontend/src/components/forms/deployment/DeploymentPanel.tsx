@@ -492,33 +492,38 @@ export default function DeploymentPanel({
         tabTour="notices"
       >
         <section className={`${cardClassName} overflow-hidden`}>
-          <header className="flex flex-wrap items-start gap-4 p-5">
-            <ProductMark
-              product={deployment.product}
-              className="size-12 rounded-lg"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-medium tracking-tight">
-                  {deployment.product.name}
-                </h2>
-                <StateBadge state={state} />
+          <header className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:p-5">
+            <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+              <ProductMark
+                product={deployment.product}
+                className="size-10 shrink-0 rounded-lg sm:size-12"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h2 className="text-lg leading-snug font-medium tracking-tight break-words sm:text-xl">
+                    {deployment.product.name}
+                  </h2>
+                  <StateBadge state={state} />
+                </div>
+                <p
+                  className={cn(
+                    'mt-0.5',
+                    expiry?.kind === 'expired'
+                      ? 'text-sm text-[var(--destructive)]'
+                      : expiry?.kind === 'expiring'
+                        ? 'text-sm text-amber-700'
+                        : hintClassName,
+                  )}
+                >
+                  {subscriptionLine(deployment)}
+                  {variantName ? ` · ${variantName}` : ''}
+                </p>
               </div>
-              <p
-                className={cn(
-                  'mt-0.5',
-                  expiry?.kind === 'expired'
-                    ? 'text-sm text-[var(--destructive)]'
-                    : expiry?.kind === 'expiring'
-                      ? 'text-sm text-amber-700'
-                      : hintClassName,
-                )}
-              >
-                {subscriptionLine(deployment)}
-                {variantName ? ` · ${variantName}` : ''}
-              </p>
             </div>
-            <div className="flex flex-wrap gap-2" data-tour="actions">
+            <div
+              className="flex flex-wrap gap-2 *:flex-1 sm:shrink-0 sm:*:flex-none"
+              data-tour="actions"
+            >
               {extendable && expiry.kind === 'expired' ? (
                 <Button
                   type="button"
