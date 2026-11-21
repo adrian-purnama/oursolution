@@ -17,7 +17,7 @@ export class NotificationInputError extends Error {}
  * Control characters (tab and newline aside, null bytes included),
  * zero-width characters and bidirectional overrides.
  */
-const INVISIBLE =
+export const INVISIBLE =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;

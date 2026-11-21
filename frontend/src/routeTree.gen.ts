@@ -26,6 +26,7 @@ import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-pass
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAppConfigRouteImport } from './routes/admin/app-config'
 import { Route as AdminDeploymentsRouteImport } from './routes/admin/deployments'
+import { Route as AdminEmailsRouteImport } from './routes/admin/emails'
 import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
 import { Route as AdminRedeemCodesRouteImport } from './routes/admin/redeem-codes'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
@@ -129,6 +130,11 @@ const AdminAppConfigRoute = AdminAppConfigRouteImport.update({
 const AdminDeploymentsRoute = AdminDeploymentsRouteImport.update({
   id: '/deployments',
   path: '/deployments',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminEmailsRoute = AdminEmailsRouteImport.update({
+  id: '/emails',
+  path: '/emails',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
@@ -260,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
+  '/admin/emails': typeof AdminEmailsRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/redeem-codes': typeof AdminRedeemCodesRoute
   '/products/$productId': typeof ProductsProductIdRoute
@@ -297,6 +304,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
+  '/admin/emails': typeof AdminEmailsRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/redeem-codes': typeof AdminRedeemCodesRoute
   '/products/$productId': typeof ProductsProductIdRoute
@@ -338,6 +346,7 @@ export interface FileRoutesById {
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/admin/app-config': typeof AdminAppConfigRoute
   '/admin/deployments': typeof AdminDeploymentsRoute
+  '/admin/emails': typeof AdminEmailsRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/redeem-codes': typeof AdminRedeemCodesRoute
   '/products/$productId': typeof ProductsProductIdRoute
@@ -378,6 +387,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin/app-config'
     | '/admin/deployments'
+    | '/admin/emails'
     | '/admin/payments'
     | '/admin/redeem-codes'
     | '/products/$productId'
@@ -415,6 +425,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin/app-config'
     | '/admin/deployments'
+    | '/admin/emails'
     | '/admin/payments'
     | '/admin/redeem-codes'
     | '/products/$productId'
@@ -455,6 +466,7 @@ export interface FileRouteTypes {
     | '/_auth/reset-password'
     | '/admin/app-config'
     | '/admin/deployments'
+    | '/admin/emails'
     | '/admin/payments'
     | '/admin/redeem-codes'
     | '/products/$productId'
@@ -615,6 +627,13 @@ declare module '@tanstack/react-router' {
       path: '/deployments'
       fullPath: '/admin/deployments'
       preLoaderRoute: typeof AdminDeploymentsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/emails': {
+      id: '/admin/emails'
+      path: '/emails'
+      fullPath: '/admin/emails'
+      preLoaderRoute: typeof AdminEmailsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/payments': {
@@ -814,6 +833,7 @@ const AuthenticatedRouteRouteWithChildren =
 interface AdminRouteRouteChildren {
   AdminAppConfigRoute: typeof AdminAppConfigRoute
   AdminDeploymentsRoute: typeof AdminDeploymentsRoute
+  AdminEmailsRoute: typeof AdminEmailsRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminRedeemCodesRoute: typeof AdminRedeemCodesRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -829,6 +849,7 @@ interface AdminRouteRouteChildren {
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAppConfigRoute: AdminAppConfigRoute,
   AdminDeploymentsRoute: AdminDeploymentsRoute,
+  AdminEmailsRoute: AdminEmailsRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminRedeemCodesRoute: AdminRedeemCodesRoute,
   AdminIndexRoute: AdminIndexRoute,
