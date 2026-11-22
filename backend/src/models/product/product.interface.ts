@@ -126,10 +126,26 @@ export const BASE_VARIANT_ID = "default";
 export const MAX_PRODUCT_VARIANTS = 10;
 
 /**
+ * A variant's own deployment settings. The Dokploy project and the name in
+ * Dokploy stay the product's, so a customer who switches variant keeps the
+ * same compose and their data.
+ */
+export interface VariantDeployment {
+  /**
+   * Checked and re-indented on save. It must mount the same sources as the
+   * product's, so switching keeps the customer's data.
+   */
+  composeFile: string;
+  variables: DeploymentVariable[];
+  domains: DeploymentDomain[];
+  commands: DeploymentCommand[];
+}
+
+/**
  * Another way to buy the same subscription, e.g. more CPU and memory. It
- * shares everything else with the product (name in Dokploy, variables,
- * domains, commands, data), so a customer can switch between variants and
- * keep their service.
+ * has its own price and duration, and may have its own deployment settings;
+ * it shares the product's name, Dokploy project and data, so a customer can
+ * switch between variants and keep their service.
  */
 export interface ProductVariant {
   /** Stable across edits; periods and deployments point at it. */
@@ -138,13 +154,23 @@ export interface ProductVariant {
   name: string;
   /** Public, short: what this variant gives. */
   specs: string;
+  /**
+   * Free text shown as its price once chosen, e.g. "Rp 149.000 / month";
+   * empty shows the price itself.
+   */
+  pricingText: string;
+  /** Markdown shown once chosen; empty shows the product's description. */
+  description: string;
   /** Amount charged per checkout, in whole rupiah. */
   priceIdr: number;
   /** How long one checkout keeps it active. */
   durationDays: number;
+  /** Its own deployment settings, or null to deploy the product's. */
+  deployment: VariantDeployment | null;
   /**
-   * Its own compose file, or null to use the product's. It must mount the
-   * same sources as the product's, so switching keeps the customer's data.
+   * Legacy: saved before variants had their own settings, a compose file
+   * used with the product's variables, domains and commands. Read only when
+   * `deployment` is null; new saves leave it null.
    */
   composeFile: string | null;
 }

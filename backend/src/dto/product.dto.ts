@@ -78,6 +78,10 @@ export interface PricingVariantOutDto {
   id: string;
   name: string;
   specs: string;
+  /** Shown as its price once chosen; empty shows the price. */
+  pricingText: string;
+  /** Markdown shown once chosen: its own, else the product's. */
+  description: string;
   priceIdr: number;
   durationDays: number | null;
 }

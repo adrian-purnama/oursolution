@@ -7,6 +7,7 @@ import {
   MAX_PRODUCT_IMAGES,
   MAX_PRODUCT_VARIANTS,
   type ProductVariant,
+  type VariantDeployment,
   NOTICE_TONES,
   PRODUCT_KINDS,
   type NoticeTone,
@@ -344,6 +345,40 @@ function parseDeployment(value: unknown): ProductDeployment | null {
   };
 }
 
+/**
+ * A variant's own settings, shape only: `fitVariants` checks them against
+ * the product once the product's own are known. Null deploys the product's.
+ */
+function parseVariantDeployment(
+  value: unknown,
+  where: string,
+): VariantDeployment | null {
+  if (value === undefined || value === null) return null;
+  const raw = asRecord(value);
+  const composeFile = parseText(
+    raw.composeFile ?? "",
+    `${where}'s compose file`,
+    MAX_COMPOSE_LENGTH,
+  );
+  if (!composeFile.trim()) throw new Error(`${where}'s compose file is empty`);
+  return {
+    composeFile,
+    variables: parseList(
+      raw.variables,
+      `${where}'s variables`,
+      MAX_VARIABLES,
+    ).map(parseVariable),
+    domains: parseList(raw.domains, `${where}'s domains`, MAX_DOMAINS).map(
+      parseDomain,
+    ),
+    commands: parseList(
+      raw.commands,
+      `${where}'s commands`,
+      MAX_DEPLOYMENT_COMMANDS,
+    ).map(parseCommand),
+  };
+}
+
 /** One variant's shape; `fitVariants` checks it against the product. */
 function parseVariant(value: unknown, index: number): ProductVariant {
   const raw = asRecord(value);
@@ -361,7 +396,9 @@ function parseVariant(value: unknown, index: number): ProductVariant {
     MAX_NAME_LENGTH,
   ).trim();
   if (!name) throw new Error(`${where} needs a name`);
+  const deployment = parseVariantDeployment(raw.deployment, where);
   const composeFile =
+    deployment !== null ||
     raw.composeFile === undefined ||
     raw.composeFile === null ||
     raw.composeFile === ""
@@ -375,8 +412,11 @@ function parseVariant(value: unknown, index: number): ProductVariant {
     id,
     name,
     specs: parseText(raw.specs ?? "", `${where}'s specs`, MAX_SPECS_LENGTH),
+    pricingText: parsePricingText(raw.pricingText ?? ""),
+    description: parseDescription(raw.description ?? ""),
     priceIdr: parsePriceIdr(raw.priceIdr),
     durationDays: parseDays(raw.durationDays, `${where}'s durationDays`),
+    deployment,
     composeFile,
   };
 }

@@ -1,26 +1,41 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { ArrowLeft, LoaderCircle, Plus, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  CircleX,
+  LoaderCircle,
+  Plus,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react'
 import DeploymentFields, {
-  EMPTY_DEPLOYMENT,
   checkDeployment,
   toDeploymentBody,
-  toDeploymentDraft,
 } from '#/components/forms/admin/DeploymentFields'
-import type { DeploymentDraft } from '#/components/forms/admin/DeploymentFields'
 import ProductImagesField, {
   saveProductImages,
   toImageItems,
 } from '#/components/forms/admin/ProductImagesField'
 import type { ImageItem } from '#/components/forms/admin/ProductImagesField'
 import ProductVariantsField, {
-  EMPTY_VARIANTS,
+  ProblemDot,
+  VariantPicker,
+  emptyVariants,
+  isBase,
+  priceLine,
+  settingsToCheck,
+  toVariantDrafts,
   toVariantsBody,
-  toVariantsDraft,
+  variantLabel,
+  variantProblems,
 } from '#/components/forms/admin/ProductVariantsField'
-import type { VariantsDraft } from '#/components/forms/admin/ProductVariantsField'
+import type {
+  EditorTab,
+  Problem,
+  VariantDraft,
+} from '#/components/forms/admin/ProductVariantsField'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -34,13 +49,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { Textarea } from '#/components/ui/textarea'
 import { apiFetch } from '#/lib/api'
-import { PRODUCT_KIND_LABELS } from '#/lib/product'
+import { PRODUCT_KIND_LABELS, formatIdr } from '#/lib/product'
 import type { Product, ProductKind, ProductNotice } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 
 type DeploymentChoice = 'none' | 'dockerCompose'
-
-type EditorTab = 'general' | 'pricing' | 'variants' | 'content' | 'delivery'
 
 /** Inactive panels stay mounted so their state and ids survive tab switches. */
 const tabPanelClassName = 'space-y-5 data-[state=inactive]:hidden'
@@ -50,36 +63,36 @@ const DEPLOYMENT_LABELS: Record<DeploymentChoice, string> = {
   dockerCompose: 'Docker Compose',
 }
 
+const TAB_LABELS: Record<EditorTab, string> = {
+  general: 'General',
+  pricing: 'Pricing',
+  variants: 'Variants',
+  delivery: 'Deployment',
+}
+
 type Draft = {
   name: string
   kind: ProductKind
   color: string
-  pricingText: string
-  description: string
   notices: ProductNotice[]
-  priceIdr: string
-  durationDays: string
   accessUrl: string
   showOnPricingPage: boolean
   deployment: DeploymentChoice
-  settings: DeploymentDraft
-  variants: VariantsDraft
+  /** The base variant first: the product's own price, days and settings. */
+  variants: VariantDraft[]
 }
 
-const EMPTY_DRAFT: Draft = {
-  name: '',
-  kind: 'subscription',
-  color: '#135ef5',
-  pricingText: '',
-  description: '',
-  notices: [],
-  priceIdr: '0',
-  durationDays: '30',
-  accessUrl: '',
-  showOnPricingPage: true,
-  deployment: 'none',
-  settings: EMPTY_DEPLOYMENT,
-  variants: EMPTY_VARIANTS,
+function emptyDraft(): Draft {
+  return {
+    name: '',
+    kind: 'subscription',
+    color: '#135ef5',
+    notices: [],
+    accessUrl: '',
+    showOnPricingPage: true,
+    deployment: 'none',
+    variants: emptyVariants(),
+  }
 }
 
 function toDraft(product: Product): Draft {
@@ -87,17 +100,109 @@ function toDraft(product: Product): Draft {
     name: product.name,
     kind: product.kind,
     color: product.color,
-    pricingText: product.pricingText,
-    description: product.description,
     notices: product.notices,
-    priceIdr: String(product.priceIdr),
-    durationDays: String(product.durationDays ?? 30),
     accessUrl: product.accessUrl ?? '',
     showOnPricingPage: product.showOnPricingPage,
     deployment: product.deployment ? product.deployment.type : 'none',
-    settings: toDeploymentDraft(product.deployment),
-    variants: toVariantsDraft(product),
+    variants: toVariantDrafts(product),
   }
+}
+
+/** Everything that is missing or odd, for every tab. */
+function problemsOf(draft: Draft): Problem[] {
+  const problems: Problem[] = []
+  if (!draft.name.trim()) {
+    problems.push({
+      tab: 'general',
+      severity: 'error',
+      message: 'The product needs a name',
+    })
+  }
+  if (!draft.variants[0].description.trim()) {
+    problems.push({
+      tab: 'general',
+      variantKey: draft.variants[0].key,
+      severity: 'warning',
+      message: 'No description yet. The product page tells buyers nothing',
+    })
+  }
+  if (draft.kind === 'subscription') {
+    problems.push(
+      ...variantProblems(draft.variants, draft.deployment === 'dockerCompose'),
+    )
+  } else {
+    const price = Number(draft.variants[0].priceIdr)
+    if (
+      !Number.isInteger(price) ||
+      price < 0 ||
+      !draft.variants[0].priceIdr.trim()
+    ) {
+      problems.push({
+        tab: 'pricing',
+        severity: 'error',
+        message: 'The price must be a whole number of rupiah, 0 or more',
+      })
+    }
+  }
+  return problems
+}
+
+/** A tab's problems, each a link to the variant it is about. */
+function ProblemList({
+  problems,
+  onOpen,
+}: {
+  problems: Problem[]
+  onOpen?: (problem: Problem) => void
+}) {
+  if (problems.length === 0) return null
+  const errors = problems.filter((problem) => problem.severity === 'error')
+  const ordered = [
+    ...errors,
+    ...problems.filter((problem) => problem.severity === 'warning'),
+  ]
+  return (
+    <div
+      className="overflow-hidden rounded-md border border-[var(--line)] bg-white"
+      aria-live="polite"
+    >
+      <p className="border-b border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-medium">
+        {errors.length > 0
+          ? `${errors.length} ${errors.length === 1 ? 'thing' : 'things'} to fix before saving`
+          : `${problems.length} ${problems.length === 1 ? 'warning' : 'warnings'}. You can still save`}
+      </p>
+      <ul className="divide-y divide-[var(--line)]">
+        {ordered.map((problem, index) => {
+          const isError = problem.severity === 'error'
+          const Icon = isError ? CircleX : TriangleAlert
+          const body: ReactNode = (
+            <>
+              <Icon
+                className={`mt-0.5 size-4 shrink-0 ${isError ? 'text-[var(--destructive)]' : 'text-amber-600'}`}
+                aria-label={isError ? 'Error' : 'Warning'}
+              />
+              <span className="min-w-0">{problem.message}</span>
+            </>
+          )
+          return (
+            <li key={index}>
+              {onOpen && problem.variantKey ? (
+                <button
+                  type="button"
+                  className="flex w-full gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--surface)]"
+                  onClick={() => onOpen(problem)}
+                >
+                  {body}
+                </button>
+              ) : (
+                <div className="flex gap-2 px-3 py-2 text-sm">{body}</div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
 }
 
 const sectionTitleClassName = 'text-sm font-medium'
@@ -200,10 +305,11 @@ export default function ProductEditorForm({
 
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(!isNew)
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
+  const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [images, setImages] = useState<ImageItem[]>([])
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<EditorTab>('general')
+  const [selectedKey, setSelectedKey] = useState('')
 
   useEffect(() => {
     if (!productId) return
@@ -233,88 +339,97 @@ export default function ProductEditorForm({
     }
   }, [productId])
 
+  const isSubscription = draft.kind === 'subscription'
+  const deploys = isSubscription && draft.deployment === 'dockerCompose'
+  const variants = isSubscription ? draft.variants : draft.variants.slice(0, 1)
+  const many = variants.length > 1
+  const base = variants[0]
+  const selected =
+    variants.find((variant) => variant.key === selectedKey) ?? base
+  const selectedIndex = variants.indexOf(selected)
+  const problems = problemsOf(draft)
+  const problemsIn = (at: EditorTab) =>
+    problems.filter((problem) => problem.tab === at)
+  const errorCount = problems.filter(
+    (problem) => problem.severity === 'error',
+  ).length
+
+  function setVariants(next: VariantDraft[]) {
+    setDraft({ ...draft, variants: next })
+  }
+
+  function setVariant(key: string, patch: Partial<VariantDraft>) {
+    setVariants(
+      draft.variants.map((variant) =>
+        variant.key === key ? { ...variant, ...patch } : variant,
+      ),
+    )
+  }
+
+  /** Shows a tab, and in it the given variant. */
+  function open(at: EditorTab, variantKey?: string) {
+    setTab(at)
+    if (variantKey) setSelectedKey(variantKey)
+  }
+
   async function handleSave(event: FormEvent) {
     event.preventDefault()
 
-    const priceIdr = Number(draft.priceIdr)
-    const durationDays = Number(draft.durationDays)
-    if (!draft.name.trim()) {
-      setTab('general')
-      toast.error('Name is required')
-      return
-    }
-    if (!Number.isInteger(priceIdr) || priceIdr < 0) {
-      setTab('pricing')
-      toast.error('Price must be a whole number of rupiah, 0 or more')
-      return
-    }
-    const isSubscription = draft.kind === 'subscription'
-    if (
-      isSubscription &&
-      (!Number.isInteger(durationDays) || durationDays < 1)
-    ) {
-      setTab('pricing')
-      toast.error('Duration must be a whole number of days, 1 or more')
+    const blocking = problems.find((problem) => problem.severity === 'error')
+    if (blocking) {
+      open(blocking.tab, blocking.variantKey)
+      toast.error(blocking.message)
       return
     }
 
-    const deploys = isSubscription && draft.deployment === 'dockerCompose'
-    if (deploys && !draft.settings.projectId) {
-      setTab('delivery')
-      toast.error('Choose the Dokploy project to deploy into')
-      return
-    }
-    if (deploys && !draft.settings.composeFile.trim()) {
-      setTab('delivery')
-      toast.error('The compose file is empty')
-      return
-    }
-    const variants = isSubscription ? toVariantsBody(draft.variants) : null
-    if (variants && 'problem' in variants) {
-      setTab('variants')
-      toast.error(variants.problem)
-      return
-    }
     const notices = draft.notices
       .map((notice) => ({ ...notice, text: notice.text.trim() }))
       .filter((notice) => notice.text)
     setSaving(true)
     try {
       if (deploys) {
-        const check = await checkDeployment(draft.settings)
-        if (check && !check.valid) {
-          const count = check.issues.filter(
-            (issue) => issue.severity === 'error',
-          ).length
-          setTab('delivery')
-          toast.error(
-            `Fix ${count} ${count === 1 ? 'problem' : 'problems'} in the deployment first`,
-          )
-          document
-            .getElementById('product-deployment')
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          return
+        // The server judges the compose files; ask before saving so the
+        // admin lands on the variant at fault.
+        for (const [index, variant] of variants.entries()) {
+          if (!isBase(variant) && !variant.ownDeployment) continue
+          const check = await checkDeployment(settingsToCheck(variant, base))
+          if (check && !check.valid) {
+            const count = check.issues.filter(
+              (issue) => issue.severity === 'error',
+            ).length
+            open('delivery', variant.key)
+            const where = many
+              ? `${variantLabel(variant, index)}'s deployment`
+              : 'the deployment'
+            toast.error(
+              `Fix ${count} ${count === 1 ? 'problem' : 'problems'} in ${where} first`,
+            )
+            document
+              .getElementById('product-deployment')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            return
+          }
         }
       }
 
+      const pricing = toVariantsBody(variants, deploys)
       const body = JSON.stringify({
         name: draft.name.trim(),
         // The kind is fixed once the product exists.
         ...(isNew ? { kind: draft.kind } : {}),
         color: draft.color,
-        pricingText: draft.pricingText.trim(),
-        description: draft.description.trim(),
+        pricingText: pricing.pricingText,
+        description: pricing.description,
         notices,
-        priceIdr,
+        priceIdr: pricing.priceIdr,
         ...(isSubscription
           ? {
-              durationDays,
-              ...(variants && 'body' in variants ? variants.body : {}),
+              ...pricing,
               deployment: deploys
                 ? {
                     type: 'dockerCompose',
-                    projectId: draft.settings.projectId,
-                    ...toDeploymentBody(draft.settings),
+                    projectId: base.settings.projectId,
+                    ...toDeploymentBody(base.settings),
                   }
                 : null,
             }
@@ -348,6 +463,10 @@ export default function ProductEditorForm({
       setSaving(false)
     }
   }
+
+  const tabs: EditorTab[] = isSubscription
+    ? ['general', 'pricing', 'variants', 'delivery']
+    : ['general', 'pricing', 'delivery']
 
   return (
     <div className="mx-auto w-full max-w-3xl text-[var(--ink)]">
@@ -383,21 +502,16 @@ export default function ProductEditorForm({
             value={tab}
             onValueChange={(value) => setTab(value as EditorTab)}
           >
-            <TabsList className="mb-6">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
-              {draft.kind === 'subscription' ? (
-                <TabsTrigger value="variants">
-                  Variants
-                  {draft.variants.variants.length > 0
-                    ? ` (${draft.variants.variants.length + 1})`
-                    : ''}
+            <TabsList className="mb-6 max-w-full justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {tabs.map((at) => (
+                <TabsTrigger key={at} value={at} className="gap-1.5">
+                  {at === 'delivery' && !isSubscription
+                    ? 'Access'
+                    : TAB_LABELS[at]}
+                  {at === 'variants' && many ? ` (${variants.length})` : ''}
+                  <ProblemDot problems={problemsIn(at)} />
                 </TabsTrigger>
-              ) : null}
-              <TabsTrigger value="content">Description</TabsTrigger>
-              <TabsTrigger value="delivery">
-                {draft.kind === 'oneTime' ? 'Access' : 'Deployment'}
-              </TabsTrigger>
+              ))}
             </TabsList>
 
             <TabsContent
@@ -405,6 +519,8 @@ export default function ProductEditorForm({
               forceMount
               className={tabPanelClassName}
             >
+              <ProblemList problems={problemsIn('general')} />
+
               <fieldset className="space-y-1.5">
                 <legend className={`mb-1 ${sectionTitleClassName}`}>
                   Type
@@ -445,6 +561,12 @@ export default function ProductEditorForm({
                     id="product-name"
                     value={draft.name}
                     maxLength={60}
+                    aria-invalid={
+                      !draft.name.trim() &&
+                      problemsIn('general').some(
+                        (problem) => problem.severity === 'error',
+                      )
+                    }
                     onChange={(event) =>
                       setDraft({ ...draft, name: event.target.value })
                     }
@@ -463,6 +585,58 @@ export default function ProductEditorForm({
                   />
                 </div>
               </div>
+
+              <div className="space-y-3 border-t border-[var(--line)] pt-5">
+                <VariantPicker
+                  variants={variants}
+                  selected={selected.key}
+                  onSelect={setSelectedKey}
+                  problems={problemsIn('general')}
+                  describe={(variant) =>
+                    isBase(variant)
+                      ? 'Product description'
+                      : variant.description.trim()
+                        ? 'Own description'
+                        : 'Same as base'
+                  }
+                />
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-description">
+                    {many
+                      ? `Description: ${variantLabel(selected, selectedIndex)}`
+                      : 'Description'}
+                  </Label>
+                  <Textarea
+                    id="product-description"
+                    value={selected.description}
+                    maxLength={4000}
+                    rows={many ? 8 : 5}
+                    placeholder={
+                      isBase(selected)
+                        ? 'What the buyer gets.\n\n- **Bold**, _italic_, [links](https://…)\n- Lists, headings (## Title), tables'
+                        : `Leave empty to show ${variantLabel(base, 0)}'s description.\n\nOr describe what this variant gives, in Markdown.`
+                    }
+                    onChange={(event) =>
+                      setVariant(selected.key, {
+                        description: event.target.value,
+                      })
+                    }
+                  />
+                  <p className={`text-xs ${hintClassName}`}>
+                    {!many
+                      ? 'Supports Markdown.'
+                      : isBase(selected)
+                        ? 'Supports Markdown. Shown before a variant is picked, and for variants without their own.'
+                        : 'Supports Markdown. Shown once a customer picks this variant.'}
+                  </p>
+                </div>
+
+                <NoticesField
+                  value={draft.notices}
+                  onChange={(notices) => setDraft({ ...draft, notices })}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent
@@ -470,51 +644,175 @@ export default function ProductEditorForm({
               forceMount
               className={tabPanelClassName}
             >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="product-price">Price charged (IDR)</Label>
-                  <Input
-                    id="product-price"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    step={1}
-                    value={draft.priceIdr}
-                    onChange={(event) =>
-                      setDraft({ ...draft, priceIdr: event.target.value })
-                    }
-                  />
-                </div>
-                {draft.kind === 'subscription' ? (
+              <ProblemList problems={problemsIn('pricing')} />
+
+              {many ? (
+                <fieldset className="space-y-2">
+                  <legend className={`mb-1 ${sectionTitleClassName}`}>
+                    Price per variant
+                  </legend>
+                  <div
+                    className={`hidden gap-3 px-3 text-xs sm:grid sm:grid-cols-[minmax(0,1fr)_9rem_7rem] ${hintClassName}`}
+                    aria-hidden
+                  >
+                    <span>Variant</span>
+                    <span>Price charged (IDR)</span>
+                    <span>Days per checkout</span>
+                  </div>
+                  {variants.map((variant, index) => {
+                    const mine = problemsIn('pricing').filter(
+                      (problem) => problem.variantKey === variant.key,
+                    )
+                    const label = variantLabel(variant, index)
+                    const price = Number(variant.priceIdr)
+                    const days = Number(variant.durationDays)
+                    const per30 =
+                      Number.isInteger(price) &&
+                      Number.isInteger(days) &&
+                      days > 0
+                        ? formatIdr(Math.round((price / days) * 30))
+                        : null
+                    const errorAbout = (word: string) =>
+                      mine.some(
+                        (problem) =>
+                          problem.severity === 'error' &&
+                          problem.message.includes(word),
+                      )
+                    return (
+                      <div
+                        key={variant.key}
+                        className="grid grid-cols-2 items-center gap-3 rounded-md border border-[var(--line)] bg-white px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_9rem_7rem]"
+                      >
+                        <div className="col-span-2 min-w-0 sm:col-span-1">
+                          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                            {label}
+                            <ProblemDot problems={mine} />
+                          </p>
+                          <p className={`truncate text-xs ${hintClassName}`}>
+                            {per30 ? `About ${per30} per 30 days` : 'Not set'}
+                          </p>
+                        </div>
+                        <Input
+                          aria-label={`${label}: price charged (IDR)`}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          step={1}
+                          value={variant.priceIdr}
+                          aria-invalid={errorAbout('price')}
+                          onChange={(event) =>
+                            setVariant(variant.key, {
+                              priceIdr: event.target.value,
+                            })
+                          }
+                        />
+                        <Input
+                          aria-label={`${label}: days per checkout`}
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          step={1}
+                          value={variant.durationDays}
+                          aria-invalid={errorAbout('days')}
+                          onChange={(event) =>
+                            setVariant(variant.key, {
+                              durationDays: event.target.value,
+                            })
+                          }
+                        />
+                        <div className="col-span-2 space-y-1 sm:col-span-3">
+                          <Input
+                            aria-label={`${label}: pricing text`}
+                            value={variant.pricingText}
+                            maxLength={120}
+                            placeholder={
+                              index === 0
+                                ? 'Pricing text, e.g. From Rp 49.000 / month'
+                                : `Pricing text. Empty shows ${Number.isInteger(price) ? formatIdr(price) : 'the price'}`
+                            }
+                            onChange={(event) =>
+                              setVariant(variant.key, {
+                                pricingText: event.target.value,
+                              })
+                            }
+                          />
+                          {index === 0 ? (
+                            <p className={`text-xs ${hintClassName}`}>
+                              Also the text on the product card in the shop.
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <p className={`text-xs ${hintClassName}`}>
+                    Name variants and add more on the{' '}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-[var(--ink)]"
+                      onClick={() => open('variants')}
+                    >
+                      Variants tab
+                    </button>
+                    .
+                  </p>
+                </fieldset>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="product-duration">Days per checkout</Label>
+                    <Label htmlFor="product-price">Price charged (IDR)</Label>
                     <Input
-                      id="product-duration"
+                      id="product-price"
                       type="number"
                       inputMode="numeric"
-                      min={1}
+                      min={0}
                       step={1}
-                      value={draft.durationDays}
+                      value={base.priceIdr}
                       onChange={(event) =>
-                        setDraft({ ...draft, durationDays: event.target.value })
+                        setVariant(base.key, { priceIdr: event.target.value })
                       }
                     />
                   </div>
-                ) : null}
-              </div>
+                  {isSubscription ? (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="product-duration">
+                        Days per checkout
+                      </Label>
+                      <Input
+                        id="product-duration"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={base.durationDays}
+                        onChange={(event) =>
+                          setVariant(base.key, {
+                            durationDays: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="product-pricing-text">Pricing text</Label>
-                <Input
-                  id="product-pricing-text"
-                  value={draft.pricingText}
-                  maxLength={120}
-                  placeholder="Rp 99.000 / month"
-                  onChange={(event) =>
-                    setDraft({ ...draft, pricingText: event.target.value })
-                  }
-                />
-              </div>
+              {many ? null : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-pricing-text">Pricing text</Label>
+                  <Input
+                    id="product-pricing-text"
+                    value={base.pricingText}
+                    maxLength={120}
+                    placeholder="Rp 99.000 / month"
+                    onChange={(event) =>
+                      setVariant(base.key, { pricingText: event.target.value })
+                    }
+                  />
+                  <p className={`text-xs ${hintClassName}`}>
+                    Shown on the product card in the shop.
+                  </p>
+                </div>
+              )}
 
               <label className="flex items-start gap-2 text-sm">
                 <input
@@ -534,7 +832,7 @@ export default function ProductEditorForm({
               </label>
             </TabsContent>
 
-            {draft.kind === 'subscription' ? (
+            {isSubscription ? (
               <TabsContent
                 value="variants"
                 forceMount
@@ -542,49 +840,20 @@ export default function ProductEditorForm({
               >
                 <ProductVariantsField
                   value={draft.variants}
-                  onChange={(variants) => setDraft({ ...draft, variants })}
-                  basePriceIdr={draft.priceIdr}
-                  baseDurationDays={draft.durationDays}
-                  deploys={draft.deployment === 'dockerCompose'}
-                  baseComposeFile={draft.settings.composeFile}
+                  onChange={setVariants}
+                  problems={problems}
+                  deploys={deploys}
+                  onOpen={open}
                 />
               </TabsContent>
             ) : null}
-
-            <TabsContent
-              value="content"
-              forceMount
-              className={tabPanelClassName}
-            >
-              <div className="space-y-1.5">
-                <Label htmlFor="product-description">Description</Label>
-                <Textarea
-                  id="product-description"
-                  value={draft.description}
-                  maxLength={4000}
-                  rows={5}
-                  placeholder={
-                    'What the buyer gets.\n\n- **Bold**, _italic_, [links](https://…)\n- Lists, headings (## Title), tables'
-                  }
-                  onChange={(event) =>
-                    setDraft({ ...draft, description: event.target.value })
-                  }
-                />
-                <p className={hintClassName}>Supports Markdown.</p>
-              </div>
-
-              <NoticesField
-                value={draft.notices}
-                onChange={(notices) => setDraft({ ...draft, notices })}
-              />
-            </TabsContent>
 
             <TabsContent
               value="delivery"
               forceMount
               className={tabPanelClassName}
             >
-              {draft.kind === 'oneTime' ? (
+              {!isSubscription ? (
                 <section className="space-y-1.5">
                   <Label htmlFor="product-access-url">Access link</Label>
                   <Input
@@ -603,7 +872,7 @@ export default function ProductEditorForm({
               ) : (
                 <section
                   id="product-deployment"
-                  className="scroll-mt-20 space-y-5"
+                  className="scroll-mt-20 space-y-6"
                 >
                   <fieldset className="space-y-1.5">
                     <legend className={`mb-1 ${sectionTitleClassName}`}>
@@ -632,18 +901,142 @@ export default function ProductEditorForm({
                     </div>
                   </fieldset>
 
-                  {draft.deployment === 'dockerCompose' ? (
-                    <DeploymentFields
-                      value={draft.settings}
-                      onChange={(settings) => setDraft({ ...draft, settings })}
+                  {deploys ? (
+                    <ProblemList
+                      problems={problemsIn('delivery')}
+                      onOpen={(problem) =>
+                        setSelectedKey(problem.variantKey ?? '')
+                      }
                     />
+                  ) : null}
+
+                  {deploys && !many ? (
+                    <DeploymentFields
+                      value={base.settings}
+                      onChange={(settings) =>
+                        setVariant(base.key, { settings })
+                      }
+                    />
+                  ) : null}
+
+                  {deploys && many ? (
+                    <>
+                      <div className="space-y-3">
+                        <p className={`text-xs ${hintClassName}`}>
+                          Shared by every variant, so a customer who switches
+                          keeps the same service.
+                        </p>
+                        <DeploymentFields
+                          section="shared"
+                          value={base.settings}
+                          onChange={(settings) =>
+                            setVariant(base.key, { settings })
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-4 border-t border-[var(--line)] pt-6">
+                        <div className="space-y-2">
+                          <h3 className={sectionTitleClassName}>
+                            Settings per variant
+                          </h3>
+                          <VariantPicker
+                            variants={variants}
+                            selected={selected.key}
+                            onSelect={setSelectedKey}
+                            problems={problemsIn('delivery')}
+                            describe={(variant) =>
+                              isBase(variant) || variant.ownDeployment
+                                ? 'Own settings'
+                                : 'Same as base'
+                            }
+                          />
+                        </div>
+
+                        {isBase(selected) ? (
+                          <p className={`text-xs ${hintClassName}`}>
+                            The base variant&apos;s settings. Other variants can
+                            reuse them or have their own.
+                          </p>
+                        ) : (
+                          <fieldset className="space-y-2">
+                            <legend className="sr-only">
+                              {variantLabel(selected, selectedIndex)}:
+                              deployment settings
+                            </legend>
+                            <div className="flex flex-wrap gap-x-5 gap-y-2">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`variant-${selected.key}-deployment`}
+                                  checked={!selected.ownDeployment}
+                                  onChange={() =>
+                                    setVariant(selected.key, {
+                                      ownDeployment: false,
+                                    })
+                                  }
+                                />
+                                Same as {variantLabel(base, 0)}
+                              </label>
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`variant-${selected.key}-deployment`}
+                                  checked={selected.ownDeployment}
+                                  onChange={() =>
+                                    setVariant(selected.key, {
+                                      ownDeployment: true,
+                                      // Start from the base's, which
+                                      // usually differs only in limits.
+                                      settings: base.settings,
+                                    })
+                                  }
+                                />
+                                Its own settings
+                              </label>
+                            </div>
+                            <p className={`text-xs ${hintClassName}`}>
+                              {selected.ownDeployment
+                                ? "Its own compose file, environment, domains and commands. It must mount the same volumes as the base variant's, so customers who switch keep their data."
+                                : `Deploys exactly what ${variantLabel(base, 0)} deploys, at ${priceLine(selected)}.`}
+                            </p>
+                          </fieldset>
+                        )}
+
+                        {isBase(selected) || selected.ownDeployment ? (
+                          <DeploymentFields
+                            key={selected.key}
+                            section="service"
+                            value={settingsToCheck(selected, base)}
+                            onChange={(settings) =>
+                              setVariant(selected.key, { settings })
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    </>
                   ) : null}
                 </section>
               )}
             </TabsContent>
           </Tabs>
 
-          <div className="flex justify-end gap-2 border-t border-[var(--line)] pt-5">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--line)] pt-5">
+            {errorCount > 0 ? (
+              <button
+                type="button"
+                className="mr-auto flex items-center gap-1.5 text-sm text-[var(--destructive)] underline-offset-2 hover:underline"
+                onClick={() => {
+                  const first = problems.find(
+                    (problem) => problem.severity === 'error',
+                  )
+                  if (first) open(first.tab, first.variantKey)
+                }}
+              >
+                <CircleX className="size-4" aria-hidden />
+                {errorCount} {errorCount === 1 ? 'thing' : 'things'} to fix
+              </button>
+            ) : null}
             <Button asChild variant="outline">
               <Link to="/admin/products">Cancel</Link>
             </Button>

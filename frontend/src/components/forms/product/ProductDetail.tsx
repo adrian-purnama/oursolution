@@ -101,6 +101,8 @@ function Detail({ product }: { product: PricingProduct }) {
   const chosen = choosing
     ? (variants.find((variant) => variant.id === variantId) ?? null)
     : null
+  // A picked variant may describe itself; else the product's shows.
+  const description = chosen?.description || product.description
 
   return (
     <article>
@@ -127,7 +129,7 @@ function Detail({ product }: { product: PricingProduct }) {
           <div className="mt-6 border-t border-[var(--line)] pt-6">
             <p className="font-display text-3xl text-[var(--ink)]">
               {chosen
-                ? formatIdr(chosen.priceIdr)
+                ? chosen.pricingText || formatIdr(chosen.priceIdr)
                 : product.pricingText || 'Contact us'}
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">
@@ -164,13 +166,13 @@ function Detail({ product }: { product: PricingProduct }) {
         </div>
       </div>
 
-      {product.description ? (
+      {description ? (
         <section className="mt-12 max-w-3xl border-t border-[var(--line)] pt-8">
           <h2 className="mb-3 text-lg font-semibold text-[var(--ink)]">
             About this product
           </h2>
           <Markdown className="prose-base leading-relaxed">
-            {product.description}
+            {description}
           </Markdown>
         </section>
       ) : null}

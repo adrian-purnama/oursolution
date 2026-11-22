@@ -125,17 +125,35 @@ export type DeploymentCheck = {
 export const BASE_VARIANT_ID = 'default'
 
 /**
+ * A variant's own deployment settings. The Dokploy project and the name in
+ * Dokploy are always the product's.
+ */
+export type VariantDeployment = {
+  composeFile: string
+  variables: DeploymentVariable[]
+  domains: DeploymentDomain[]
+  commands: DeploymentCommand[]
+}
+
+/**
  * Another way to buy the same subscription, e.g. more CPU and memory. It
- * shares the product's settings and data, so customers can switch.
+ * has its own price and days and may have its own deployment settings; it
+ * shares the product's data, so customers can switch.
  */
 export type ProductVariant = {
   /** Empty for a new one; the server gives it an id on save. */
   id: string
   name: string
   specs: string
+  /** Shown as its price once chosen; empty shows the price. */
+  pricingText: string
+  /** Markdown; empty shows the product's description. */
+  description: string
   priceIdr: number
   durationDays: number
-  /** null uses the product's compose file. */
+  /** null deploys the product's settings. */
+  deployment: VariantDeployment | null
+  /** Legacy: a compose file used with the product's other settings. */
   composeFile: string | null
 }
 
@@ -144,6 +162,10 @@ export type PricingVariant = {
   id: string
   name: string
   specs: string
+  /** Shown as its price once chosen; empty shows the price. */
+  pricingText: string
+  /** Markdown: its own, else the product's. */
+  description: string
   priceIdr: number
   durationDays: number | null
 }

@@ -11,6 +11,7 @@ import {
   ProductInterface,
   ProductVariant,
   VARIABLE_VISIBILITIES,
+  VariantDeployment,
 } from "./product.interface";
 
 const variableSchema = new Schema<DeploymentVariable>(
@@ -63,13 +64,27 @@ const deploymentSchema = new Schema<ProductDeployment>(
   { _id: false },
 );
 
+const variantDeploymentSchema = new Schema<VariantDeployment>(
+  {
+    composeFile: { type: String, required: true },
+    variables: { type: [variableSchema], default: [] },
+    domains: { type: [domainSchema], default: [] },
+    commands: { type: [commandSchema], default: [] },
+  },
+  { _id: false },
+);
+
 const variantSchema = new Schema<ProductVariant>(
   {
     id: { type: String, required: true },
     name: { type: String, required: true },
     specs: { type: String, default: "" },
+    pricingText: { type: String, default: "" },
+    description: { type: String, default: "" },
     priceIdr: { type: Number, required: true, min: 0 },
     durationDays: { type: Number, required: true, min: 1 },
+    deployment: { type: variantDeploymentSchema, default: null },
+    // Legacy: read only while `deployment` is null.
     composeFile: { type: String, default: null },
   },
   { _id: false },
