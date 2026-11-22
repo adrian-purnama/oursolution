@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { Send } from 'lucide-react'
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import GoogleButton from '#/components/forms/auth/GoogleButton'
 import PasswordChecklist from '#/components/forms/shared/PasswordChecklist'
@@ -18,6 +18,7 @@ import {
   hintClassName,
   inputClassNameCompact,
 } from '#/lib/ui-classes'
+import { cn } from '#/lib/utils'
 
 interface RegisterResponse {
   email: string
@@ -37,6 +38,18 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
   const [loading, setLoading] = useState(false)
   const [sendingOtp, setSendingOtp] = useState(false)
   const [agreed, setAgreed] = useState(false)
+  /** Set when the user tried to go on without agreeing, to point at the box. */
+  const [needsAgreement, setNeedsAgreement] = useState(false)
+  const termsBox = useRef<HTMLLabelElement>(null)
+
+  /** True when the terms are agreed; otherwise points the user at the box. */
+  function checkAgreed(): boolean {
+    if (agreed) return true
+    setNeedsAgreement(true)
+    termsBox.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    toast.error('Please agree to the terms of service and privacy policy')
+    return false
+  }
 
   async function sendOtp() {
     if (!email.trim()) {
@@ -90,10 +103,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
       return
     }
 
-    if (!agreed) {
-      toast.error('Please agree to the terms of service and privacy policy')
-      return
-    }
+    if (!checkAgreed()) return
 
     setLoading(true)
 
@@ -126,12 +136,73 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
 
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`}>
-      <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">Register</h1>
-      {redirect?.startsWith('/checkout') ? (
-        <p className={`-mt-3 mb-6 ${hintClassName}`}>
-          Create an account to continue to checkout.
-        </p>
-      ) : null}
+      <h1 className="mb-1 text-2xl font-medium text-[var(--ink)]">
+        Create your account
+      </h1>
+      <p className={`mb-6 ${hintClassName}`}>
+        {redirect?.startsWith('/checkout')
+          ? 'Create an account to continue to checkout.'
+          : 'Buy services and manage them from one dashboard.'}
+      </p>
+
+      {/* Agreement first: it covers Google and email sign-up alike. */}
+      <label
+        ref={termsBox}
+        htmlFor="register-terms"
+        className={cn(
+          'mb-5 flex cursor-pointer items-start gap-3 rounded-[var(--radius-sm)] border p-3.5 transition-colors',
+          agreed
+            ? 'border-[var(--line)] bg-white'
+            : needsAgreement
+              ? 'border-[var(--destructive)] bg-red-50'
+              : 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_6%,white)]',
+        )}
+      >
+        <Checkbox
+          id="register-terms"
+          checked={agreed}
+          onCheckedChange={(checked) => {
+            setAgreed(checked === true)
+            setNeedsAgreement(false)
+          }}
+          className="mt-0.5 size-5 border-[var(--ink)]/40 bg-white"
+        />
+        <span className="text-sm leading-snug text-[var(--ink)]">
+          I agree to the{' '}
+          <Link
+            to="/terms"
+            target="_blank"
+            className="font-medium underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            terms of service
+          </Link>{' '}
+          and{' '}
+          <Link
+            to="/privacy"
+            target="_blank"
+            className="font-medium underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            privacy policy
+          </Link>
+          .
+        </span>
+      </label>
+
+      <GoogleButton
+        label="Continue with Google"
+        mode="signin"
+        redirect={redirect}
+        onBeforeStart={checkAgreed}
+        className="h-11 w-full"
+      />
+
+      <div className={`my-5 flex items-center gap-3 text-xs ${hintClassName}`}>
+        <span className="h-px flex-1 bg-[var(--line)]" />
+        or sign up with email
+        <span className="h-px flex-1 bg-[var(--line)]" />
+      </div>
 
       <form className="w-full space-y-4" onSubmit={handleRegister}>
         <div className="w-full">
@@ -223,62 +294,14 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
           ) : null}
         </div>
 
-        <div className="flex items-start gap-2.5">
-          <Checkbox
-            id="register-terms"
-            checked={agreed}
-            onCheckedChange={(checked) => setAgreed(checked === true)}
-            className="mt-0.5"
-          />
-          <label
-            htmlFor="register-terms"
-            className="text-sm leading-snug text-[var(--muted)]"
-          >
-            I agree to the{' '}
-            <Link
-              to="/terms"
-              target="_blank"
-              className="text-[var(--ink)] underline"
-            >
-              terms of service
-            </Link>{' '}
-            and{' '}
-            <Link
-              to="/privacy"
-              target="_blank"
-              className="text-[var(--ink)] underline"
-            >
-              privacy policy
-            </Link>
-            .
-          </label>
-        </div>
-
         <button
           type="submit"
-          disabled={loading || !agreed}
+          disabled={loading}
           className={`${buttonClassNameFull} disabled:cursor-not-allowed disabled:opacity-60`}
         >
-          {loading ? 'Creating account…' : 'Register'}
+          {loading ? 'Creating account…' : 'Create account'}
         </button>
       </form>
-
-      <div className={`my-5 flex items-center gap-3 text-xs ${hintClassName}`}>
-        <span className="h-px flex-1 bg-[var(--line)]" />
-        or
-        <span className="h-px flex-1 bg-[var(--line)]" />
-      </div>
-      <GoogleButton
-        label="Sign up with Google"
-        mode="signin"
-        redirect={redirect}
-        disabled={!agreed}
-      />
-      {!agreed ? (
-        <p className={`mt-2 text-center text-xs ${hintClassName}`}>
-          Tick the box above to agree to the terms first.
-        </p>
-      ) : null}
 
       <p className={`mt-6 ${hintClassName}`}>
         Already have an account?{' '}

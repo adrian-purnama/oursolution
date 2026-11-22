@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useBranding } from '#/context/brandingContext'
 import { CONTACT_URL } from '#/lib/config'
+import { SHOW_HOME_STATE } from '#/lib/home'
 import { SERVICES } from '#/lib/services'
 import type { ServiceSlug } from '#/lib/services'
 
@@ -42,7 +43,7 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
   {
     title: 'Account',
     links: [
-      { label: 'Get started', to: '/register' },
+      { label: 'Sign up', to: '/register' },
       { label: 'Log in', to: '/login' },
     ],
   },
@@ -91,7 +92,11 @@ export default function Footer() {
                         {link.label}
                       </Link>
                     ) : 'to' in link ? (
-                      <Link to={link.to} className={linkClass}>
+                      <Link
+                        to={link.to}
+                        state={link.to === '/' ? SHOW_HOME_STATE : undefined}
+                        className={linkClass}
+                      >
                         {link.label}
                       </Link>
                     ) : (
