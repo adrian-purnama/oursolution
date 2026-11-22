@@ -477,7 +477,7 @@ function DeploymentRow({
       <Link
         to="/admin/users/$userId"
         params={{ userId: user.id }}
-        search={{ tab: 'deployments' }}
+        search={{ tab: 'deployments', deployment: deployment.product.id }}
         className={cn(
           cardClassName,
           'block min-w-0 flex-1 px-4 py-4 no-underline transition hover:border-[var(--ink)] sm:px-5',

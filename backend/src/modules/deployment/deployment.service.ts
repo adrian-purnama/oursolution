@@ -73,7 +73,6 @@ import { notificationService } from "../notification/notification.service";
 import { noticesOf, toProductSummary } from "../product/product.service";
 import {
   deploymentFor,
-  variableKeysOf,
   variantIdOf,
   variantOf,
   type ResolvedVariant,
@@ -1975,11 +1974,13 @@ export class DeploymentService {
 
   /**
    * After an erase: takes away everything the service had, so it is as if
-   * it was never deployed. Set-once values go too, so the customer chooses
-   * them afresh (a first admin password is useless without its data).
+   * it was never deployed. Its settings go back to the product's too: the
+   * customer's values, set-once ones included, so they choose them afresh
+   * (a first admin password is useless without its data), and any admin
+   * overrides of the environment or compose file.
    */
   private async stepRemove(context: RunContext): Promise<void> {
-    const { deployment, product } = context;
+    const { deployment } = context;
     await this.stepUnroute(context);
     if (
       deployment.dokploy &&
@@ -2003,12 +2004,34 @@ export class DeploymentService {
       }
     }
 
-    // Every variant's, so switching later asks for them afresh too.
-    const setOnce = new Set(variableKeysOf(product, isSetOnce));
+    // Back to the product's: every value the customer filled in (every
+    // variant's, so switching later asks for them afresh too) and every
+    // override of the environment or compose file an admin made.
+    const cleared = diffOverrides(overridesOf(deployment), {
+      env: [],
+      composeFile: null,
+    });
+    deployment.values = [];
+    deployment.overrides = { env: [], composeFile: null };
     await DeploymentModel.updateOne(
       { _id: deployment._id },
-      { $pull: { values: { key: { $in: [...setOnce] } } } },
+      { $set: { values: [], overrides: { env: [], composeFile: null } } },
     ).exec();
+    if (cleared.length > 0) {
+      const starter = context.run.startedBy
+        ? await UserModel.findById(context.run.startedBy).exec()
+        : null;
+      const at = new Date();
+      await DeploymentChangeModel.insertMany(
+        cleared.map((change) => ({
+          ...change,
+          deploymentId: deployment._id,
+          byUserId: starter?._id ?? null,
+          byEmail: `${starter?.email ?? "the app"} (${context.run.action === "wipe" ? "Delete data" : "Erase data"})`,
+          at,
+        })),
+      );
+    }
   }
 
   private async stepUnroute({ deployment }: RunContext): Promise<void> {

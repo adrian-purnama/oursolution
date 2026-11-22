@@ -9,18 +9,27 @@ import { privatePage } from '#/lib/seo'
 
 type UserTab = 'account' | 'deployments' | 'payments'
 
+type UserSearch = {
+  tab?: Exclude<UserTab, 'account'>
+  /** Deployments tab: the product whose deployment is open. */
+  deployment?: string
+}
+
 export const Route = createFileRoute('/admin/users/$userId')({
   head: () => privatePage('User · Admin'),
-  validateSearch: (search: Record<string, unknown>): { tab?: UserTab } =>
-    search.tab === 'deployments' || search.tab === 'payments'
-      ? { tab: search.tab }
-      : {},
+  validateSearch: (search: Record<string, unknown>): UserSearch => {
+    if (search.tab === 'payments') return { tab: 'payments' }
+    if (search.tab !== 'deployments') return {}
+    return typeof search.deployment === 'string' && search.deployment
+      ? { tab: 'deployments', deployment: search.deployment }
+      : { tab: 'deployments' }
+  },
   component: AdminUserDetailPage,
 })
 
 function AdminUserDetailPage() {
   const { userId } = Route.useParams()
-  const { tab = 'account' } = Route.useSearch()
+  const { tab = 'account', deployment } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
   return (
@@ -48,7 +57,17 @@ function AdminUserDetailPage() {
           <UserPurchasesForm userId={userId} />
         </TabsContent>
         <TabsContent value="deployments">
-          <UserDeploymentsForm userId={userId} />
+          <UserDeploymentsForm
+            userId={userId}
+            open={deployment ?? null}
+            onOpen={(productId) =>
+              void navigate({
+                search: productId
+                  ? { tab: 'deployments', deployment: productId }
+                  : { tab: 'deployments' },
+              })
+            }
+          />
         </TabsContent>
         <TabsContent value="payments">
           <UserPaymentsForm userId={userId} />

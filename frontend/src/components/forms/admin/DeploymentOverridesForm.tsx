@@ -10,6 +10,7 @@ import type {
   Deployment,
   DeploymentChange,
   DeploymentOverrides,
+  DeploymentVariable,
 } from '#/lib/deployment'
 import { formatDateTime } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
@@ -55,13 +56,21 @@ function changeLine(change: DeploymentChange): string {
 export default function DeploymentOverridesForm({
   url,
   overrides,
+  variables,
   onSaved,
 }: {
   /** The deployment's admin URL, e.g. "/admin/users/:id/deployments/:productId". */
   url: string
   overrides: DeploymentOverrides
+  /** The deployment's variables, with the values they run as. */
+  variables: DeploymentVariable[]
   onSaved: (deployment: Deployment) => void
 }) {
+  const byKey = new Map(variables.map((variable) => [variable.key, variable]))
+  /** Filled in by the customer: edited under Customer values instead. */
+  const customerKeys = new Set(
+    variables.filter((variable) => variable.editable).map(({ key }) => key),
+  )
   const [rows, setRows] = useState<Row[]>(() => rowsOf(overrides))
   const [compose, setCompose] = useState<string | null>(overrides.composeFile)
   const [newKey, setNewKey] = useState('')
@@ -82,6 +91,10 @@ export default function DeploymentOverridesForm({
     JSON.stringify([payloadOf(rows), compose]) !==
     JSON.stringify([payloadOf(rowsOf(overrides)), overrides.composeFile])
   const overriddenCount = payloadOf(rowsOf(overrides)).length
+  // Customer values are left out unless they were overridden here already.
+  const listed = rows.flatMap((row, index) =>
+    customerKeys.has(row.key) && row.override === null ? [] : [{ row, index }],
+  )
 
   function setValue(index: number, value: string) {
     setRows(
@@ -114,6 +127,10 @@ export default function DeploymentOverridesForm({
   function addRow() {
     const key = newKey.trim()
     if (!key) return
+    if (customerKeys.has(key) && !listed.some(({ row }) => row.key === key)) {
+      toast.error(`${key} is a customer value: change it under Customer values`)
+      return
+    }
     if (rows.some((row) => row.key === key)) {
       toast.error(`${key} is already in the list`)
       return
@@ -145,191 +162,239 @@ export default function DeploymentOverridesForm({
     }
   }
 
-  return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-medium">Environment and compose</h3>
-        <p className={`text-xs ${hintClassName}`}>
-          What this customer runs with. A value you change overrides the
-          product's for them only, and they see it. Applies on the next
-          deploy or redeploy. <code>{'${USERNAME}'}</code> and the
-          other built-ins work; write <code>$$</code> for a dollar sign.
-        </p>
-      </div>
+  const actions = (
+    <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-5 py-3">
+      <Button
+        type="button"
+        size="sm"
+        disabled={!dirty || saving}
+        onClick={() => void save(rows, compose)}
+      >
+        {saving ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
+        Save overrides
+      </Button>
+      {dirty ? (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={saving}
+            onClick={() => {
+              setRows(rowsOf(overrides))
+              setCompose(overrides.composeFile)
+            }}
+          >
+            Discard changes
+          </Button>
+          <span className={`text-xs ${hintClassName}`}>Not saved yet</span>
+        </>
+      ) : overriddenCount > 0 || overrides.composeFile !== null ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={saving}
+          onClick={() =>
+            void save(
+              rows.map((row) => ({ ...row, override: null })),
+              null,
+            )
+          }
+        >
+          <RotateCcw aria-hidden />
+          Reset all to the product's
+        </Button>
+      ) : null}
+    </div>
+  )
 
-      <div className={`${cardClassName} space-y-5 p-5`}>
-        <div className="space-y-2">
-          <Label>Environment</Label>
-          {rows.length === 0 ? (
-            <p className={`text-sm ${hintClassName}`}>
-              The product has no variables.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {rows.map((row, index) => {
-                const changed = row.override !== null
-                return (
-                  <li
-                    key={row.key}
-                    className="grid gap-2 sm:grid-cols-[11rem_minmax(0,1fr)_5.5rem] sm:items-start"
-                  >
-                    <span className="pt-2 font-mono text-[13px] break-all">
-                      {row.key}
-                    </span>
-                    <div className="space-y-1">
-                      <Input
-                        value={row.override ?? row.productValue ?? ''}
-                        aria-label={row.key}
-                        className={cn(
-                          'font-mono text-[13px]',
-                          changed && 'border-amber-500',
-                        )}
-                        onChange={(event) =>
-                          setValue(index, event.target.value)
-                        }
-                      />
-                      {changed ? (
-                        <p className={`text-xs break-all ${hintClassName}`}>
-                          Overridden. Product's:{' '}
-                          <span className="font-mono">
-                            {row.productValue ?? 'not a product variable'}
-                          </span>
-                        </p>
-                      ) : null}
-                    </div>
-                    {changed ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={saving}
-                        onClick={() => reset(index)}
-                      >
-                        <RotateCcw aria-hidden />
-                        Reset
-                      </Button>
-                    ) : null}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={newKey}
-              placeholder="Another variable"
-              aria-label="Name of another variable"
-              className="max-w-56 font-mono text-[13px]"
-              onChange={(event) => setNewKey(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  addRow()
-                }
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!newKey.trim() || saving}
-              onClick={addRow}
-            >
-              <Plus aria-hidden />
-              Add
-            </Button>
-          </div>
+  return (
+    <>
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium">Environment</h3>
+          <p className={`text-xs ${hintClassName}`}>
+            The product's values, which you can override for this customer
+            only. Applies on the next deploy or redeploy.{' '}
+            <code>{'${USERNAME}'}</code> and the other built-ins work; write{' '}
+            <code>$$</code> for a dollar sign.
+          </p>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label htmlFor="override-compose">Compose file</Label>
-            {compose === null ? (
+        <div className={`${cardClassName} overflow-hidden`}>
+          <div className="space-y-3 p-5">
+            {listed.length === 0 ? (
+              <p className={`text-sm ${hintClassName}`}>
+                The product has no other variables.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[var(--line)]">
+                {listed.map(({ row, index }) => {
+                  const changed = row.override !== null
+                  const variable = byKey.get(row.key)
+                  const typed = row.override ?? row.productValue ?? ''
+                  const runsAs =
+                    !changed && variable && variable.value !== typed
+                      ? variable.value
+                      : null
+                  return (
+                    <li
+                      key={row.key}
+                      className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[11rem_minmax(0,1fr)_5.5rem] sm:items-start"
+                    >
+                      <div className="min-w-0 pt-2">
+                        <p className="font-mono text-[13px] break-all">
+                          {row.key}
+                        </p>
+                        {variable?.visibility === 'hidden' ? (
+                          <p className={`text-xs ${hintClassName}`}>
+                            Hidden from the customer
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <Input
+                          value={typed}
+                          aria-label={row.key}
+                          spellCheck={false}
+                          autoComplete="off"
+                          className={cn(
+                            'bg-white font-mono text-[13px] md:text-[13px]',
+                            changed && 'border-amber-500',
+                          )}
+                          onChange={(event) =>
+                            setValue(index, event.target.value)
+                          }
+                        />
+                        {changed ? (
+                          <p className="text-xs break-all text-amber-800">
+                            Overridden. Product's:{' '}
+                            <span className="font-mono">
+                              {row.productValue ?? 'not a product variable'}
+                            </span>
+                          </p>
+                        ) : runsAs !== null ? (
+                          <p className={`text-xs break-all ${hintClassName}`}>
+                            Runs as{' '}
+                            <span className="font-mono">
+                              {runsAs || 'empty'}
+                            </span>
+                          </p>
+                        ) : null}
+                      </div>
+                      {changed ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={saving}
+                          onClick={() => reset(index)}
+                        >
+                          <RotateCcw aria-hidden />
+                          Reset
+                        </Button>
+                      ) : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Input
+                value={newKey}
+                placeholder="NEW_VARIABLE"
+                aria-label="Name of another variable"
+                className="max-w-56 bg-white font-mono text-[13px] md:text-[13px]"
+                onChange={(event) => setNewKey(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    addRow()
+                  }
+                }}
+              />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={saving}
-                onClick={() => setCompose(overrides.productComposeFile)}
+                disabled={!newKey.trim() || saving}
+                onClick={addRow}
               >
-                Edit for this customer
+                <Plus aria-hidden />
+                Add variable
               </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={saving}
-                onClick={() => setCompose(null)}
-              >
-                <RotateCcw aria-hidden />
-                Reset to the product's
-              </Button>
-            )}
+            </div>
+          </div>
+          {actions}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium">Compose file</h3>
+            <p className={`text-xs ${hintClassName}`}>
+              {compose === null
+                ? "Uses the product's, for the variant the subscription is on."
+                : 'A copy just for this customer. Applies on the next deploy or redeploy.'}
+            </p>
           </div>
           {compose === null ? (
-            <p className={`text-sm ${hintClassName}`}>
-              The product's, for the variant the subscription is on.
-            </p>
-          ) : (
-            <Textarea
-              id="override-compose"
-              value={compose}
-              spellCheck={false}
-              className="max-h-[32rem] min-h-48 border-amber-500 font-mono text-[13px]"
-              onChange={(event) => setCompose(event.target.value)}
-            />
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={() => void save(rows, compose)}
-          >
-            {saving ? (
-              <LoaderCircle className="animate-spin" aria-hidden />
-            ) : null}
-            Save
-          </Button>
-          {dirty ? (
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
+              size="sm"
               disabled={saving}
-              onClick={() => {
-                setRows(rowsOf(overrides))
-                setCompose(overrides.composeFile)
-              }}
+              onClick={() => setCompose(overrides.productComposeFile)}
             >
-              Discard changes
+              Edit for this customer
             </Button>
-          ) : null}
-          {!dirty &&
-          (overriddenCount > 0 || overrides.composeFile !== null) ? (
+          ) : (
             <Button
               type="button"
               variant="ghost"
+              size="sm"
               disabled={saving}
-              onClick={() =>
-                void save(
-                  rows.map((row) => ({ ...row, override: null })),
-                  null,
-                )
-              }
+              onClick={() => setCompose(null)}
             >
               <RotateCcw aria-hidden />
-              Reset all to the product's
+              Use the product's
             </Button>
-          ) : null}
+          )}
         </div>
-      </div>
+        {compose === null ? (
+          <details className={`${cardClassName} px-5 py-3`}>
+            <summary className={`cursor-pointer text-sm ${hintClassName}`}>
+              Show the product's compose file
+            </summary>
+            <pre className="mt-3 max-h-[32rem] overflow-auto rounded-md bg-[var(--surface)] p-3 font-mono text-[12px] leading-relaxed">
+              {overrides.productComposeFile}
+            </pre>
+          </details>
+        ) : (
+          <div className={`${cardClassName} overflow-hidden`}>
+            <div className="p-5">
+              <Label htmlFor="override-compose" className="sr-only">
+                Compose file for this customer
+              </Label>
+              <Textarea
+                id="override-compose"
+                value={compose}
+                spellCheck={false}
+                className="max-h-[32rem] min-h-48 border-amber-500 bg-white font-mono text-[13px]"
+                onChange={(event) => setCompose(event.target.value)}
+              />
+            </div>
+            {actions}
+          </div>
+        )}
+      </section>
 
       {overrides.changes.length > 0 ? (
         <details className={`${cardClassName} px-5 py-3`}>
           <summary className="cursor-pointer text-sm font-medium">
-            Change log ({overrides.changes.length})
+            Override history ({overrides.changes.length})
           </summary>
           <ul className="mt-3 divide-y divide-[var(--line)]">
             {overrides.changes.map((change) => (
@@ -343,6 +408,6 @@ export default function DeploymentOverridesForm({
           </ul>
         </details>
       ) : null}
-    </section>
+    </>
   )
 }

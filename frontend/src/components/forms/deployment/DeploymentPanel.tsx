@@ -49,6 +49,7 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import { Tabs, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { apiFetch } from '#/lib/api'
 import {
   BUSY_STATES,
@@ -78,6 +79,15 @@ import { cn } from '#/lib/utils'
 const POLL_MS = 3000
 /** While the service runs, its status is refreshed this often. */
 const STATUS_POLL_MS = 60_000
+
+/** The admin's view of one deployment is split into these. */
+const ADMIN_SECTIONS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'configuration', label: 'Configuration' },
+  { key: 'activity', label: 'Activity' },
+  { key: 'internal', label: 'Internal' },
+] as const
+type AdminSection = (typeof ADMIN_SECTIONS)[number]['key']
 
 const ACTION_ICONS: Record<RunAction, LucideIcon> = {
   deploy: Rocket,
@@ -215,6 +225,9 @@ export default function DeploymentPanel({
   /** Set after trying to start with required settings empty. */
   const [showMissing, setShowMissing] = useState(false)
   const [tourStage, setTourStage] = useTourStage('firstService')
+  const [section, setSection] = useState<AdminSection>('overview')
+  /** Customers see everything on one page; admins one section at a time. */
+  const show = (part: AdminSection) => !admin || section === part
 
   const url = `${apiBase}/${productId}`
 
@@ -394,9 +407,10 @@ export default function DeploymentPanel({
   const { state } = deployment
   const live = state === 'running'
   const editable = deployment.variables.filter((variable) => variable.editable)
-  const shown = deployment.variables.filter(
-    (variable) => admin || !variable.editable,
-  )
+  // Admins see every value, with what it runs as, under Environment.
+  const shown = admin
+    ? []
+    : deployment.variables.filter((variable) => !variable.editable)
   const primary: RunAction | null = deployment.actions.includes('deploy')
     ? 'deploy'
     : null
@@ -441,9 +455,15 @@ export default function DeploymentPanel({
   const fieldId = (key: string) => `value-${productId}-${key}`
 
   function focusSetting(key: string) {
-    const element = document.getElementById(fieldId(key))
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    element?.focus({ preventScroll: true })
+    const focus = () => {
+      const element = document.getElementById(fieldId(key))
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      element?.focus({ preventScroll: true })
+    }
+    if (admin && section !== 'configuration') {
+      setSection('configuration')
+      window.setTimeout(focus, 0)
+    } else focus()
   }
 
   /** Starts the action, or points at the settings it still waits for. */
@@ -682,7 +702,30 @@ export default function DeploymentPanel({
         </section>
       </ProductNotices>
 
-      {!deployment.entitled ? (
+      {admin ? (
+        <Tabs
+          value={section}
+          onValueChange={(value) => setSection(value as AdminSection)}
+        >
+          <TabsList
+            variant="line"
+            className="w-full justify-start border-b border-[var(--line)]"
+          >
+            {ADMIN_SECTIONS.map(({ key, label }) => (
+              <TabsTrigger key={key} value={key} className="flex-none">
+                {label}
+                {key === 'activity' && deployment.runs.length > 0 ? (
+                  <span className="ml-1 tabular-nums opacity-60">
+                    {deployment.runs.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      ) : null}
+
+      {show('overview') && !deployment.entitled ? (
         <p className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">
           {admin
             ? 'This subscription is not active, so only turning off is possible.'
@@ -690,7 +733,7 @@ export default function DeploymentPanel({
         </p>
       ) : null}
 
-      {featured ? (
+      {show('overview') && featured ? (
         <section className={`${cardClassName} p-5`} aria-live="polite">
           <h3 className="mb-4 text-sm font-medium">
             {featured.status === 'running'
@@ -710,14 +753,18 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
-      {editable.length > 0 || shown.length > 0 ? (
+      {show('configuration') && (editable.length > 0 || shown.length > 0) ? (
         <section className="space-y-3" data-tour="settings">
           <div>
-            <h3 className="text-sm font-medium">Settings</h3>
+            <h3 className="text-sm font-medium">
+              {admin ? 'Customer values' : 'Settings'}
+            </h3>
             <p className={`text-xs ${hintClassName}`}>
-              {state === 'notDeployed'
-                ? 'Fill these in before you deploy.'
-                : 'Changes apply the next time you redeploy.'}
+              {admin
+                ? 'What the customer fills in once before the first deploy. Changes apply on the next redeploy.'
+                : state === 'notDeployed'
+                  ? 'Fill these in before you deploy.'
+                  : 'Changes apply the next time you redeploy.'}
             </p>
           </div>
 
@@ -909,7 +956,7 @@ export default function DeploymentPanel({
 
       {touring && secondary.length === 0 ? <ExamplePowerControls /> : null}
 
-      {secondary.length > 0 ? (
+      {show('overview') && secondary.length > 0 ? (
         <section className="space-y-3" data-tour="power">
           <h3 className="text-sm font-medium">Manage</h3>
           <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
@@ -956,7 +1003,7 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
-      {deployment.commands.length > 0 ? (
+      {show('overview') && deployment.commands.length > 0 ? (
         <section className="space-y-3">
           <div>
             <h3 className="text-sm font-medium">Commands</h3>
@@ -995,7 +1042,7 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
-      {wipe && deployment.internal ? (
+      {show('overview') && wipe && deployment.internal ? (
         <section className="space-y-3">
           <h3 className="text-sm font-medium">Delete data</h3>
           <div
@@ -1034,9 +1081,9 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
-      {admin && deployment.internal ? (
+      {show('internal') && admin && deployment.internal ? (
         <section className="space-y-3">
-          <h3 className="text-sm font-medium">Internal</h3>
+          <h3 className="text-sm font-medium">In Dokploy and Cloudflare</h3>
           <dl
             className={`${cardClassName} grid gap-x-4 gap-y-1.5 p-5 text-sm sm:grid-cols-[11rem_minmax(0,1fr)]`}
           >
@@ -1105,15 +1152,24 @@ export default function DeploymentPanel({
         </section>
       ) : null}
 
-      {admin && deployment.internal ? (
+      {show('configuration') && admin && deployment.internal ? (
         <DeploymentOverridesForm
           url={url}
           overrides={deployment.internal.overrides}
+          variables={deployment.variables}
           onSaved={(next) => accept(next, true)}
         />
       ) : null}
 
-      {history.length > 0 ? (
+      {admin && section === 'activity' && history.length === 0 ? (
+        <p className={`${cardClassName} px-5 py-8 text-center ${hintClassName}`}>
+          {featured
+            ? 'Only the run on the Overview so far.'
+            : 'Nothing has run yet.'}
+        </p>
+      ) : null}
+
+      {show('activity') && history.length > 0 ? (
         <section className="space-y-3">
           <h3 className="text-sm font-medium">Activity</h3>
           <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
@@ -1195,7 +1251,7 @@ export default function DeploymentPanel({
               </DialogTitle>
               <DialogDescription>
                 {confirmErase === 'wipe'
-                  ? `Everything ${deployment.internal?.username ?? 'this customer'} stored in this service is erased for good, and the service is removed from Dokploy. This cannot be undone.`
+                  ? `Everything ${deployment.internal?.username ?? 'this customer'} stored in this service is erased for good, and the service is removed from Dokploy. The customer's values and your environment and compose overrides go back to the product's. This cannot be undone.`
                   : 'Everything stored in this service is erased for good and the service is removed, including the values you set once. Turn it on again to start afresh. This cannot be undone.'}
               </DialogDescription>
             </DialogHeader>
