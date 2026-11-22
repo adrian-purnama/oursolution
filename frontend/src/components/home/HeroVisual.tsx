@@ -241,7 +241,12 @@ function playScene(
  * frame, and the tabs can be clicked for real. With reduced motion there is
  * no cursor, nothing moves and the tabs still work. Purely illustrative.
  */
-export default function HeroVisual() {
+export default function HeroVisual({
+  introDelay = 1.1,
+}: {
+  /** Seconds to wait on load before the first scene plays. */
+  introDelay?: number
+}) {
   const root = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(0)
 
@@ -284,7 +289,7 @@ export default function HeroVisual() {
           frame,
           scene,
           cursor,
-          first ? 1.1 : 0.15,
+          first ? introDelay : 0.15,
         )
         timeline.current = tl
         if (first) {

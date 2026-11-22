@@ -1,10 +1,11 @@
 import { useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Check } from 'lucide-react'
+import HeroBuilders, { BUILD_SECONDS } from '#/components/home/HeroBuilders'
 import HeroVisual from '#/components/home/HeroVisual'
 import { Button } from '#/components/ui/button'
 import { BRAND_NAME, CONTACT_URL } from '#/lib/config'
-import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '#/lib/gsap'
+import { MOTION_OK, gsap, useGSAP } from '#/lib/gsap'
 
 const lineMask = 'block overflow-hidden pb-[0.12em] -mb-[0.12em]'
 
@@ -16,9 +17,9 @@ const ASSURANCES = [
 
 /**
  * Centered hero: the promise, two ways in, the three services by name, and
- * a moving example of what we deliver. Lines and blocks ease in once on load
- * and the backdrop keeps breathing; with reduced motion everything is simply
- * there.
+ * a moving example of what we deliver. On load three teammates' cursors lay
+ * the blocks out (see HeroBuilders) and the backdrop keeps breathing; with
+ * reduced motion everything is simply there.
  */
 export default function HeroSection() {
   const root = useRef<HTMLElement>(null)
@@ -28,21 +29,6 @@ export default function HeroSection() {
       const mm = gsap.matchMedia()
 
       mm.add(MOTION_OK, () => {
-        gsap
-          .timeline({ defaults: { ease: EASE_OUT } })
-          .to('[data-hero-line]', {
-            y: 0,
-            duration: 1,
-            ease: 'power4.out',
-            stagger: 0.12,
-            delay: 0.1,
-          })
-          .to(
-            '[data-hero-fade]',
-            { opacity: 1, y: 0, duration: 0.8, stagger: 0.09 },
-            '-=0.65',
-          )
-
         // The backdrop breathes: the accent grid glows and dims, and the
         // light behind it swells and drifts a little.
         gsap.to('[data-hero-grid-glow]', {
@@ -90,13 +76,14 @@ export default function HeroSection() {
       />
 
       <div className="relative mx-auto flex max-w-6xl flex-col items-center px-6 pt-16 text-center sm:pt-24">
+        <HeroBuilders />
         <h1 className="font-display mb-6 max-w-4xl text-[clamp(2.5rem,6.6vw,5.25rem)] leading-[1.02]">
-          <span className={lineMask}>
+          <span data-build="title1" className={lineMask}>
             <span data-hero-line className="block">
               We build your software.
             </span>
           </span>
-          <span className={lineMask}>
+          <span data-build="title2" className={lineMask}>
             <span data-hero-line className="block text-[var(--accent)]">
               Then we keep it running.
             </span>
@@ -104,6 +91,7 @@ export default function HeroSection() {
         </h1>
 
         <p
+          data-build="copy"
           data-hero-fade
           className="mb-9 max-w-2xl text-lg leading-relaxed text-[var(--muted)]"
         >
@@ -112,7 +100,11 @@ export default function HeroSection() {
           we manage, and make answr, an AI chatbot for your website.
         </p>
 
-        <div data-hero-fade className="flex flex-wrap justify-center gap-3">
+        <div
+          data-build="actions"
+          data-hero-fade
+          className="flex flex-wrap justify-center gap-3"
+        >
           <Button asChild size="lg" className="rounded-full px-6">
             <a href={CONTACT_URL} className="no-underline">
               Start a project
@@ -132,6 +124,7 @@ export default function HeroSection() {
         </div>
 
         <ul
+          data-build="assure"
           data-hero-fade
           className="mt-9 flex flex-col items-center gap-x-7 gap-y-2 text-sm text-[var(--muted)] sm:flex-row"
         >
@@ -143,8 +136,12 @@ export default function HeroSection() {
           ))}
         </ul>
 
-        <div data-hero-fade className="mt-14 w-full sm:mt-20">
-          <HeroVisual />
+        <div
+          data-build="visual"
+          data-hero-fade
+          className="mt-14 w-full sm:mt-20"
+        >
+          <HeroVisual introDelay={BUILD_SECONDS} />
         </div>
       </div>
     </section>
