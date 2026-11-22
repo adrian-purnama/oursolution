@@ -20,6 +20,8 @@ import {
   seo,
 } from '../lib/seo'
 
+import { useMatomoPageViews } from '../lib/matomo'
+
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -84,6 +86,8 @@ function AppThemeShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  useMatomoPageViews()
+
   return (
     <html lang="en">
       <head>
