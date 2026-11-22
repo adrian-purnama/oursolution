@@ -31,6 +31,7 @@ import {
   isCustomerSet,
   isSetOnce,
   type DeploymentCommand,
+  type DeploymentVariable,
   type ProductDeployment,
   type ProductInterface,
 } from "../../models/product/product.interface";
@@ -71,6 +72,8 @@ import { mailer } from "../mail/mail.service";
 import { notificationService } from "../notification/notification.service";
 import { noticesOf, toProductSummary } from "../product/product.service";
 import {
+  deploymentFor,
+  variableKeysOf,
   variantIdOf,
   variantOf,
   type ResolvedVariant,
@@ -246,7 +249,7 @@ function updateOf(
   deployment: DeploymentDoc | null,
   currentVariantId: string | null | undefined,
 ): UpdateStatus | null {
-  const config = product.deployment;
+  const config = deploymentFor(product, currentVariantId);
   if (!config || !deployment?.dokploy) return null;
   const variantCompose = variantOf(product, currentVariantId)?.composeFile;
   if (!variantCompose) return null;
@@ -499,7 +502,8 @@ export class DeploymentService {
     view: DeploymentView,
   ): Promise<DeploymentOutDto> {
     const product = await this.loadProduct(productId);
-    const variables = product.deployment?.variables ?? [];
+    const variables =
+      (await this.settingsFor(userId, product))?.variables ?? [];
     const visibilityOf = new Map(
       variables.map((variable) => [variable.key, variable.visibility]),
     );
@@ -508,7 +512,8 @@ export class DeploymentService {
     // A customer sees an admin's override as the value. Sending it back
     // unchanged keeps the override; changing it replaces it, which is logged.
     const overrides = overridesOf(deployment);
-    const user = view === "customer" ? await UserModel.findById(userId).exec() : null;
+    const user =
+      view === "customer" ? await UserModel.findById(userId).exec() : null;
     const builtIns = user
       ? builtInsFor(user, user.deployUsername ?? usernameFromEmail(user.email))
       : null;
@@ -677,7 +682,10 @@ export class DeploymentService {
       throw new Error("This product has nothing to deploy");
     }
     if (action === "deploy" || action === "redeploy") {
-      this.assertFilled(product, deployment);
+      this.assertFilled(
+        (await this.settingsFor(userId, product))?.variables ?? [],
+        deployment,
+      );
     }
     if (action === "erase") {
       const out = await this.get(userId, productId, "admin");
@@ -708,15 +716,16 @@ export class DeploymentService {
     view: DeploymentView,
   ): Promise<DeploymentOutDto> {
     const product = await this.loadProduct(productId);
-    const command = product.deployment?.commands.find(
-      (item) => item.id === commandId,
-    );
-    if (!command) throw new Error("This command does not exist");
-
     const [deployment, entitled] = await Promise.all([
       DeploymentModel.findOne({ userId, productId }).exec(),
       entitlementService.canRunService(userId, productId),
     ]);
+    // The commands of the variant that runs, not the one paid for next.
+    const command = deploymentFor(
+      product,
+      deployment?.deployedVariantId,
+    )?.commands.find((item) => item.id === commandId);
+    if (!command) throw new Error("This command does not exist");
     if (!deployment) throw new Error("Turn the service on first");
     const blocker = commandBlocker(deployment.state, entitled);
     if (blocker) {
@@ -736,12 +745,24 @@ export class DeploymentService {
     return this.get(userId, productId, view);
   }
 
-  /** Throws while the customer still has set-once variables to fill. */
-  private assertFilled(product: ProductDoc, deployment: DeploymentDoc): void {
-    const missing = missingValues(
-      product.deployment?.variables ?? [],
-      filledValuesOf(deployment),
+  /**
+   * The deployment settings of the variant the customer's subscription is
+   * on now: what the next deploy sends.
+   */
+  private async settingsFor(userId: string, product: ProductDoc) {
+    const schedule = await userProductService.variantSchedule(
+      userId,
+      product.id,
     );
+    return deploymentFor(product, schedule.current?.variantId);
+  }
+
+  /** Throws while the customer still has set-once variables to fill. */
+  private assertFilled(
+    variables: DeploymentVariable[],
+    deployment: DeploymentDoc,
+  ): void {
+    const missing = missingValues(variables, filledValuesOf(deployment));
     if (missing.length > 0) {
       const them = missing.length === 1 ? "it" : "them";
       throw new Error(
@@ -935,6 +956,19 @@ export class DeploymentService {
       if (!shouldAutoApplyVariant(pending, current.applyVariant, latestRun)) {
         continue;
       }
+      // The new variant may ask for values the old one did not. Redeploying
+      // without them would fail and leave the service marked failed while
+      // the old variant still runs, so wait for the customer to fill them.
+      const product = await ProductModel.findById(deployment.productId).exec();
+      const settings = product
+        ? deploymentFor(product, current.variantId)
+        : null;
+      if (
+        !settings ||
+        missingValues(settings.variables, filledValuesOf(deployment)).length > 0
+      ) {
+        continue;
+      }
       try {
         await this.launch(deployment, "redeploy", null);
         started++;
@@ -952,9 +986,7 @@ export class DeploymentService {
   }
 
   /** The deployment's latest run, as the sweep rules read it. */
-  private async latestRunOf(
-    deployment: DeploymentDoc,
-  ): Promise<{
+  private async latestRunOf(deployment: DeploymentDoc): Promise<{
     action: RunAction;
     automatic: boolean;
     failed: boolean;
@@ -1139,7 +1171,7 @@ export class DeploymentService {
         item.outcome = "changed";
       }
 
-      const config = product.deployment;
+      const config = deploymentFor(product, record.deployedVariantId);
       const expected =
         config && env.deployDomain
           ? resolveDeployment(
@@ -1568,8 +1600,7 @@ export class DeploymentService {
     if (!(await entitlementService.canRunService(user.id, product.id))) {
       throw new Error("The subscription is no longer active");
     }
-    this.assertFilled(product, deployment);
-    // The variant the subscription is on now decides the compose file.
+    // The variant the subscription is on now decides what is deployed.
     const schedule = await userProductService.variantSchedule(
       user.id,
       product.id,
@@ -1581,10 +1612,12 @@ export class DeploymentService {
       );
     }
     context.variant = variant;
+    const settings = variant.deployment ?? config;
+    this.assertFilled(settings.variables, deployment);
 
     const username = await this.ensureUsername(user);
     const resolved = effectiveOf(
-      config,
+      settings,
       builtInsFor(user, username),
       deployment,
     );
@@ -1643,7 +1676,8 @@ export class DeploymentService {
    */
   private async stepWipeCheck(context: RunContext): Promise<void> {
     const { deployment, product, user, run } = context;
-    const config = product.deployment;
+    // The data is the running variant's; every variant mounts the same.
+    const config = deploymentFor(product, deployment.deployedVariantId);
     if (!config) throw new Error("The product has no deployment settings");
     if (!user.deployUsername) {
       throw new Error("It was never deployed, so there is no data");
@@ -1719,7 +1753,10 @@ export class DeploymentService {
 
     const { composeId } = deployment.dokploy;
     const envFile = toEnvFile(resolved.env);
-    await dokployService.updateCompose(composeId, { composeFile, env: envFile });
+    await dokployService.updateCompose(composeId, {
+      composeFile,
+      env: envFile,
+    });
     // Dokploy has this variant's compose now, even if the deploy fails.
     const pushed = { ...fingerprintOf(composeFile, envFile), at: new Date() };
     deployment.deployedVariantId = variant.id;
@@ -1908,7 +1945,7 @@ export class DeploymentService {
    */
   private async stepCommand(context: RunContext): Promise<void> {
     const { run, deployment, product } = context;
-    const config = product.deployment;
+    const config = deploymentFor(product, deployment.deployedVariantId);
     const command = config?.commands.find(
       (item) => item.id === run.command?.id,
     );
@@ -1966,11 +2003,8 @@ export class DeploymentService {
       }
     }
 
-    const setOnce = new Set(
-      (product.deployment?.variables ?? [])
-        .filter((variable) => isSetOnce(variable.visibility))
-        .map((variable) => variable.key),
-    );
+    // Every variant's, so switching later asks for them afresh too.
+    const setOnce = new Set(variableKeysOf(product, isSetOnce));
     await DeploymentModel.updateOne(
       { _id: deployment._id },
       { $pull: { values: { key: { $in: [...setOnce] } } } },
@@ -2180,7 +2214,17 @@ export class DeploymentService {
     entitled: boolean,
     view: DeploymentView,
   ): Promise<DeploymentOutDto> {
-    const config = product.deployment;
+    const schedule = await userProductService.variantSchedule(
+      user.id,
+      product.id,
+    );
+    // What the customer sees and fills is for the variant they are on.
+    const config = deploymentFor(product, schedule.current?.variantId);
+    // What runs may still be another variant, until it is redeployed: its
+    // commands and addresses are the ones that work now.
+    const running = deployment?.pushed
+      ? deploymentFor(product, deployment.deployedVariantId)
+      : config;
     const state = deployment?.state ?? "notDeployed";
     const username = user.deployUsername ?? usernameFromEmail(user.email);
     const resolved = config
@@ -2232,7 +2276,7 @@ export class DeploymentService {
           .exec()
       : [];
 
-    const [status, endsAt, cameUp, schedule] = await Promise.all([
+    const [status, endsAt, cameUp] = await Promise.all([
       this.statusOf(deployment),
       entitled ? userProductService.runsUntil(user.id, product.id) : null,
       deployment && state === "running"
@@ -2245,7 +2289,6 @@ export class DeploymentService {
             .select("finishedAt")
             .exec()
         : null,
-      userProductService.variantSchedule(user.id, product.id),
     ]);
 
     const overrides = overridesOf(deployment);
@@ -2278,8 +2321,12 @@ export class DeploymentService {
       subscriptionEndsAt: endsAt?.toISOString() ?? null,
       runningSince: cameUp?.finishedAt?.toISOString() ?? null,
       hosts:
-        resolved && env.deployDomain
-          ? resolved.domains.map(({ host }) => host)
+        running && env.deployDomain
+          ? resolveDeployment(
+              running,
+              builtInsFor(user, username),
+              valuesOf(deployment),
+            ).domains.map(({ host }) => host)
           : (deployment?.routedHosts ?? []),
       variables,
       missingValues: config
@@ -2287,7 +2334,7 @@ export class DeploymentService {
         : [],
       status,
       actions,
-      commands: (config?.commands ?? []).map(({ id, label }) => ({
+      commands: (running?.commands ?? []).map(({ id, label }) => ({
         id,
         label,
       })),

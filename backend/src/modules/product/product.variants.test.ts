@@ -6,6 +6,7 @@ import {
   type ProductVariant,
 } from "../../models/product/product.interface";
 import {
+  deploymentFor,
   fitVariants,
   removedVariantIds,
   variantIdOf,
@@ -44,8 +45,11 @@ const variant = (over: Partial<ProductVariant> = {}): ProductVariant => ({
   id: "big",
   name: "4 cores / 4 GB",
   specs: "",
+  pricingText: "",
+  description: "",
   priceIdr: 100_000,
   durationDays: 30,
+  deployment: null,
   composeFile: null,
   ...over,
 });
@@ -55,6 +59,8 @@ const host = (over: Partial<VariantHost> = {}): VariantHost => ({
   name: "Minecraft",
   priceIdr: 50_000,
   durationDays: 30,
+  pricingText: "Rp 50.000 / month",
+  description: "About Minecraft",
   deployment: DEPLOYMENT,
   variantName: "2 cores / 2 GB",
   variantSpecs: "",
@@ -71,6 +77,18 @@ describe("variantsOf / variantOf", () => {
     assert.equal(big.id, "big");
     // No own compose file: it deploys the product's.
     assert.equal(big.composeFile, DEPLOYMENT.composeFile);
+  });
+
+  it("shows the product's description unless a variant has its own", () => {
+    const [base, big] = variantsOf(host());
+    assert.equal(base.pricingText, "Rp 50.000 / month");
+    assert.equal(big.pricingText, "");
+    assert.equal(big.description, "About Minecraft");
+    const own = variantOf(
+      host({ variants: [variant({ description: "More RAM" })] }),
+      "big",
+    );
+    assert.equal(own?.description, "More RAM");
   });
 
   it("names the base after the product when it has no name of its own", () => {
@@ -90,6 +108,69 @@ describe("variantsOf / variantOf", () => {
       "big",
     );
     assert.equal(big?.composeFile, null);
+  });
+});
+
+describe("variant deployment settings", () => {
+  const own = {
+    composeFile: compose("4G"),
+    variables: [{ key: "SEED", value: "1", visibility: "editable" as const }],
+    domains: [],
+    commands: [],
+  };
+
+  it("uses the variant's own settings with the product's project and name", () => {
+    const settings = deploymentFor(
+      host({ variants: [variant({ deployment: own })] }),
+      "big",
+    );
+    assert.equal(settings?.projectId, "p1");
+    assert.equal(settings?.name, "mc-${USERNAME}");
+    assert.deepEqual(
+      settings?.variables.map(({ key }) => key),
+      ["SEED"],
+    );
+    assert.deepEqual(settings?.commands, []);
+  });
+
+  it("falls back to the product's for the base or a gone variant", () => {
+    assert.equal(deploymentFor(host(), null), DEPLOYMENT);
+    assert.equal(deploymentFor(host(), "nope"), DEPLOYMENT);
+  });
+
+  it("keeps a legacy compose-only variant on the product's other settings", () => {
+    const settings = deploymentFor(
+      host({ variants: [variant({ composeFile: compose("4G") })] }),
+      "big",
+    );
+    assert.equal(settings?.commands.length, 1);
+    assert.match(settings?.composeFile ?? "", /MEMORY=4G/);
+  });
+
+  it("checks own settings and stores them re-indented", () => {
+    const [fitted] = fitVariants(
+      host({ variants: [variant({ deployment: own })] }),
+    );
+    assert.equal(fitted.composeFile, null);
+    assert.match(fitted.deployment?.composeFile ?? "", /MEMORY=4G/);
+    assert.throws(
+      () =>
+        fitVariants(
+          host({
+            variants: [
+              variant({
+                deployment: {
+                  ...own,
+                  commands: [
+                    { id: "x", label: "X", serviceName: "nope", command: "ls" },
+                  ],
+                },
+              }),
+            ],
+          }),
+        ),
+      /not in this variant's compose file/,
+    );
   });
 });
 

@@ -14,8 +14,12 @@ import type {
 } from "../../dto/product.dto";
 import {
   MAX_PRODUCT_IMAGES,
+  type DeploymentCommand,
+  type DeploymentDomain,
+  type DeploymentVariable,
   type ProductInterface,
   type ProductNotice,
+  type ProductVariant,
 } from "../../models/product/product.interface";
 import { ProductModel } from "../../models/product/product.model";
 import { PaymentModel } from "../../models/payment/payment.model";
@@ -91,10 +95,20 @@ export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
     variants:
       product.kind === "subscription"
         ? variantsOf(product).map(
-            ({ id, name, specs, priceIdr, durationDays }) => ({
+            ({
               id,
               name,
               specs,
+              pricingText,
+              description,
+              priceIdr,
+              durationDays,
+            }) => ({
+              id,
+              name,
+              specs,
+              pricingText,
+              description,
               priceIdr,
               durationDays,
             }),
@@ -103,15 +117,60 @@ export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
   };
 }
 
+function deploymentListsOf(deployment: {
+  variables: DeploymentVariable[];
+  domains: DeploymentDomain[];
+  commands?: DeploymentCommand[];
+}) {
+  return {
+    variables: deployment.variables.map(({ key, value, visibility }) => ({
+      key,
+      value,
+      visibility,
+    })),
+    domains: deployment.domains.map(({ serviceName, subdomain, port }) => ({
+      serviceName,
+      subdomain,
+      port,
+    })),
+    commands: (deployment.commands ?? []).map(
+      ({ id, label, serviceName, command }) => ({
+        id,
+        label,
+        serviceName,
+        command,
+      }),
+    ),
+  };
+}
+
 /** Plain copies: products saved before variants existed have none. */
-function variantListOf(product: ProductDoc) {
+function variantListOf(product: ProductDoc): ProductVariant[] {
   return (product.variants ?? []).map(
-    ({ id, name, specs, priceIdr, durationDays, composeFile }) => ({
+    ({
       id,
       name,
       specs,
+      pricingText,
+      description,
       priceIdr,
       durationDays,
+      deployment,
+      composeFile,
+    }) => ({
+      id,
+      name,
+      specs,
+      pricingText: pricingText ?? "",
+      description: description ?? "",
+      priceIdr,
+      durationDays,
+      deployment: deployment
+        ? {
+            composeFile: deployment.composeFile,
+            ...deploymentListsOf(deployment),
+          }
+        : null,
       composeFile: composeFile ?? null,
     }),
   );
@@ -136,24 +195,7 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
           projectId: product.deployment.projectId,
           name: product.deployment.name,
           composeFile: product.deployment.composeFile,
-          variables: product.deployment.variables.map(
-            ({ key, value, visibility }) => ({ key, value, visibility }),
-          ),
-          domains: product.deployment.domains.map(
-            ({ serviceName, subdomain, port }) => ({
-              serviceName,
-              subdomain,
-              port,
-            }),
-          ),
-          commands: (product.deployment.commands ?? []).map(
-            ({ id, label, serviceName, command }) => ({
-              id,
-              label,
-              serviceName,
-              command,
-            }),
-          ),
+          ...deploymentListsOf(product.deployment),
         }
       : null,
     variantName: product.variantName ?? "",
@@ -341,6 +383,8 @@ export class ProductService {
       name: product.name,
       priceIdr: product.priceIdr,
       durationDays: product.durationDays,
+      pricingText: product.pricingText,
+      description: product.description,
       deployment: product.deployment,
       variantName: product.variantName ?? "",
       variantSpecs: product.variantSpecs ?? "",
