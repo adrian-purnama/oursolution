@@ -37,6 +37,7 @@ import { useBranding } from '#/context/brandingContext'
 import { refreshBasket, useBasketCount } from '#/lib/billing'
 import { startNotificationStream } from '#/lib/notification'
 import { SERVICES } from '#/lib/services'
+import { SHOW_HOME_STATE } from '#/lib/home'
 import { cn } from '#/lib/utils'
 
 const DRAWER_TRANSITION_MS = 300
@@ -210,13 +211,13 @@ export default function Header() {
                 Log in
               </Link>
               <Link
-                to="/contact"
+                to="/register"
                 className={ctaPrimaryClass}
                 activeProps={{
                   className: cn(ctaPrimaryClass, 'opacity-90'),
                 }}
               >
-                Get started
+                Sign up
                 <ArrowRight className="size-4" aria-hidden />
               </Link>
             </>
@@ -311,6 +312,7 @@ export default function Header() {
                   {isAuthenticated ? (
                     <Link
                       to="/"
+                      state={SHOW_HOME_STATE}
                       className={drawerSubLinkClass}
                       activeOptions={{ exact: true }}
                       activeProps={{
@@ -462,11 +464,11 @@ export default function Header() {
                       Log in
                     </Link>
                     <Link
-                      to="/contact"
+                      to="/register"
                       className="block rounded-[var(--radius-sm)] bg-[var(--navy)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
                       onClick={closeMenu}
                     >
-                      Get started
+                      Sign up
                     </Link>
                   </div>
                 )}
@@ -570,7 +572,12 @@ function DashboardMenu({
             asChild
             className="cursor-pointer rounded-xl p-0"
           >
-            <Link to={to} className="flex items-start gap-3 p-3 no-underline">
+            <Link
+              to={to}
+              // A signed-in user asked for the home page on purpose.
+              state={to === '/' ? SHOW_HOME_STATE : undefined}
+              className="flex items-start gap-3 p-3 no-underline"
+            >
               <Icon
                 className="mt-0.5 size-5 shrink-0 text-[var(--accent)]"
                 aria-hidden

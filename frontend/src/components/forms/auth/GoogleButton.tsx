@@ -38,6 +38,7 @@ export default function GoogleButton({
   redirect,
   className = 'w-full',
   disabled = false,
+  onBeforeStart,
 }: {
   label: string
   mode: GoogleIntent['mode']
@@ -45,10 +46,13 @@ export default function GoogleButton({
   redirect?: string
   className?: string
   disabled?: boolean
+  /** Return false to stop before going to Google, e.g. terms not agreed. */
+  onBeforeStart?: () => boolean
 }) {
   const [starting, setStarting] = useState(false)
 
   async function handleClick() {
+    if (onBeforeStart && !onBeforeStart()) return
     setStarting(true)
     const problem = await startGoogle({ mode, rememberMe, redirect })
     if (problem) {
