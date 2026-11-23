@@ -5,9 +5,16 @@ import { logger } from "../../logger/logger";
 const SOURCE = "modules/dokploy/dokploy.service.ts";
 
 const TIMEOUT_MS = 20_000;
+/**
+ * A deploy is checked every 5 seconds at first, then less often (×1.5 each
+ * time, up to every 30 seconds): most finish quickly, and a long build
+ * should not cost hundreds of requests.
+ */
 const POLL_INTERVAL_MS = 5_000;
+const POLL_INTERVAL_MAX_MS = 30_000;
+const POLL_BACKOFF = 1.5;
 /** How long a deployment may build before we call it failed. */
-const DEPLOY_TIMEOUT_MS = 20 * 60_000;
+const DEPLOY_TIMEOUT_MS = 60 * 60_000;
 /** How long to wait for Dokploy to list a deployment we just queued. */
 const QUEUE_GRACE_MS = 3 * 60_000;
 /** How long a one-off job may run: erasing a big folder on a NAS is slow. */
@@ -443,8 +450,10 @@ export class DokployService {
     const since = new Date();
     await this.request("POST", "compose.deploy", { composeId, title });
 
+    let interval = POLL_INTERVAL_MS;
     while (Date.now() - since.getTime() < DEPLOY_TIMEOUT_MS) {
-      await sleep(POLL_INTERVAL_MS);
+      await sleep(interval);
+      interval = Math.min(interval * POLL_BACKOFF, POLL_INTERVAL_MAX_MS);
       const outcome = deploymentOutcome(
         await this.request("GET", "deployment.allByCompose", { composeId }),
         since,
