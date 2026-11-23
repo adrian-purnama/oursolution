@@ -34,14 +34,19 @@ export default function RevealScope({
   const layer = useRef<HTMLDivElement>(null)
 
   useGSAP(
-    (_context, contextSafe) => {
+    () => {
       const main = root.current
       const overlay = layer.current
-      if (!main || !overlay || !contextSafe) return
+      if (!main || !overlay) return
       /** Which builder takes the next element, in turn. */
       let turn = 0
 
-      const build = contextSafe((element: HTMLElement, delay: number) => {
+      // Not wrapped in contextSafe: the batch callback already runs inside
+      // the matchMedia context below, so the timelines land there and are
+      // reverted with it. Wrapping it in the outer context would put that
+      // context inside its own child, and reverting it on unmount would
+      // then recurse forever ("Maximum call stack size exceeded").
+      const build = (element: HTMLElement, delay: number) => {
         const index = turn++ % BUILDERS.length
         const builder = BUILDERS[index]
         const cursor = cloneTemplate(overlay, 'cursor', index)
@@ -118,7 +123,7 @@ export default function RevealScope({
             },
             '<-0.2',
           )
-      })
+      }
 
       const mm = gsap.matchMedia()
       mm.add(MOTION_OK, () => {
