@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import toast from 'react-hot-toast'
-import { LoaderCircle, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import {
+  FileUp,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react'
 import { ProductMark } from '#/components/ProductBadge'
 import { Button } from '#/components/ui/button'
 import {
@@ -12,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog'
+import ImportProductDialog from '#/components/forms/admin/ImportProductDialog'
 import { apiFetch } from '#/lib/api'
 import {
   PRODUCT_KIND_LABELS,
@@ -31,6 +39,7 @@ export default function ProductsAdminForm() {
   const [removing, setRemoving] = useState(false)
   const [purging, setPurging] = useState<Product | null>(null)
   const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -123,7 +132,15 @@ export default function ProductsAdminForm() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setImporting(true)}
+        >
+          <FileUp aria-hidden />
+          Upload JSON
+        </Button>
         <Button asChild>
           <Link to="/admin/products/new">
             <Plus aria-hidden />
@@ -337,6 +354,7 @@ export default function ProductsAdminForm() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ImportProductDialog open={importing} onOpenChange={setImporting} />
     </div>
   )
 }
