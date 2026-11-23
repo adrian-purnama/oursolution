@@ -1,0 +1,41 @@
+{
+  "name": "n8n Starter",
+  "kind": "subscription",
+  "color": "#ea4b71",
+  "pricingText": "Rp 99.000 / bulan",
+  "description": "Your own **n8n** instance for workflow automation.\n\n- Unlimited workflows\n- Daily backups",
+  "notices": [
+    {
+      "tone": "warning",
+      "text": "Your owner password cannot be recovered by us. Keep it safe."
+    }
+  ],
+  "priceIdr": 99000,
+  "durationDays": 30,
+  "variantName": "1 core / 1 GB",
+  "variantSpecs": "1 vCPU, 1 GB RAM, 10 GB storage",
+  "variants": [],
+  "accessUrl": null,
+  "showOnPricingPage": false,
+  "deployment": {
+    "type": "dockerCompose",
+    "projectId": "REPLACE_WITH_DOKPLOY_PROJECT_ID",
+    "name": "n8n-${USERNAME}",
+    "composeFile": "services:\n  n8n:\n    image: n8nio/n8n:1.80.0\n    restart: unless-stopped\n    expose:\n      - \"5678\"\n    environment:\n      - N8N_HOST=n8n-${USERNAME}.${DOMAIN}\n      - N8N_PROTOCOL=https\n      - WEBHOOK_URL=https://n8n-${USERNAME}.${DOMAIN}/\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      - GENERIC_TIMEZONE=${TIMEZONE}\n    volumes:\n      - n8n_data:/home/node/.n8n\nvolumes:\n  n8n_data:\n",
+    "variables": [
+      { "key": "N8N_ENCRYPTION_KEY", "value": "", "visibility": "setOnceHidden" },
+      { "key": "TIMEZONE", "value": "Asia/Jakarta", "visibility": "editable" }
+    ],
+    "domains": [
+      { "serviceName": "n8n", "subdomain": "n8n-${USERNAME}", "port": 5678 }
+    ],
+    "commands": [
+      {
+        "id": "reset-owner",
+        "label": "Reset owner password",
+        "serviceName": "n8n",
+        "command": "n8n user-management:reset"
+      }
+    ]
+  }
+}
