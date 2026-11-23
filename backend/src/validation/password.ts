@@ -3,7 +3,10 @@ export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_BYTES = 72;
 
 /** Each rule a new password must meet. Keep in sync with frontend/src/lib/password.ts */
-export const PASSWORD_RULES: { label: string; test: (password: string) => boolean }[] = [
+export const PASSWORD_RULES: {
+  label: string;
+  test: (password: string) => boolean;
+}[] = [
   {
     label: `at least ${MIN_PASSWORD_LENGTH} characters`,
     test: (password) => password.length >= MIN_PASSWORD_LENGTH,
