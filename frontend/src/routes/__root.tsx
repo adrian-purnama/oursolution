@@ -20,9 +20,10 @@ import {
   seo,
 } from '../lib/seo'
 
-import { useMatomoPageViews } from '../lib/matomo'
-
 import appCss from '../styles.css?url'
+
+const UMAMI_URL = 'https://umami-adrianpurnama209.oursolution.id'
+const UMAMI_WEBSITE_ID = '72cfcf48-5034-475d-885a-175d6e07526e'
 
 export const Route = createRootRoute({
   head: () => {
@@ -62,7 +63,20 @@ export const Route = createRootRoute({
         { rel: 'manifest', href: '/manifest.json' },
         ...defaults.links,
       ],
-      scripts: [jsonLd(ORGANIZATION_LD), jsonLd(WEBSITE_LD)],
+      scripts: [
+        jsonLd(ORGANIZATION_LD),
+        jsonLd(WEBSITE_LD),
+        {
+          src: `${UMAMI_URL}/script.js`,
+          defer: true,
+          'data-website-id': UMAMI_WEBSITE_ID,
+        },
+        {
+          src: `${UMAMI_URL}/recorder.js`,
+          defer: true,
+          'data-website-id': UMAMI_WEBSITE_ID,
+        },
+      ],
     }
   },
   shellComponent: RootDocument,
@@ -86,8 +100,6 @@ function AppThemeShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  useMatomoPageViews()
-
   return (
     <html lang="en">
       <head>
