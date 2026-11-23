@@ -86,7 +86,7 @@ function emptyDraft(): Draft {
   return {
     name: '',
     kind: 'subscription',
-    color: '#135ef5',
+    color: '#035bfe',
     notices: [],
     accessUrl: '',
     showOnPricingPage: true,

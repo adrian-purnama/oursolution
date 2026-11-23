@@ -5,7 +5,9 @@ import {
   BuildFrame,
   BuilderCursor,
   MOVE,
+  clipToFrame,
   offscreen,
+  releaseClip,
 } from '#/components/home/builders'
 import { EASE_OUT, MOTION_OK, ScrollTrigger, gsap, useGSAP } from '#/lib/gsap'
 import { cn } from '#/lib/utils'
@@ -16,8 +18,8 @@ const STAGGER = 0.15
 /**
  * The landing page shell. Every `[data-reveal]` element inside is built
  * once as it scrolls into view: one of the builders' cursors flies in from
- * its side of the screen, drags a frame over it, the element fades up into
- * the frame, and the cursor leaves. Elements entering together go to
+ * its side of the screen, drags a frame over it, the element is drawn in
+ * place under the frame as it grows, and the cursor leaves. Elements entering together go to
  * different builders, a little apart. Their hidden start state lives in
  * styles.css; with reduced motion they are simply there.
  */
@@ -45,19 +47,19 @@ export default function RevealScope({
         const cursor = cloneTemplate(overlay, 'cursor', index)
         const frame = cloneTemplate(overlay, 'frame', index)
         if (!cursor || !frame) {
-          gsap.to(element, { opacity: 1, y: 0, duration: 0.8, ease: EASE_OUT })
+          gsap.to(element, { opacity: 1, duration: 0.8, ease: EASE_OUT })
           return
         }
 
-        /** Where the element will sit once it has risen, in `main`'s terms. */
+        /** Where the element sits, in `main`'s terms. */
         let box = { left: 0, top: 0, width: 0, height: 0 }
+        const draw = () => clipToFrame(element, frame)
         const measure = () => {
           const area = main.getBoundingClientRect()
           const rect = element.getBoundingClientRect()
-          const rise = Number(gsap.getProperty(element, 'y')) || 0
           box = {
             left: rect.left - area.left,
-            top: rect.top - area.top - rise,
+            top: rect.top - area.top,
             width: rect.width,
             // A tall element is framed only as far as the screen shows.
             height: Math.min(rect.height, window.innerHeight * 0.6),
@@ -92,6 +94,8 @@ export default function RevealScope({
             width: () => box.width,
             height: () => box.height,
             ...MOVE,
+            onStart: draw,
+            onUpdate: draw,
           })
           .to(
             cursor,
@@ -102,12 +106,8 @@ export default function RevealScope({
             },
             '<',
           )
-          .to(
-            element,
-            { opacity: 1, y: 0, duration: 0.8, ease: EASE_OUT },
-            '-=0.15',
-          )
-          .to(frame, { autoAlpha: 0, duration: 0.45 }, '<0.35')
+          .add(() => void releaseClip(element))
+          .to(frame, { autoAlpha: 0, duration: 0.45 }, '<0.2')
           .to(
             cursor,
             {

@@ -62,7 +62,7 @@ export default function HeroSection() {
           dims, while the light behind it drifts. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_75%_65%_at_50%_0%,black,transparent)] bg-[linear-gradient(to_right,rgba(12,12,11,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(12,12,11,0.06)_1px,transparent_1px)] bg-[size:56px_56px]"
+        className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_75%_65%_at_50%_0%,black,transparent)] bg-[linear-gradient(to_right,rgba(0,32,96,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,32,96,0.06)_1px,transparent_1px)] bg-[size:56px_56px]"
       />
       <div
         aria-hidden
