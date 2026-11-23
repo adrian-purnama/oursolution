@@ -3,12 +3,16 @@
  * answers whether the money is in, still on its way, or refused; later it can
  * be asked how a payment stands.
  */
+import type { PaymentCurrency } from "../../models/payment/payment.interface";
 
 export type ChargeLine = {
   id: string;
   name: string;
+  /** In the request's currency (whole rupiah, or US cents). */
   unitPriceIdr: number;
   quantity: number;
+  /** The provider's own price for the line (Paddle), or null. */
+  providerPriceId: string | null;
 };
 
 export type ChargeRequest = {
@@ -16,6 +20,8 @@ export type ChargeRequest = {
   invoiceNumber: string;
   userId: string;
   customerEmail: string;
+  currency: PaymentCurrency;
+  /** In `currency`. */
   amountIdr: number;
   lines: ChargeLine[];
   expiresAt: Date;
@@ -66,13 +72,16 @@ export interface PaymentProvider {
    * yet (e.g. the user has not picked a way to pay). Throws when it cannot
    * tell right now.
    */
-  fetchStatus(paymentId: string): Promise<ProviderStatus | null>;
+  fetchStatus(
+    paymentId: string,
+    reference: string | null,
+  ): Promise<ProviderStatus | null>;
   /**
    * Stop a pending payment from being paid (e.g. close its virtual
    * account). Optional; nothing to do when the user never picked a way to
    * pay. Throws when the provider refuses.
    */
-  expire?(paymentId: string): Promise<void>;
+  expire?(paymentId: string, reference: string | null): Promise<void>;
 }
 
 /**

@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
 import { CONTACT_URL } from '#/lib/config'
+import { m } from '#/paraglide/messages'
+import { localizeHref } from '#/paraglide/runtime'
 
 export default function FinalCta() {
   return (
@@ -16,26 +18,24 @@ export default function FinalCta() {
           />
           <div className="relative">
             <h2 className="font-display mb-5 max-w-3xl text-4xl leading-[1.05] sm:text-6xl">
-              Tell us what you need.
+              {m.home_cta_title()}
             </h2>
             <p className="mb-10 max-w-xl text-lg leading-relaxed text-white/60">
-              Tell us what slows your team down and we will reply with a plan
-              and an estimate. Or pick a hosting plan in the shop and start
-              today.
+              {m.home_cta_copy()}
             </p>
             <div className="flex flex-wrap gap-3">
               <a
-                href={CONTACT_URL}
+                href={localizeHref(CONTACT_URL)}
                 className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-6 text-sm font-medium text-[var(--navy)] no-underline transition hover:bg-white/90"
               >
-                Start a project
+                {m.home_cta_primary()}
                 <ArrowRight className="size-4" aria-hidden />
               </a>
               <Link
                 to="/pricing"
                 className="inline-flex h-11 items-center rounded-full border border-white/20 px-6 text-sm font-medium text-white no-underline transition hover:border-white/50"
               >
-                Go to the shop
+                {m.home_cta_secondary()}
               </Link>
             </div>
           </div>

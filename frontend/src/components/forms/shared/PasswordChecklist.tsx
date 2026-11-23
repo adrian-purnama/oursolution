@@ -1,6 +1,7 @@
 import { Check, Circle } from 'lucide-react'
 import { PASSWORD_RULES } from '#/lib/password'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /** The password rules, each ticked off as the password meets it. */
 export default function PasswordChecklist({
@@ -15,7 +16,7 @@ export default function PasswordChecklist({
   return (
     <ul
       id={id}
-      aria-label="Password requirements"
+      aria-label={m.pw_requirements()}
       className={cn('mt-2 grid gap-1 text-xs sm:grid-cols-2', className)}
     >
       {PASSWORD_RULES.map((rule) => {
@@ -35,7 +36,9 @@ export default function PasswordChecklist({
             )}
             <span>
               {rule.label}
-              <span className="sr-only">{met ? ' (done)' : ' (missing)'}</span>
+              <span className="sr-only">
+                {met ? m.pw_done() : m.pw_missing()}
+              </span>
             </span>
           </li>
         )

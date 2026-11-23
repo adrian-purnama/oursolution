@@ -66,6 +66,11 @@ export function midtransSandbox(raw: string | undefined): boolean {
   return !value || /sandbox/i.test(value);
 }
 
+/** Live Paddle keys start "pdl_live_"; anything else is the sandbox. */
+export function paddleSandbox(apiKey: string | undefined): boolean {
+  return !apiKey?.trim().startsWith("pdl_live_");
+}
+
 /** Where Midtrans reaches us, relative to the backend's public URL. */
 export const MIDTRANS_NOTIFICATION_PATH = "/payments/midtrans/notification";
 
@@ -233,6 +238,16 @@ export const env = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || null,
   // How long an unpaid invoice can still be paid.
   paymentTtlMinutes: Number(process.env.PAYMENT_TTL_MINUTES) || 60,
+  // Paddle bills customers outside Indonesia in USD. Optional: without an
+  // API key only the Indonesian region can check out.
+  paddleApiKey: process.env.PADDLE_API_KEY?.trim() || null,
+  // Public: lets the browser open Paddle Checkout.
+  paddleClientToken: process.env.PADDLE_CLIENT_TOKEN?.trim() || null,
+  paddleWebhookSecret: process.env.PADDLE_WEBHOOK_SECRET?.trim() || null,
+  paddleSandbox: paddleSandbox(process.env.PADDLE_API_KEY),
+  paddleTaxCategory: process.env.PADDLE_TAX_CATEGORY?.trim() || "standard",
+  // Days before a subscription ends that its owner is reminded.
+  expiryReminderDays: positiveInt(process.env.EXPIRY_REMINDER_DAYS) ?? 5,
   // An OpenAI-compatible chat endpoint (base only; /v1/chat/completions is
   // appended). Optional: without it, tickets close without a summary.
   llmBaseUrl:

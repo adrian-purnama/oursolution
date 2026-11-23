@@ -55,12 +55,18 @@ const userProductPeriodSchema = new Schema<UserProductPeriodInterface>(
       ref: "RedeemCode",
       required: false,
     },
+    reminderSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );
 
 userProductPeriodSchema.index({ userId: 1, productId: 1, startsAt: 1 });
 userProductPeriodSchema.index({ productId: 1 });
+// The expiry reminder sweep: periods about to end, not yet reminded.
+userProductPeriodSchema.index({ endsAt: 1, reminderSentAt: 1 });
 
 export const UserProductPeriodModel = model<UserProductPeriodInterface>(
   "UserProductPeriod",

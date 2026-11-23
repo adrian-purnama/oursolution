@@ -17,10 +17,13 @@ import { nextSequence } from "../../models/counter/counter.model";
 import type {
   PaymentInterface,
   CheckoutPlacement,
+  PaymentCurrency,
   PaymentItem,
   PaymentSource,
   PaymentStatus,
 } from "../../models/payment/payment.interface";
+import { PaddleSubscriptionModel } from "../../models/paddleSubscription/paddleSubscription.model";
+import type { BillingRegion } from "../../models/user/user.interface";
 import { PaymentModel } from "../../models/payment/payment.model";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
@@ -52,6 +55,8 @@ import {
   totalAmount,
 } from "./checkout.rules";
 import { MidtransProvider } from "./midtrans.provider";
+import { paddleClient } from "./paddle.client";
+import { PaddleProvider } from "./paddle.provider";
 import {
   allowAllProvider,
   type PaymentProvider,
@@ -85,6 +90,35 @@ type InvoiceLine = Omit<
 > & {
   productId: string | null;
 };
+
+/** The currency a billing region pays in. */
+export function currencyOf(region: BillingRegion): PaymentCurrency {
+  return region === "INTL" ? "USD" : "IDR";
+}
+
+/** Paddle statuses that still renew, or are retrying a renewal. */
+export const RENEWING_STATUSES = ["active", "trialing", "past_due"] as const;
+
+/** One renewal Paddle charged, to be recorded and granted. */
+export interface RenewalInput {
+  userId: string;
+  /** Paddle's subscription id. */
+  subscriptionRef: string;
+  /** Paddle's transaction id. Recording the same one twice does nothing. */
+  reference: string;
+  currency: PaymentCurrency;
+  paymentType: string | null;
+  items: {
+    productId: string;
+    variantId: string | null;
+    applyVariant: VariantApplyMode;
+    name: string;
+    durationDays: number;
+    providerPriceId: string;
+    unitPrice: number;
+    quantity: number;
+  }[];
+}
 
 /**
  * Where payments are stored. A small seam so the checkout and grant rules
@@ -121,11 +155,38 @@ export interface PaymentStore {
     userId: string,
     productId: string,
   ): Promise<{ id: string; paymentId: string | null } | null>;
+  /** The payment a provider knows by this transaction id. */
+  findByReference(
+    provider: string,
+    reference: string,
+  ): Promise<PaymentRecord | null>;
 }
 
+/** Where a user is billed, and whether that can still change. */
+export interface BillingProfiles {
+  regionOf(
+    userId: string,
+  ): Promise<{ region: BillingRegion; locked: boolean }>;
+  /** Fix the region once the user has checked out in it. */
+  lockRegion(userId: string, region: BillingRegion): Promise<void>;
+  /** Whether Paddle renews this product for the user by itself. */
+  renewsAutomatically(userId: string, productId: string): Promise<boolean>;
+}
+
+/** Everyone is billed in Indonesia: for tests and setups without Paddle. */
+export const indonesiaOnly: BillingProfiles = {
+  regionOf: async () => ({ region: "ID", locked: false }),
+  lockRegion: async () => {},
+  renewsAutomatically: async () => false,
+};
+
 type Deps = {
-  /** Null when no provider is set up: checkout is refused. */
+  /** Bills Indonesia (IDR). Null when none is set up: checkout is refused. */
   provider: PaymentProvider | null;
+  /** Bills everyone else (USD). Null or missing: only Indonesia can buy. */
+  paddle?: PaymentProvider | null;
+  /** Missing: everyone is billed in Indonesia. */
+  billing?: BillingProfiles;
   products: Pick<typeof productService, "get">;
   userProducts: Pick<
     typeof userProductService,
@@ -242,6 +303,12 @@ export const mongoPaymentStore: PaymentStore = {
       paymentId: doc.paymentId?.toString() ?? null,
     };
   },
+  async findByReference(provider, reference) {
+    const doc = await PaymentModel.findOne({ provider, reference })
+      .lean()
+      .exec();
+    return doc ? toRecord(doc) : null;
+  },
 };
 
 export function toPaymentOut(
@@ -257,6 +324,7 @@ export function toPaymentOut(
     status: payment.status,
     // Older documents read through `lean()` have no source yet.
     source: payment.source ?? "checkout",
+    currency: payment.currency ?? "IDR",
     amountIdr: payment.amountIdr,
     items: payment.items.map((item) => ({
       productId: item.productId?.toString() ?? null,
@@ -273,6 +341,8 @@ export function toPaymentOut(
     paymentType: payment.paymentType,
     redirectUrl: payable ? payment.redirectUrl : null,
     snapToken: payable ? payment.snapToken : null,
+    paddleTransactionId:
+      payable && payment.provider === "paddle" ? payment.reference : null,
     expiresAt: payment.expiresAt.toISOString(),
     paidAt: payment.paidAt?.toISOString() ?? null,
     grantedAt: payment.grantedAt?.toISOString() ?? null,
@@ -284,7 +354,10 @@ export function toPaymentOut(
   };
 }
 
-type PricedLine = CheckoutLineOutDto & { productDoc: Product };
+type PricedLine = CheckoutLineOutDto & {
+  productDoc: Product;
+  providerPriceId: string | null;
+};
 
 /**
  * Checkout: a user pays for one or more products at once and gets one
@@ -299,18 +372,48 @@ type PricedLine = CheckoutLineOutDto & { productDoc: Product };
 export class PaymentService {
   constructor(private readonly deps: Deps) {}
 
+  private get billing(): BillingProfiles {
+    return this.deps.billing ?? indonesiaOnly;
+  }
+
+  /** The provider a payment was made with, when it is still set up. */
+  private providerNamed(name: string): PaymentProvider | null {
+    const { provider, paddle } = this.deps;
+    if (provider?.name === name) return provider;
+    if (paddle?.name === name) return paddle;
+    return null;
+  }
+
+  /** Where this user is billed; without Paddle, always Indonesia. */
+  async regionOf(
+    userId: string,
+  ): Promise<{ region: BillingRegion; locked: boolean }> {
+    const profile = await this.billing.regionOf(userId);
+    return this.deps.paddle ? profile : { ...profile, region: "ID" };
+  }
+
   /** Price these items now, saying what stops each from being bought. */
   async quote(
     userId: string,
     items: CheckoutItemInDto[],
     now: Date = new Date(),
   ): Promise<CheckoutQuoteOutDto> {
-    const lines = await this.priceLines(userId, items, now);
-    return this.toQuote(lines);
+    const { region, locked } = await this.regionOf(userId);
+    const lines = await this.priceLines(userId, items, now, region);
+    return {
+      ...this.toQuote(lines),
+      currency: currencyOf(region),
+      region,
+      regionLocked: locked,
+    };
   }
 
-  private toQuote(lines: PricedLine[]): CheckoutQuoteOutDto {
-    const out = lines.map(({ productDoc: _product, ...line }) => line);
+  private toQuote(
+    lines: PricedLine[],
+  ): Omit<CheckoutQuoteOutDto, "currency" | "region" | "regionLocked"> {
+    const out = lines.map(
+      ({ productDoc: _product, providerPriceId: _price, ...line }) => line,
+    );
     return {
       lines: out,
       totalIdr: out
@@ -324,8 +427,12 @@ export class PaymentService {
     userId: string,
     rawItems: CheckoutItemInDto[],
     now: Date,
+    region: BillingRegion,
   ): Promise<PricedLine[]> {
     const { products, userProducts, purchases, store } = this.deps;
+    const intl = region === "INTL";
+    /** The billing period every subscription in one Paddle checkout shares. */
+    let intlCycleDays: number | null = null;
     const items = mergeDuplicateItems(rawItems).slice(0, MAX_CHECKOUT_LINES);
 
     const found: {
@@ -375,11 +482,23 @@ export class PaymentService {
       placement,
     } of found) {
       const productId = product.id as string;
-      const quantity = clampQuantity(product.kind, wanted);
       const isSubscription = product.kind === "subscription";
+      // Paddle renews a subscription every period by itself: one at a time.
+      const quantity =
+        intl && isSubscription ? 1 : clampQuantity(product.kind, wanted);
       const variant = isSubscription ? variantOf(product, variantId) : null;
       // What the line costs: the chosen variant, or the product as it was.
-      const unitPriceIdr = variant?.priceIdr ?? product.priceIdr;
+      const unitPriceUsd = isSubscription
+        ? (variant?.priceUsdCents ?? null)
+        : (product.priceUsdCents ?? null);
+      const providerPriceId = intl
+        ? isSubscription
+          ? (variant?.paddlePriceId ?? null)
+          : (product.paddlePriceId ?? null)
+        : null;
+      const unitPriceIdr = intl
+        ? (unitPriceUsd ?? 0)
+        : (variant?.priceIdr ?? product.priceIdr);
       const durationDays = isSubscription
         ? (variant?.durationDays ?? product.durationDays)
         : null;
@@ -390,6 +509,25 @@ export class PaymentService {
         problem = "No longer available";
       } else if (isSubscription && !variant) {
         problem = "This variant is no longer available: choose another";
+      } else if (intl && (unitPriceUsd === null || !providerPriceId)) {
+        problem = "Not available outside Indonesia yet";
+      } else if (intl && isSubscription && placement === "now") {
+        problem =
+          "Switching variant now is not available with automatic renewal: buy it to start after your current time";
+      } else if (
+        intl &&
+        isSubscription &&
+        (await this.billing.renewsAutomatically(userId, productId))
+      ) {
+        problem = "Already renews automatically: manage it from Billing";
+      } else if (
+        intl &&
+        isSubscription &&
+        intlCycleDays !== null &&
+        durationDays !== intlCycleDays
+      ) {
+        problem =
+          "Renews on a different schedule from the other subscriptions here: check it out on its own";
       } else if (
         !product.showOnPricingPage &&
         !(
@@ -423,6 +561,7 @@ export class PaymentService {
                 { kind: "days", days: durationDays },
                 now,
               );
+              if (intl) intlCycleDays = durationDays;
             }
           } catch (error) {
             if (!(error instanceof PlanScheduleError)) throw error;
@@ -440,21 +579,29 @@ export class PaymentService {
 
       lines.push({
         productDoc: product,
+        providerPriceId,
         product: toProductSummary(product),
         unitPriceIdr,
         quantity,
-        maxQuantity: maxQuantity(product.kind),
+        maxQuantity: intl && isSubscription ? 1 : maxQuantity(product.kind),
         durationDays,
         amountIdr: lineAmount(unitPriceIdr, quantity),
         variant: variant ? { id: variant.id, name: variant.name } : null,
         variants: isSubscription
-          ? variantsOf(product).map((option) => ({
-              id: option.id,
-              name: option.name,
-              specs: option.specs,
-              unitPriceIdr: option.priceIdr,
-              durationDays: option.durationDays,
-            }))
+          ? variantsOf(product).flatMap((option) => {
+              const price = intl ? option.priceUsdCents : option.priceIdr;
+              // Outside Indonesia, only variants with a USD price are sold.
+              if (price === null || (intl && !option.paddlePriceId)) return [];
+              return [
+                {
+                  id: option.id,
+                  name: option.name,
+                  specs: option.specs,
+                  unitPriceIdr: price,
+                  durationDays: option.durationDays,
+                },
+              ];
+            })
           : [],
         applyVariant: isSubscription ? applyVariant : null,
         placement: isSubscription ? placement : null,
@@ -479,7 +626,8 @@ export class PaymentService {
       );
     }
 
-    const lines = await this.priceLines(userId, input.items, now);
+    const { region } = await this.regionOf(userId);
+    const lines = await this.priceLines(userId, input.items, now, region);
     if (lines.length < mergeDuplicateItems(input.items).length) {
       throw new CheckoutError("A product in your checkout no longer exists");
     }
@@ -502,11 +650,14 @@ export class PaymentService {
         applyVariant: line.applyVariant,
         placement: line.placement,
         amountIdr: line.amountIdr,
+        providerPriceId: line.providerPriceId,
       })),
       new Date(now.getTime() + env.paymentTtlMinutes * 60_000),
       "checkout",
       now,
+      currencyOf(region),
     );
+    await this.billing.lockRegion(userId, region);
     await this.voidEarlierCheckouts(userId, created);
     return created;
   }
@@ -544,10 +695,10 @@ export class PaymentService {
 
   /** Close a payment at its provider. Failures are logged, not thrown. */
   private async expireAtProvider(payment: PaymentRecord): Promise<void> {
-    const { provider } = this.deps;
-    if (!provider?.expire || provider.name !== payment.provider) return;
+    const provider = this.providerNamed(payment.provider);
+    if (!provider?.expire) return;
     try {
-      await provider.expire(payment.id);
+      await provider.expire(payment.id, payment.reference);
     } catch (error) {
       // Paid anyway later: the late payment is still granted.
       logger.warn(
@@ -603,6 +754,7 @@ export class PaymentService {
           applyVariant: null,
           placement: null,
           amountIdr: lineAmount(line.unitPriceIdr, line.quantity),
+          providerPriceId: null,
         });
         continue;
       }
@@ -675,6 +827,7 @@ export class PaymentService {
         applyVariant: isSubscription ? "auto" : null,
         placement: isSubscription ? "after" : null,
         amountIdr: lineAmount(unitPriceIdr, quantity),
+        providerPriceId: null,
       });
     }
 
@@ -695,8 +848,11 @@ export class PaymentService {
     expiresAt: Date,
     source: PaymentSource,
     now: Date,
+    currency: PaymentCurrency = "IDR",
   ): Promise<CheckoutOutDto> {
-    const { provider, store } = this.deps;
+    const { store } = this.deps;
+    const provider =
+      currency === "USD" ? (this.deps.paddle ?? null) : this.deps.provider;
     const amountIdr = totalAmount(lines);
     const free = amountIdr === 0;
     if (!free && !provider) {
@@ -716,10 +872,12 @@ export class PaymentService {
       invoiceNumber,
       items,
       amountIdr,
+      currency,
       status: "pending",
       source,
       provider: free ? "free" : provider!.name,
       reference: null,
+      subscriptionRef: null,
       redirectUrl: null,
       snapToken: null,
       paymentType: null,
@@ -740,8 +898,10 @@ export class PaymentService {
         paymentId,
         invoiceNumber,
         status: "paid",
+        provider: "free",
         redirectUrl: null,
         snapToken: null,
+        paddleTransactionId: null,
       };
     }
 
@@ -750,6 +910,7 @@ export class PaymentService {
       invoiceNumber,
       userId,
       customerEmail: await this.deps.customerEmail(userId),
+      currency,
       amountIdr,
       // Free lines add nothing; payment gateways may refuse a zero price.
       lines: lines
@@ -762,6 +923,7 @@ export class PaymentService {
               : line.name,
           unitPriceIdr: line.unitPriceIdr,
           quantity: line.quantity,
+          providerPriceId: line.providerPriceId ?? null,
         })),
       expiresAt,
       finishUrl: this.deps.finishUrl(paymentId),
@@ -786,22 +948,27 @@ export class PaymentService {
         paymentId,
         invoiceNumber,
         status: "paid",
+        provider: provider!.name,
         redirectUrl: null,
         snapToken: null,
+        paddleTransactionId: null,
       };
     }
 
+    const isPaddle = provider!.name === "paddle";
     await store.update(paymentId, {
       reference: result.reference,
       redirectUrl: result.redirectUrl,
-      snapToken: result.token,
+      snapToken: isPaddle ? null : result.token,
     });
     return {
       paymentId,
       invoiceNumber,
       status: "pending",
+      provider: provider!.name,
       redirectUrl: result.redirectUrl,
-      snapToken: result.token,
+      snapToken: isPaddle ? null : result.token,
+      paddleTransactionId: isPaddle ? result.reference : null,
     };
   }
 
@@ -1048,7 +1215,7 @@ export class PaymentService {
    * finishes granting a paid payment that was interrupted.
    */
   async refresh(paymentId: string, now: Date = new Date()): Promise<void> {
-    const { store, provider } = this.deps;
+    const { store } = this.deps;
     const payment = await store.get(paymentId);
     if (!payment) return;
 
@@ -1067,7 +1234,8 @@ export class PaymentService {
 
     const pastGrace =
       now.getTime() > payment.expiresAt.getTime() + EXPIRY_GRACE_MS;
-    if (!provider || provider.name !== payment.provider) {
+    const provider = this.providerNamed(payment.provider);
+    if (!provider) {
       if (pastGrace)
         await store.update(paymentId, { status: "expired" }, ["pending"]);
       return;
@@ -1075,7 +1243,7 @@ export class PaymentService {
 
     let status: ProviderStatus | null;
     try {
-      status = await provider.fetchStatus(paymentId);
+      status = await provider.fetchStatus(paymentId, payment.reference);
     } catch (error) {
       logger.warn(
         `Status check for ${payment.invoiceNumber} failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -1089,8 +1257,87 @@ export class PaymentService {
       await this.applyProviderStatus(paymentId, status, "poll", now);
     }
     if ((!status || status.state === "pending") && pastGrace) {
-      await store.update(paymentId, { status: "expired" }, ["pending"]);
+      const expired = await store.update(paymentId, { status: "expired" }, [
+        "pending",
+      ]);
+      // Paddle keeps a transaction open until it is cancelled.
+      if (expired) await this.expireAtProvider(payment);
     }
+  }
+
+  /**
+   * Record a renewal Paddle charged by itself as a paid invoice, and grant
+   * one more period of each item after what the user has. Safe to call
+   * again for the same transaction. Returns the payment's id.
+   */
+  async recordRenewal(
+    input: RenewalInput,
+    now: Date = new Date(),
+  ): Promise<string> {
+    const { store } = this.deps;
+    const known = await store.findByReference("paddle", input.reference);
+    if (known) {
+      if (known.status === "paid" && !known.grantedAt) {
+        await this.grant(known.id, now);
+      }
+      return known.id;
+    }
+
+    const items: PaymentItem[] = input.items.map((item) => ({
+      productId: new Types.ObjectId(item.productId),
+      name: item.name,
+      description: null,
+      kind: "subscription",
+      unitPriceIdr: item.unitPrice,
+      quantity: item.quantity,
+      durationDays: item.durationDays,
+      variantId: item.variantId,
+      applyVariant: item.applyVariant,
+      placement: "after",
+      amountIdr: lineAmount(item.unitPrice, item.quantity),
+      providerPriceId: item.providerPriceId,
+      periodIds: [],
+      purchaseId: null,
+    }));
+    let paymentId: string;
+    try {
+      paymentId = await store.create({
+        userId: new Types.ObjectId(input.userId),
+        invoiceNumber: await this.deps.nextInvoiceNumber(now),
+        items,
+        amountIdr: totalAmount(items),
+        currency: input.currency,
+        status: "pending",
+        source: "renewal",
+        provider: "paddle",
+        reference: input.reference,
+        subscriptionRef: input.subscriptionRef,
+        redirectUrl: null,
+        snapToken: null,
+        paymentType: input.paymentType,
+        providerStatus: "completed",
+        failureReason: null,
+        expiresAt: now,
+        paidAt: null,
+        grantedAt: null,
+        grantClaimedAt: null,
+        checkedAt: null,
+        needsReview: false,
+        reviewNote: null,
+      });
+    } catch (error) {
+      // Another delivery of the same webhook recorded it first.
+      const raced = await store.findByReference("paddle", input.reference);
+      if (raced) return raced.id;
+      throw error;
+    }
+    await this.markPaid(paymentId, { reference: input.reference }, now);
+    logger.info(
+      `Renewal ${input.reference} of ${input.subscriptionRef} recorded`,
+      logSource,
+      "recordRenewal",
+    );
+    return paymentId;
   }
 
   /** The user gives up on an unpaid invoice. */
@@ -1132,6 +1379,39 @@ function chooseProvider(): PaymentProvider | null {
 
 export const paymentProvider = chooseProvider();
 
+/** Paddle, for customers outside Indonesia, when its API key is set. */
+export const paddleProvider: PaddleProvider | null = paddleClient
+  ? new PaddleProvider(paddleClient)
+  : null;
+
+export const mongoBillingProfiles: BillingProfiles = {
+  async regionOf(userId) {
+    const user = await UserModel.findById(userId)
+      .select("billingRegion billingRegionLocked")
+      .lean()
+      .exec();
+    return {
+      region: user?.billingRegion ?? "ID",
+      locked: user?.billingRegionLocked ?? false,
+    };
+  },
+  async lockRegion(userId, region) {
+    await UserModel.updateOne(
+      { _id: userId, billingRegionLocked: { $ne: true } },
+      { $set: { billingRegion: region, billingRegionLocked: true } },
+    ).exec();
+  },
+  async renewsAutomatically(userId, productId) {
+    const found = await PaddleSubscriptionModel.exists({
+      userId,
+      status: { $in: [...RENEWING_STATUSES] },
+      cancelsAt: null,
+      "items.productId": productId,
+    });
+    return Boolean(found);
+  },
+};
+
 /** Late-bound so payment.service does not import the mail module eagerly. */
 let afterGrant: (paymentId: string) => Promise<void> = async () => {};
 export function setAfterGrant(fn: (paymentId: string) => Promise<void>): void {
@@ -1140,6 +1420,8 @@ export function setAfterGrant(fn: (paymentId: string) => Promise<void>): void {
 
 export const paymentService = new PaymentService({
   provider: paymentProvider,
+  paddle: paddleProvider,
+  billing: mongoBillingProfiles,
   products: productService,
   userProducts: userProductService,
   purchases: purchaseService,

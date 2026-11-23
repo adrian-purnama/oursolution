@@ -7,11 +7,12 @@ import RedeemCodeForm from '#/components/forms/profile/RedeemCodeForm'
 import TourReplay from '#/components/forms/profile/TourReplay'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 type ProfileTab = 'account' | 'products' | 'billing'
 
 export const Route = createFileRoute('/_authenticated/profile/')({
-  head: () => privatePage('Profile'),
+  head: () => privatePage(m.seo_profile()),
   validateSearch: (search: Record<string, unknown>): { tab?: ProfileTab } =>
     search.tab === 'products' || search.tab === 'billing'
       ? { tab: search.tab }
@@ -25,7 +26,7 @@ function ProfilePage() {
 
   return (
     <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-4xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
-      <h1 className="mb-6 text-2xl font-medium">Profile</h1>
+      <h1 className="mb-6 text-2xl font-medium">{m.profile_title()}</h1>
       <UnpaidNotice className="mb-6" />
       <Tabs
         value={tab}
@@ -38,9 +39,9 @@ function ProfilePage() {
         }
       >
         <TabsList className="mb-8">
-          <TabsTrigger value="account">Account</TabsTrigger>
-          <TabsTrigger value="products">Products & plans</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
+          <TabsTrigger value="account">{m.profile_tab_account()}</TabsTrigger>
+          <TabsTrigger value="products">{m.profile_tab_products()}</TabsTrigger>
+          <TabsTrigger value="billing">{m.profile_tab_billing()}</TabsTrigger>
         </TabsList>
         <TabsContent value="account" className="space-y-4">
           <ProfileForm />

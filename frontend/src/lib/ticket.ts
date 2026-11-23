@@ -1,11 +1,19 @@
+import { m } from '#/paraglide/messages'
+
 export type TicketStatus = 'open' | 'in_progress' | 'closed'
 
 export const TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'closed']
 
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  closed: 'Closed',
+  get open() {
+    return m.ticket_status_open()
+  },
+  get in_progress() {
+    return m.ticket_status_in_progress()
+  },
+  get closed() {
+    return m.ticket_status_closed()
+  },
 }
 
 /** Badge colors, the same for customers and admins. */
@@ -88,9 +96,9 @@ export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 /** Why a picked file cannot be sent, or null when it looks fine. */
 export function imageProblem(file: File): string | null {
   if (!IMAGE_TYPES.includes(file.type)) {
-    return 'The photo must be a JPEG, PNG or WebP image'
+    return m.ticket_image_type()
   }
-  if (file.size > MAX_IMAGE_BYTES) return 'The photo must be 2 MB or smaller'
+  if (file.size > MAX_IMAGE_BYTES) return m.ticket_image_size()
   return null
 }
 

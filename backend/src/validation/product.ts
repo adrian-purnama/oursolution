@@ -131,6 +131,27 @@ function parseNotices(value: unknown): ProductNotice[] {
   });
 }
 
+/** Most a price outside Indonesia may be: $100,000.00. */
+const MAX_PRICE_USD_CENTS = 10_000_000;
+/** Paddle refuses prices below its minimum; 50 cents is safe everywhere. */
+const MIN_PRICE_USD_CENTS = 50;
+
+/** US cents, or null (missing, null or "") for "not sold outside Indonesia". */
+function parsePriceUsdCents(value: unknown, where = "priceUsdCents"): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < MIN_PRICE_USD_CENTS ||
+    value > MAX_PRICE_USD_CENTS
+  ) {
+    throw new Error(
+      `${where} must be a whole number of US cents, at least ${MIN_PRICE_USD_CENTS}, or empty`,
+    );
+  }
+  return value;
+}
+
 function parsePriceIdr(value: unknown): number {
   if (
     typeof value !== "number" ||
@@ -415,6 +436,12 @@ function parseVariant(value: unknown, index: number): ProductVariant {
     pricingText: parsePricingText(raw.pricingText ?? ""),
     description: parseDescription(raw.description ?? ""),
     priceIdr: parsePriceIdr(raw.priceIdr),
+    priceUsdCents: parsePriceUsdCents(
+      raw.priceUsdCents,
+      `${where}'s priceUsdCents`,
+    ),
+    // Set by the Paddle sync, never by the client.
+    paddlePriceId: null,
     durationDays: parseDays(raw.durationDays, `${where}'s durationDays`),
     deployment,
     composeFile,
@@ -454,6 +481,7 @@ export function parseCreateProductDto(body: unknown): CreateProductDto {
     description: parseDescription(raw.description ?? ""),
     notices: parseNotices(raw.notices ?? []),
     priceIdr: parsePriceIdr(raw.priceIdr),
+    priceUsdCents: parsePriceUsdCents(raw.priceUsdCents),
     durationDays:
       kind === "subscription"
         ? parseDays(raw.durationDays ?? 30, "durationDays")
@@ -504,6 +532,9 @@ export function parseUpdateProductDto(
   }
   if ("notices" in raw) patch.notices = parseNotices(raw.notices);
   if ("priceIdr" in raw) patch.priceIdr = parsePriceIdr(raw.priceIdr);
+  if ("priceUsdCents" in raw) {
+    patch.priceUsdCents = parsePriceUsdCents(raw.priceUsdCents);
+  }
   if ("durationDays" in raw && kind === "subscription") {
     patch.durationDays = parseDays(raw.durationDays, "durationDays");
   }

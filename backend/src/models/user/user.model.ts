@@ -1,5 +1,5 @@
 import { model, Schema } from "mongoose";
-import { USER_ROLES, UserInterface } from "./user.interface";
+import { BILLING_REGIONS, USER_ROLES, UserInterface } from "./user.interface";
 
 const userSchema = new Schema<UserInterface>(
   {
@@ -39,6 +39,15 @@ const userSchema = new Schema<UserInterface>(
       default: undefined,
       unique: true,
       sparse: true,
+    },
+    billingRegion: {
+      type: String,
+      enum: [...BILLING_REGIONS, null],
+      default: null,
+    },
+    billingRegionLocked: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true },

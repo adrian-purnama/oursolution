@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { loadSnap } from '#/lib/billing'
+import { m } from '#/paraglide/messages'
 
 type Phase = 'loading' | 'shown' | 'unavailable'
 
@@ -69,17 +70,15 @@ export default function SnapEmbed({
       {phase === 'loading' ? (
         <div className="flex h-40 items-center justify-center gap-2 text-sm text-[var(--muted)]">
           <LoaderCircle className="size-4 animate-spin" aria-hidden />
-          Loading payment options…
+          {m.snap_loading()}
         </div>
       ) : null}
       {phase === 'unavailable' && redirectUrl ? (
         <div className="flex flex-col items-start gap-3 py-2">
-          <p className="text-sm text-[var(--muted)]">
-            Finish paying on Midtrans’ page.
-          </p>
+          <p className="text-sm text-[var(--muted)]">{m.snap_fallback()}</p>
           <Button asChild>
             <a href={redirectUrl}>
-              Open payment page
+              {m.snap_open()}
               <ExternalLink className="size-4" aria-hidden />
             </a>
           </Button>

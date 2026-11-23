@@ -3,9 +3,10 @@ import { ArrowLeft } from 'lucide-react'
 import TicketDetail from '#/components/forms/ticket/TicketDetail'
 import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authenticated/support/$ticketId')({
-  head: () => privatePage('Support ticket'),
+  head: () => privatePage(m.seo_ticket()),
   component: SupportTicketPage,
 })
 

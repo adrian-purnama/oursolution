@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import type { Service } from '#/lib/services'
+import { localizeHref } from '#/paraglide/runtime'
 
 /** A service's call-to-action button: a route, a mail link or an outside site. */
 export default function ServiceAction({
@@ -28,7 +29,7 @@ export default function ServiceAction({
   return (
     <Button asChild size="lg" variant={variant} className={className}>
       <a
-        href={action.href}
+        href={action.external ? action.href : localizeHref(action.href)}
         className="no-underline"
         {...(action.external ? { target: '_blank', rel: 'noreferrer' } : {})}
       >

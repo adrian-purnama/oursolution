@@ -5,6 +5,7 @@ import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
 import type { Deployment } from '#/lib/deployment'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** Plays the dashboard tours again, on the dashboard. */
 export default function TourReplay() {
@@ -30,10 +31,8 @@ export default function TourReplay() {
   return (
     <section className={`${cardClassName} space-y-3 px-4 py-4`}>
       <div>
-        <h2 className="text-sm font-medium">Guided tours</h2>
-        <p className={`text-xs ${hintClassName}`}>
-          Take a tour again whenever you like.
-        </p>
+        <h2 className="text-sm font-medium">{m.replay_title()}</h2>
+        <p className={`text-xs ${hintClassName}`}>{m.replay_copy()}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">
@@ -43,7 +42,7 @@ export default function TourReplay() {
             className="no-underline"
           >
             <Compass aria-hidden />
-            Dashboard tour
+            {m.replay_dashboard()}
           </Link>
         </Button>
         {hasService ? (
@@ -54,20 +53,18 @@ export default function TourReplay() {
               className="no-underline"
             >
               <PartyPopper aria-hidden />
-              Service tour
+              {m.replay_service()}
             </Link>
           </Button>
         ) : (
           <Button type="button" variant="outline" size="sm" disabled>
             <PartyPopper aria-hidden />
-            Service tour
+            {m.replay_service()}
           </Button>
         )}
       </div>
       {hasService === false ? (
-        <p className={`text-xs ${hintClassName}`}>
-          The service tour is available once you have a service.
-        </p>
+        <p className={`text-xs ${hintClassName}`}>{m.replay_service_hint()}</p>
       ) : null}
     </section>
   )

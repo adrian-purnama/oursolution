@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import GoogleCallback from '#/components/forms/auth/GoogleCallback'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 type GoogleCallbackSearch = { code?: string; state?: string; error?: string }
 
@@ -9,7 +10,7 @@ function text(value: unknown): string | undefined {
 }
 
 export const Route = createFileRoute('/auth/google/callback')({
-  head: () => privatePage('Signing in'),
+  head: () => privatePage(m.seo_signing_in()),
   validateSearch: (search: Record<string, unknown>): GoogleCallbackSearch => ({
     code: text(search.code),
     state: text(search.state),

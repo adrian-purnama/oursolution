@@ -37,6 +37,10 @@ export type VariantDraft = {
    */
   description: string
   priceIdr: string
+  /** US dollars as typed, e.g. "9" or "9.50"; empty: not sold outside Indonesia. */
+  priceUsd: string
+  /** Read-only: the Paddle price it is synced to. */
+  paddlePriceId: string | null
   durationDays: string
   /** Off: deploys the base variant's settings. Always on for the base. */
   ownDeployment: boolean
@@ -72,6 +76,8 @@ export function emptyVariants(): VariantDraft[] {
       pricingText: '',
       description: '',
       priceIdr: '0',
+      priceUsd: '',
+      paddlePriceId: null,
       durationDays: '30',
       ownDeployment: true,
       settings: EMPTY_DEPLOYMENT,
@@ -109,6 +115,8 @@ export function toVariantDrafts(product: Product): VariantDraft[] {
       pricingText: product.pricingText,
       description: product.description,
       priceIdr: String(product.priceIdr),
+      priceUsd: usdText(product.priceUsdCents),
+      paddlePriceId: product.paddlePriceId,
       durationDays: String(product.durationDays ?? 30),
       ownDeployment: true,
       settings: base,
@@ -123,6 +131,8 @@ export function toVariantDrafts(product: Product): VariantDraft[] {
         pricingText: variant.pricingText,
         description: variant.description,
         priceIdr: String(variant.priceIdr),
+        priceUsd: usdText(variant.priceUsdCents),
+        paddlePriceId: variant.paddlePriceId,
         durationDays: String(variant.durationDays),
         ownDeployment: own !== null,
         settings: own ?? base,
@@ -150,6 +160,7 @@ export function toVariantsBody(variants: VariantDraft[], deploys: boolean) {
     pricingText: base.pricingText.trim(),
     description: base.description.trim(),
     priceIdr: Number(base.priceIdr),
+    priceUsdCents: usdCents(base.priceUsd),
     durationDays: Number(base.durationDays),
     variantName: others.length > 0 ? base.name.trim() : '',
     variantSpecs: others.length > 0 ? base.specs.trim() : '',
@@ -160,6 +171,7 @@ export function toVariantsBody(variants: VariantDraft[], deploys: boolean) {
       pricingText: variant.pricingText.trim(),
       description: variant.description.trim(),
       priceIdr: Number(variant.priceIdr),
+      priceUsdCents: usdCents(variant.priceUsd),
       durationDays: Number(variant.durationDays),
       deployment:
         deploys && variant.ownDeployment
@@ -190,6 +202,29 @@ export type Problem = {
 function isWholeNumber(text: string, min: number): boolean {
   const value = Number(text)
   return text.trim() !== '' && Number.isInteger(value) && value >= min
+}
+
+/** Cents shown as dollars for the editor: 900 is "9.00"; null is empty. */
+export function usdText(cents: number | null | undefined): string {
+  return cents === null || cents === undefined ? '' : (cents / 100).toFixed(2)
+}
+
+/** What the admin typed, in cents; empty is null (not sold outside Indonesia). */
+export function usdCents(text: string): number | null {
+  return text.trim() === '' ? null : Math.round(Number(text) * 100)
+}
+
+/** Why a typed USD price is refused, or null when it is fine or empty. */
+export function usdProblem(text: string): string | null {
+  if (text.trim() === '') return null
+  const value = Number(text)
+  if (!Number.isFinite(value) || value < 0.5) {
+    return 'the USD price must be at least 0.50, or empty to sell only in Indonesia'
+  }
+  if (Math.abs(value * 100 - Math.round(value * 100)) > 1e-6) {
+    return 'the USD price can have at most 2 decimals'
+  }
+  return null
 }
 
 /**
@@ -241,6 +276,15 @@ export function variantProblems(
       }
     }
 
+    const usd = usdProblem(variant.priceUsd)
+    if (usd) {
+      problems.push({
+        tab: 'pricing',
+        variantKey,
+        severity: 'error',
+        message: `${label}${usd}`,
+      })
+    }
     if (!isWholeNumber(variant.priceIdr, 0)) {
       problems.push({
         tab: 'pricing',
@@ -432,6 +476,9 @@ export default function ProductVariantsField({
         pricingText: from && !isBase(from) ? from.pricingText : '',
         description: from && !isBase(from) ? from.description : '',
         priceIdr: source.priceIdr,
+        priceUsd: source.priceUsd,
+        // A new variant gets its own Paddle price when saved.
+        paddlePriceId: null,
         durationDays: source.durationDays,
         // A copy keeps its own settings; a new one starts on the base's.
         ownDeployment: from ? from.ownDeployment : false,

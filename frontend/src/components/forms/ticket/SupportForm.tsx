@@ -19,6 +19,7 @@ import { BODY_MAX, SUBJECT_MAX, SUBJECT_MIN } from '#/lib/ticket'
 import type { Ticket, TicketPage } from '#/lib/ticket'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /** The customer's support page: a new-ticket form and their tickets. */
 export default function SupportForm() {
@@ -55,24 +56,22 @@ export default function SupportForm() {
       ) : (
         <Button type="button" onClick={() => setComposing(true)}>
           <Plus aria-hidden />
-          New ticket
+          {m.support_new_ticket()}
         </Button>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-base font-medium">My tickets</h2>
+        <h2 className="text-base font-medium">{m.support_my_tickets()}</h2>
         {state === 'loading' ? (
           <div className={`flex items-center gap-2 py-4 ${hintClassName}`}>
             <LoaderCircle className="size-4 animate-spin" aria-hidden />
-            Loading tickets…
+            {m.support_loading()}
           </div>
         ) : state === 'error' ? (
           <div className={`${cardClassName} px-4 py-8 text-center`}>
-            <p className={`mb-3 ${hintClassName}`}>
-              Your tickets could not be loaded.
-            </p>
+            <p className={`mb-3 ${hintClassName}`}>{m.support_load_failed()}</p>
             <Button type="button" variant="outline" onClick={() => void load()}>
-              Retry
+              {m.common_retry()}
             </Button>
           </div>
         ) : empty || !data ? (
@@ -81,10 +80,7 @@ export default function SupportForm() {
               className="mx-auto mb-3 size-6 text-[var(--muted)]"
               aria-hidden
             />
-            <p className={hintClassName}>
-              No tickets yet. Describe your problem above and we will get back
-              to you.
-            </p>
+            <p className={hintClassName}>{m.support_empty()}</p>
           </div>
         ) : (
           <>
@@ -104,7 +100,9 @@ export default function SupportForm() {
                         {ticket.subject}
                       </p>
                       <p className={`mt-0.5 text-xs ${hintClassName}`}>
-                        Updated {formatDateTime(ticket.updatedAt)}
+                        {m.support_updated({
+                          date: formatDateTime(ticket.updatedAt),
+                        })}
                       </p>
                     </div>
                     {ticket.unread ? (
@@ -113,7 +111,7 @@ export default function SupportForm() {
                           aria-hidden
                           className="size-2 rounded-full bg-red-600"
                         />
-                        New reply
+                        {m.support_new_reply()}
                       </span>
                     ) : null}
                     <TicketStatusBadge status={ticket.status} />
@@ -150,13 +148,11 @@ function NewTicket({ onCancel }: { onCancel?: () => void }) {
     const subjectLength = [...subject.trim()].length
     const descriptionLength = [...description.trim()].length
     if (subjectLength < SUBJECT_MIN || subjectLength > SUBJECT_MAX) {
-      setError(
-        `The subject must be ${SUBJECT_MIN} to ${SUBJECT_MAX} characters`,
-      )
+      setError(m.support_subject_error({ min: SUBJECT_MIN, max: SUBJECT_MAX }))
       return
     }
     if (descriptionLength === 0 || descriptionLength > BODY_MAX) {
-      setError(`Describe the problem in 1 to ${BODY_MAX} characters`)
+      setError(m.support_body_error({ max: BODY_MAX }))
       return
     }
     setError(null)
@@ -168,16 +164,16 @@ function NewTicket({ onCancel }: { onCancel?: () => void }) {
       if (image) form.append('image', image)
       const response = await apiUpload<Ticket>('/tickets', form)
       if (!response.success || !response.data) {
-        setError(response.message || 'The ticket could not be sent')
+        setError(response.message || m.support_send_failed())
         return
       }
-      toast.success('Ticket sent')
+      toast.success(m.support_sent())
       await navigate({
         to: '/support/$ticketId',
         params: { ticketId: response.data.id },
       })
     } catch {
-      setError('Unable to reach the server. Please try again.')
+      setError(m.common_error_network())
     } finally {
       setSending(false)
     }
@@ -189,16 +185,16 @@ function NewTicket({ onCancel }: { onCancel?: () => void }) {
       onSubmit={submit}
       noValidate
     >
-      <h2 className="text-base font-medium">New ticket</h2>
+      <h2 className="text-base font-medium">{m.support_new_ticket()}</h2>
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between gap-3">
-          <Label htmlFor={subjectId}>Subject</Label>
+          <Label htmlFor={subjectId}>{m.support_subject()}</Label>
           <CharCount value={subject} max={SUBJECT_MAX} />
         </div>
         <Input
           id={subjectId}
           value={subject}
-          placeholder="e.g. My n8n page does not load"
+          placeholder={m.support_subject_placeholder()}
           disabled={sending}
           className="bg-white"
           onChange={(event) => setSubject(event.target.value)}
@@ -206,14 +202,14 @@ function NewTicket({ onCancel }: { onCancel?: () => void }) {
       </div>
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between gap-3">
-          <Label htmlFor={descriptionId}>Description</Label>
+          <Label htmlFor={descriptionId}>{m.support_description()}</Label>
           <CharCount value={description} max={BODY_MAX} />
         </div>
         <Textarea
           id={descriptionId}
           rows={6}
           value={description}
-          placeholder="What happened, what you expected, and what you already tried."
+          placeholder={m.support_description_placeholder()}
           disabled={sending}
           className="bg-white"
           onChange={(event) => setDescription(event.target.value)}
@@ -233,14 +229,14 @@ function NewTicket({ onCancel }: { onCancel?: () => void }) {
             disabled={sending}
             onClick={onCancel}
           >
-            Cancel
+            {m.support_cancel()}
           </Button>
         ) : null}
         <Button type="submit" disabled={sending}>
           {sending ? (
             <LoaderCircle className="animate-spin" aria-hidden />
           ) : null}
-          {sending ? 'Sending…' : 'Send ticket'}
+          {sending ? m.support_sending() : m.support_send_ticket()}
         </Button>
       </div>
     </form>

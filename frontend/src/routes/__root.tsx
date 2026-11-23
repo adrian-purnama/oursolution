@@ -20,6 +20,8 @@ import {
   seo,
 } from '../lib/seo'
 
+import { getLocale } from '../paraglide/runtime'
+
 import appCss from '../styles.css?url'
 
 const UMAMI_URL = 'https://umami-adrianpurnama209.oursolution.id'
@@ -101,7 +103,7 @@ function AppThemeShell({ children }: { children: React.ReactNode }) {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang={getLocale()}>
       <head>
         <HeadContent />
         <link rel="stylesheet" href={appCss} />

@@ -20,6 +20,8 @@ export type VariantHost = Pick<
   | "kind"
   | "name"
   | "priceIdr"
+  | "priceUsdCents"
+  | "paddlePriceId"
   | "durationDays"
   | "pricingText"
   | "description"
@@ -40,6 +42,10 @@ export interface ResolvedVariant {
   /** Markdown; the product's when the variant has none of its own. */
   description: string;
   priceIdr: number;
+  /** Outside Indonesia, in US cents; null when not sold there. */
+  priceUsdCents: number | null;
+  /** The Paddle price for `priceUsdCents`, once synced. */
+  paddlePriceId: string | null;
   durationDays: number | null;
   /**
    * What to deploy: the product's settings with the variant's own in place
@@ -99,6 +105,8 @@ export function variantsOf(product: VariantHost): ResolvedVariant[] {
       pricingText: product.pricingText ?? "",
       description: product.description ?? "",
       priceIdr: product.priceIdr,
+      priceUsdCents: product.priceUsdCents ?? null,
+      paddlePriceId: product.paddlePriceId ?? null,
       durationDays: product.durationDays,
       deployment: base,
       composeFile: base?.composeFile ?? null,
@@ -115,6 +123,8 @@ export function variantsOf(product: VariantHost): ResolvedVariant[] {
           ? variant.description
           : (product.description ?? ""),
         priceIdr: variant.priceIdr,
+        priceUsdCents: variant.priceUsdCents ?? null,
+        paddlePriceId: variant.paddlePriceId ?? null,
         durationDays: variant.durationDays,
         deployment,
         composeFile: deployment?.composeFile ?? null,
@@ -243,6 +253,8 @@ export function fitVariants(
 
     const plain = {
       ...variant,
+      priceUsdCents: variant.priceUsdCents ?? null,
+      paddlePriceId: variant.paddlePriceId ?? null,
       pricingText: variant.pricingText ?? "",
       description: variant.description ?? "",
       deployment: variant.deployment ?? null,

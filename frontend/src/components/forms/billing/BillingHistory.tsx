@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { LoaderCircle, ReceiptText } from 'lucide-react'
 import { PaymentTable } from '#/components/forms/billing/PaymentParts'
+import RenewingSubscriptions from '#/components/forms/billing/RenewingSubscriptions'
 import ListPagination from '#/components/forms/shared/ListPagination'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
 import type { PaymentList } from '#/lib/billing'
+import { m } from '#/paraglide/messages'
 
 const PAGE_SIZE = 20
 
@@ -29,13 +31,13 @@ export default function BillingHistory() {
       if (!res.success || !res.data) {
         setState({
           status: 'error',
-          message: res.message || 'Could not load your invoices',
+          message: res.message || m.billing_load_failed(),
         })
         return
       }
       setState({ status: 'ready', list: res.data })
     } catch {
-      setState({ status: 'error', message: 'Unable to reach the server' })
+      setState({ status: 'error', message: m.common_error_network_short() })
     }
   }
 
@@ -47,7 +49,7 @@ export default function BillingHistory() {
     return (
       <div className="flex items-center gap-2 py-12 text-sm text-[var(--muted)]">
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading invoices…
+        {m.billing_loading()}
       </div>
     )
   }
@@ -57,7 +59,7 @@ export default function BillingHistory() {
       <div className="flex flex-col items-start gap-3 py-12">
         <p className="text-sm text-[var(--muted)]">{state.message}</p>
         <Button type="button" variant="outline" onClick={() => void load(page)}>
-          Retry
+          {m.common_retry()}
         </Button>
       </div>
     )
@@ -70,12 +72,14 @@ export default function BillingHistory() {
           className="mx-auto mb-3 size-6 text-[var(--muted)]"
           aria-hidden
         />
-        <p className="text-sm font-medium text-[var(--ink)]">No invoices yet</p>
+        <p className="text-sm font-medium text-[var(--ink)]">
+          {m.billing_empty_title()}
+        </p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Invoices appear here after your first checkout.
+          {m.billing_empty_copy()}
         </p>
         <Button asChild variant="outline" className="mt-5">
-          <Link to="/pricing">Browse the shop</Link>
+          <Link to="/pricing">{m.common_browse_shop()}</Link>
         </Button>
       </div>
     )
@@ -83,6 +87,7 @@ export default function BillingHistory() {
 
   return (
     <div className="space-y-4">
+      <RenewingSubscriptions />
       <PaymentTable
         payments={state.list.items}
         onOpen={(payment) =>

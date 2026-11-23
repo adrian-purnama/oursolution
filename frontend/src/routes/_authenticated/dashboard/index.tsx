@@ -14,9 +14,10 @@ import type { ProductSummary } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
 import type { TourId } from '#/lib/tours'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
-  head: () => privatePage('Dashboard'),
+  head: () => privatePage(m.seo_dashboard()),
   /** `tour` replays a tour, from the profile. */
   validateSearch: (search: Record<string, unknown>): { tour?: TourId } =>
     search.tour === 'welcome' || search.tour === 'firstService'
@@ -87,7 +88,9 @@ function DashboardPage() {
     <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-4xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
         <div className="min-w-0">
-          <h1 className="text-2xl font-medium tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-medium tracking-tight">
+            {m.dash_title()}
+          </h1>
           {user ? (
             <p className={`mt-1 truncate ${hintClassName}`}>{user.email}</p>
           ) : null}
@@ -97,7 +100,7 @@ function DashboardPage() {
           <Button asChild size="sm" data-tour="shop">
             <Link to="/pricing" className="no-underline">
               <ShoppingBag aria-hidden />
-              Shop
+              {m.dash_shop()}
             </Link>
           </Button>
         </div>
@@ -106,13 +109,13 @@ function DashboardPage() {
       <UnpaidNotice className="mb-8" />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">Your services</h2>
+        <h2 className="text-sm font-medium">{m.dash_your_services()}</h2>
         <DeploymentList />
       </section>
 
       {user && user.products.length > 0 ? (
         <section className="mt-10 space-y-3">
-          <h2 className="text-sm font-medium">Everything you have</h2>
+          <h2 className="text-sm font-medium">{m.dash_everything()}</h2>
           <ul className="flex flex-wrap gap-1.5">
             {user.products.map((product) => (
               <li key={product.id} className="max-w-full min-w-0">

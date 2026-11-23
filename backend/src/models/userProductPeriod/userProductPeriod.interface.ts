@@ -37,6 +37,8 @@ export interface UserProductPeriodInterface {
   paymentId?: Types.ObjectId;
   /** The code that was redeemed for it, when source is "redeem". */
   redeemCodeId?: Types.ObjectId;
+  /** When its owner was told it is about to end; null until then. */
+  reminderSentAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

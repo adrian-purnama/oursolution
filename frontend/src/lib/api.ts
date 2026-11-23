@@ -10,6 +10,19 @@ export interface ApiResponseDto<T = null> {
 /** What the API actually returns: `data` is null whenever `success` is false. */
 export type ApiResponse<T> = ApiResponseDto<T | null>
 
+/**
+ * Where the browser says it is. The API prices by Cloudflare's country
+ * header and falls back on this when that is missing.
+ */
+function browserTimezone(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  } catch {
+    return null
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -21,6 +34,8 @@ export async function apiFetch<T>(
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
+  const timezone = browserTimezone()
+  if (timezone) headers.set('X-Client-Timezone', timezone)
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,

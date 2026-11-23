@@ -19,6 +19,7 @@ import {
   inputClassNameCompact,
 } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 interface RegisterResponse {
   email: string
@@ -47,13 +48,13 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
     if (agreed) return true
     setNeedsAgreement(true)
     termsBox.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    toast.error('Please agree to the terms of service and privacy policy')
+    toast.error(m.auth_register_agree_toast())
     return false
   }
 
   async function sendOtp() {
     if (!email.trim()) {
-      toast.error('Email is required')
+      toast.error(m.auth_register_email_required())
       return
     }
 
@@ -66,14 +67,14 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
       })
 
       if (!response.success) {
-        toast.error(response.message || 'Failed to send OTP')
+        toast.error(response.message || m.auth_register_otp_failed())
         return
       }
 
       setOtpSent(true)
-      toast.success('OTP sent to your email')
+      toast.success(m.auth_register_otp_sent())
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
     } finally {
       setSendingOtp(false)
     }
@@ -83,12 +84,12 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
     event.preventDefault()
 
     if (!email.trim()) {
-      toast.error('Email is required')
+      toast.error(m.auth_register_email_required())
       return
     }
 
     if (!otp.trim() || !password) {
-      toast.error('OTP and password are required')
+      toast.error(m.auth_register_otp_pw_required())
       return
     }
 
@@ -99,7 +100,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
     }
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match')
+      toast.error(m.common_passwords_mismatch())
       return
     }
 
@@ -118,17 +119,17 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
       })
 
       if (!response.success || !response.data?.jwt) {
-        toast.error(response.message || 'Registration failed')
+        toast.error(response.message || m.auth_register_failed())
         return
       }
 
       await login(response.data.jwt)
-      toast.success(response.message || 'Account created successfully')
+      toast.success(response.message || m.auth_register_success())
       const next = safeRedirect(redirect)
       if (next) router.history.push(next)
       else await navigate({ to: '/dashboard' })
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
     } finally {
       setLoading(false)
     }
@@ -137,12 +138,12 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`}>
       <h1 className="mb-1 text-2xl font-medium text-[var(--ink)]">
-        Create your account
+        {m.auth_register_title()}
       </h1>
       <p className={`mb-6 ${hintClassName}`}>
         {redirect?.startsWith('/checkout')
-          ? 'Create an account to continue to checkout.'
-          : 'Buy services and manage them from one dashboard.'}
+          ? m.auth_register_checkout_hint()
+          : m.auth_register_hint()}
       </p>
 
       {/* Agreement first: it covers Google and email sign-up alike. */}
@@ -168,30 +169,30 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
           className="mt-0.5 size-5 border-[var(--ink)]/40 bg-white"
         />
         <span className="text-sm leading-snug text-[var(--ink)]">
-          I agree to the{' '}
+          {m.auth_register_agree_1()}{' '}
           <Link
             to="/terms"
             target="_blank"
             className="font-medium underline"
             onClick={(event) => event.stopPropagation()}
           >
-            terms of service
+            {m.auth_register_agree_terms()}
           </Link>{' '}
-          and{' '}
+          {m.auth_register_agree_and()}{' '}
           <Link
             to="/privacy"
             target="_blank"
             className="font-medium underline"
             onClick={(event) => event.stopPropagation()}
           >
-            privacy policy
+            {m.auth_register_agree_privacy()}
           </Link>
           .
         </span>
       </label>
 
       <GoogleButton
-        label="Continue with Google"
+        label={m.common_continue_google()}
         mode="signin"
         redirect={redirect}
         onBeforeStart={checkAgreed}
@@ -200,7 +201,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
 
       <div className={`my-5 flex items-center gap-3 text-xs ${hintClassName}`}>
         <span className="h-px flex-1 bg-[var(--line)]" />
-        or sign up with email
+        {m.auth_register_or_email()}
         <span className="h-px flex-1 bg-[var(--line)]" />
       </div>
 
@@ -210,7 +211,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
             htmlFor="register-email"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            Email
+            {m.common_email()}
           </label>
           <input
             id="register-email"
@@ -227,7 +228,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
             htmlFor="register-otp"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            OTP
+            {m.auth_register_otp_label()}
           </label>
           <div className="flex gap-2">
             <input
@@ -238,19 +239,27 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
               value={otp}
               onChange={(event) => setOtp(event.target.value)}
               className={inputClassNameCompact}
-              placeholder={otpSent ? 'Enter code' : 'Send OTP first'}
+              placeholder={
+                otpSent
+                  ? m.auth_register_otp_enter()
+                  : m.auth_register_otp_first()
+              }
             />
             <button
               type="button"
               disabled={sendingOtp || !email.trim()}
               onClick={() => void sendOtp()}
-              aria-label={otpSent ? 'Resend OTP' : 'Send OTP'}
+              aria-label={
+                otpSent
+                  ? m.auth_register_otp_resend()
+                  : m.auth_register_otp_send()
+              }
               className={`${buttonClassName} shrink-0 px-3 py-2 disabled:cursor-not-allowed`}
             >
               {sendingOtp ? (
                 '…'
               ) : otpSent ? (
-                'Resend'
+                m.auth_register_resend()
               ) : (
                 <Send className="size-4" aria-hidden="true" />
               )}
@@ -263,7 +272,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
             htmlFor="register-password"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            Password
+            {m.common_password()}
           </label>
           <PasswordInput
             id="register-password"
@@ -279,7 +288,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
             htmlFor="register-confirm-password"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            Confirm password
+            {m.common_confirm_password()}
           </label>
           <PasswordInput
             id="register-confirm-password"
@@ -289,7 +298,7 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
           />
           {confirmPassword && confirmPassword !== password ? (
             <p className="mt-1 text-xs text-[var(--destructive)]">
-              Passwords do not match
+              {m.common_passwords_mismatch()}
             </p>
           ) : null}
         </div>
@@ -299,18 +308,18 @@ export default function RegisterForm({ redirect }: { redirect?: string }) {
           disabled={loading}
           className={`${buttonClassNameFull} disabled:cursor-not-allowed disabled:opacity-60`}
         >
-          {loading ? 'Creating account…' : 'Create account'}
+          {loading ? m.auth_register_creating() : m.auth_register_create()}
         </button>
       </form>
 
       <p className={`mt-6 ${hintClassName}`}>
-        Already have an account?{' '}
+        {m.auth_register_have_account()}{' '}
         <Link
           to="/login"
           search={redirect ? { redirect } : {}}
           className="text-[var(--ink)] underline"
         >
-          Sign in
+          {m.auth_register_signin()}
         </Link>
       </p>
     </div>

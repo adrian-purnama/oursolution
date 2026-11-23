@@ -1,13 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import TermsOfService from '#/components/legal/TermsOfService'
 import { seo } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/terms')({
   head: () =>
     seo({
-      title: 'Terms of service',
-      description:
-        "The terms for using Our Solution's website, products and hosted services.",
+      title: m.nav_terms(),
+      description: m.seo_terms_description(),
       path: '/terms',
     }),
   component: TermsOfService,

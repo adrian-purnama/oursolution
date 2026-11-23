@@ -3,6 +3,8 @@ import type {
   ProductSummary,
   VariableVisibility,
 } from '#/lib/product'
+import { m } from '#/paraglide/messages'
+import { getLocale } from '#/paraglide/runtime'
 
 export type DeploymentState =
   | 'notDeployed'
@@ -174,13 +176,13 @@ export function updatePending(deployment: Deployment): boolean {
 
 /** A short line on what an update would change. */
 export function updateLabel(update: DeploymentUpdate): string {
-  if (update.status === 'current') return 'Up to date'
-  if (update.status === 'unknown') return 'Version not known yet'
+  if (update.status === 'current') return m.dep_update_current()
+  if (update.status === 'unknown') return m.dep_update_unknown()
   const parts = [
-    ...(update.compose ? ['compose file'] : []),
-    ...(update.env ? ['environment'] : []),
+    ...(update.compose ? [m.dep_update_compose()] : []),
+    ...(update.env ? [m.dep_update_env()] : []),
   ]
-  return `Update available: ${parts.join(' and ')}`
+  return m.dep_update_available({ parts: parts.join(m.dep_update_and()) })
 }
 
 /** One logged change of a deployment's overrides. */
@@ -259,10 +261,18 @@ export type DeploymentSync = {
 export type BulkAction = 'turnOn' | 'turnOff' | 'erase' | 'update'
 
 export const BULK_ACTION_LABELS: Record<BulkAction, string> = {
-  turnOn: 'Turn on',
-  turnOff: 'Turn off',
-  erase: 'Erase data',
-  update: 'Update',
+  get turnOn() {
+    return m.dep_bulk_turn_on()
+  },
+  get turnOff() {
+    return m.dep_bulk_turn_off()
+  },
+  get erase() {
+    return m.dep_bulk_erase()
+  },
+  get update() {
+    return m.dep_bulk_update()
+  },
 }
 
 /** How many deployments one bulk action may take. */
@@ -286,10 +296,18 @@ export type DeploymentBulk = {
 }
 
 export const CHECK_STATE_LABELS: Record<ServiceCheckState, string> = {
-  up: 'Up',
-  down: 'Not responding',
-  pending: 'Checking',
-  maintenance: 'Maintenance',
+  get up() {
+    return m.dep_check_up()
+  },
+  get down() {
+    return m.dep_check_down()
+  },
+  get pending() {
+    return m.dep_check_pending()
+  },
+  get maintenance() {
+    return m.dep_check_maintenance()
+  },
 }
 
 /** "99.9%", never rounding a real outage up to 100%. */
@@ -307,38 +325,82 @@ export const BUSY_STATES: DeploymentState[] = [
 ]
 
 export const STATE_LABELS: Record<DeploymentState, string> = {
-  notDeployed: 'Not deployed',
-  deploying: 'Deploying',
-  running: 'Running',
-  stopping: 'Turning off',
-  stopped: 'Off',
-  restarting: 'Restarting',
-  erasing: 'Deleting data',
-  runningCommand: 'Running a command',
-  failed: 'Needs attention',
+  get notDeployed() {
+    return m.dep_state_not_deployed()
+  },
+  get deploying() {
+    return m.dep_state_deploying()
+  },
+  get running() {
+    return m.dep_state_running()
+  },
+  get stopping() {
+    return m.dep_state_stopping()
+  },
+  get stopped() {
+    return m.dep_state_stopped()
+  },
+  get restarting() {
+    return m.dep_state_restarting()
+  },
+  get erasing() {
+    return m.dep_state_erasing()
+  },
+  get runningCommand() {
+    return m.dep_state_running_command()
+  },
+  get failed() {
+    return m.dep_state_failed()
+  },
 }
 
 export const RUN_ACTION_LABELS: Record<RunAction, string> = {
-  deploy: 'Deploy',
-  redeploy: 'Redeploy',
-  restart: 'Restart',
-  turnOff: 'Turn off',
-  erase: 'Erase data',
-  wipe: 'Delete data',
-  command: 'Command',
+  get deploy() {
+    return m.dep_action_deploy()
+  },
+  get redeploy() {
+    return m.dep_action_redeploy()
+  },
+  get restart() {
+    return m.dep_action_restart()
+  },
+  get turnOff() {
+    return m.dep_action_turn_off()
+  },
+  get erase() {
+    return m.dep_action_erase()
+  },
+  get wipe() {
+    return m.dep_action_wipe()
+  },
+  get command() {
+    return m.dep_action_command()
+  },
 }
 
 /** What each action does, in the customer's words. */
 export const RUN_ACTION_HINTS: Record<RunAction, string> = {
-  deploy: 'Starts the service.',
-  redeploy: 'Applies your settings and the latest version. Your data is kept.',
-  restart: 'Stops and starts the service. Your data is kept.',
-  turnOff:
-    'Takes the service and its address offline. Your data is kept until you turn it on again.',
-  erase:
-    'Erases everything stored in the service and removes it. Turn it on again to start afresh.',
-  wipe: 'Erases everything stored in the service and removes it from Dokploy.',
-  command: 'Runs a command in the service.',
+  get deploy() {
+    return m.dep_hint_deploy()
+  },
+  get redeploy() {
+    return m.dep_hint_redeploy()
+  },
+  get restart() {
+    return m.dep_hint_restart()
+  },
+  get turnOff() {
+    return m.dep_hint_turn_off()
+  },
+  get erase() {
+    return m.dep_hint_erase()
+  },
+  get wipe() {
+    return m.dep_hint_wipe()
+  },
+  get command() {
+    return m.dep_hint_command()
+  },
 }
 
 /** What a run is called: a command's own label, else its action's. */
@@ -346,23 +408,29 @@ export function runTitle(run: Pick<DeploymentRun, 'action' | 'commandLabel'>) {
   return run.commandLabel ?? RUN_ACTION_LABELS[run.action]
 }
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-})
-
 export function formatDate(iso: string): string {
-  return dateFormatter.format(new Date(iso))
+  return new Intl.DateTimeFormat(getLocale(), {
+    dateStyle: 'medium',
+  }).format(new Date(iso))
 }
 
 /** "3 days", "5 hours", "12 minutes": how long ago `iso` was. */
 export function formatSince(iso: string, now: number = Date.now()): string {
   const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000))
-  const plural = (count: number, unit: string) =>
-    `${count} ${unit}${count === 1 ? '' : 's'}`
-  if (minutes < 1) return 'moments'
-  if (minutes < 60) return plural(minutes, 'minute')
-  if (minutes < 60 * 24) return plural(Math.floor(minutes / 60), 'hour')
-  return plural(Math.floor(minutes / (60 * 24)), 'day')
+  if (minutes < 1) return m.since_moments()
+  if (minutes < 60) {
+    return minutes === 1
+      ? m.since_minute_one()
+      : m.since_minute_other({ count: minutes })
+  }
+  if (minutes < 60 * 24) {
+    const hours = Math.floor(minutes / 60)
+    return hours === 1
+      ? m.since_hour_one()
+      : m.since_hour_other({ count: hours })
+  }
+  const days = Math.floor(minutes / (60 * 24))
+  return days === 1 ? m.since_day_one() : m.since_day_other({ count: days })
 }
 
 /** A subscription ending within this many days counts as "ending soon". */
@@ -392,9 +460,9 @@ export function expiryOf(
 
 /** "today", "tomorrow", "in 3 days". */
 export function formatDaysLeft(daysLeft: number): string {
-  if (daysLeft <= 0) return 'today'
-  if (daysLeft === 1) return 'tomorrow'
-  return `in ${daysLeft} days`
+  if (daysLeft <= 0) return m.dep_days_left_today()
+  if (daysLeft === 1) return m.dep_days_left_tomorrow()
+  return m.dep_days_left_other({ count: daysLeft })
 }
 
 /** One line on where the subscription stands. */
@@ -402,18 +470,23 @@ export function subscriptionLine(
   deployment: Pick<Deployment, 'entitled' | 'subscriptionEndsAt'>,
 ): string {
   const expiry = expiryOf(deployment)
-  if (expiry?.kind === 'expired') return 'Subscription expired'
+  if (expiry?.kind === 'expired') return m.dep_sub_expired()
   if (expiry?.kind === 'expiring') {
-    return `Subscription ends ${formatDaysLeft(expiry.daysLeft)} (${formatDate(expiry.endsAt)})`
+    return m.dep_sub_ends({
+      when: formatDaysLeft(expiry.daysLeft),
+      date: formatDate(expiry.endsAt),
+    })
   }
   return deployment.subscriptionEndsAt
-    ? `Subscription active until ${formatDate(deployment.subscriptionEndsAt)}`
-    : 'Subscription active'
+    ? m.dep_sub_active_until({
+        date: formatDate(deployment.subscriptionEndsAt),
+      })
+    : m.dep_sub_active()
 }
 
 /** The deploy button's label depends on where the service stands. */
 export function actionLabel(action: RunAction, state: DeploymentState): string {
-  if (action === 'deploy' && state === 'stopped') return 'Turn on'
-  if (action === 'deploy' && state === 'failed') return 'Try again'
+  if (action === 'deploy' && state === 'stopped') return m.dep_turn_on()
+  if (action === 'deploy' && state === 'failed') return m.dep_try_again()
   return RUN_ACTION_LABELS[action]
 }

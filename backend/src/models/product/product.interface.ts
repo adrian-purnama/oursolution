@@ -163,6 +163,13 @@ export interface ProductVariant {
   description: string;
   /** Amount charged per checkout, in whole rupiah. */
   priceIdr: number;
+  /**
+   * What customers outside Indonesia pay per period, in US cents; null
+   * when the variant is not sold there.
+   */
+  priceUsdCents: number | null;
+  /** The Paddle price kept in step with `priceUsdCents`. Set by the sync. */
+  paddlePriceId: string | null;
   /** How long one checkout keeps it active. */
   durationDays: number;
   /** Its own deployment settings, or null to deploy the product's. */
@@ -190,6 +197,15 @@ export interface ProductInterface {
   notices: ProductNotice[];
   /** Amount charged per checkout, in whole rupiah. */
   priceIdr: number;
+  /**
+   * The base variant's (or one-time product's) price outside Indonesia, in
+   * US cents; null when it is not sold there.
+   */
+  priceUsdCents: number | null;
+  /** The Paddle price kept in step with `priceUsdCents`. Set by the sync. */
+  paddlePriceId: string | null;
+  /** The Paddle product holding this product's prices. Set by the sync. */
+  paddleProductId: string | null;
   /** Subscription only: how long one checkout keeps it active. */
   durationDays: number | null;
   /** Subscription only: what to deploy for a subscriber. Admin-only. */

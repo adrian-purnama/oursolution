@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import UserDeploymentsForm from '#/components/forms/admin/UserDeploymentsForm'
+import UserBillingRegionForm from '#/components/forms/admin/UserBillingRegionForm'
 import UserDetailForm from '#/components/forms/admin/UserDetailForm'
 import UserPaymentsForm from '#/components/forms/admin/UserPaymentsForm'
 import UserProductsForm from '#/components/forms/admin/UserProductsForm'
@@ -69,7 +70,8 @@ function AdminUserDetailPage() {
             }
           />
         </TabsContent>
-        <TabsContent value="payments">
+        <TabsContent value="payments" className="space-y-10">
+          <UserBillingRegionForm userId={userId} />
           <UserPaymentsForm userId={userId} />
         </TabsContent>
       </Tabs>

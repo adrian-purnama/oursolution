@@ -3,6 +3,7 @@ import ServiceDetail from '#/components/services/ServiceDetail'
 import { Button } from '#/components/ui/button'
 import { getService } from '#/lib/services'
 import { absoluteUrl, jsonLd, seo } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/services/$slug')({
   beforeLoad: ({ params }) => {
@@ -10,7 +11,8 @@ export const Route = createFileRoute('/services/$slug')({
   },
   head: ({ params }) => {
     const service = getService(params.slug)
-    if (!service) return seo({ title: 'Service not found', noindex: true })
+    if (!service)
+      return seo({ title: m.service_not_found_seo(), noindex: true })
     const path = `/services/${service.slug}`
     const description = `${service.tagline} ${service.summary}`
     return {
@@ -41,14 +43,12 @@ function ServiceNotFound() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-24 text-center text-[var(--ink)]">
       <h1 className="font-display mb-3 text-3xl">
-        We could not find that service.
+        {m.service_not_found_title()}
       </h1>
-      <p className="mb-8 text-[var(--muted)]">
-        It may have been renamed. All our services are listed on one page.
-      </p>
+      <p className="mb-8 text-[var(--muted)]">{m.service_not_found_body()}</p>
       <Button asChild size="lg" className="rounded-full px-6">
         <Link to="/services" className="no-underline">
-          See all services
+          {m.service_not_found_cta()}
         </Link>
       </Button>
     </main>

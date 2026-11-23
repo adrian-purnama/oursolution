@@ -39,6 +39,8 @@ import { startNotificationStream } from '#/lib/notification'
 import { SERVICES } from '#/lib/services'
 import { SHOW_HOME_STATE } from '#/lib/home'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
+import { LanguageButtons, LanguageMenu } from '#/components/LanguageSwitcher'
 
 const DRAWER_TRANSITION_MS = 300
 
@@ -182,11 +184,12 @@ export default function Header() {
             activeProps={{ className: activeNavClass }}
           >
             <ShoppingBag className="size-4" aria-hidden />
-            Shop
+            {m.nav_shop()}
           </Link>
         </div>
 
         <div className="hidden items-center justify-self-end gap-2 md:flex">
+          <LanguageMenu />
           {isLoading ? null : isAuthenticated ? (
             <>
               <NotificationMenu />
@@ -208,7 +211,7 @@ export default function Header() {
                   className: cn(ctaOutlineClass, 'bg-[var(--surface)]'),
                 }}
               >
-                Log in
+                {m.nav_log_in()}
               </Link>
               <Link
                 to="/register"
@@ -217,7 +220,7 @@ export default function Header() {
                   className: cn(ctaPrimaryClass, 'opacity-90'),
                 }}
               >
-                Sign up
+                {m.nav_sign_up()}
                 <ArrowRight className="size-4" aria-hidden />
               </Link>
             </>
@@ -242,7 +245,7 @@ export default function Header() {
             onClick={openMenu}
           >
             <Menu className="size-6" aria-hidden />
-            <span className="sr-only">Open menu</span>
+            <span className="sr-only">{m.nav_open_menu()}</span>
           </button>
         </div>
       </nav>
@@ -262,7 +265,7 @@ export default function Header() {
                 'absolute inset-0 border-0 bg-black/60 backdrop-blur-[2px] transition-opacity duration-300 ease-out',
                 menuAnimated ? 'opacity-100' : 'opacity-0',
               )}
-              aria-label="Close menu"
+              aria-label={m.nav_close_menu()}
               onClick={closeMenu}
             />
 
@@ -270,7 +273,7 @@ export default function Header() {
               id="mobile-nav"
               role="dialog"
               aria-modal="true"
-              aria-label="Menu"
+              aria-label={m.nav_menu()}
               aria-hidden={!menuAnimated}
               className={cn(
                 'absolute inset-y-0 right-0 z-10 flex w-[min(20rem,88vw)] flex-col rounded-l-[var(--radius-md)] border-l border-[var(--line)] bg-white text-[var(--ink)] shadow-2xl transition-transform duration-300 ease-out',
@@ -294,7 +297,7 @@ export default function Header() {
                   onClick={closeMenu}
                 >
                   <X className="size-6" aria-hidden />
-                  <span className="sr-only">Close menu</span>
+                  <span className="sr-only">{m.nav_close_menu()}</span>
                 </button>
               </div>
 
@@ -306,7 +309,7 @@ export default function Header() {
                   activeProps={{ className: drawerActiveClass }}
                   onClick={closeMenu}
                 >
-                  {isAuthenticated ? 'Dashboard' : 'Home'}
+                  {isAuthenticated ? m.nav_dashboard() : m.nav_home()}
                 </Link>
                 <>
                   {isAuthenticated ? (
@@ -321,7 +324,7 @@ export default function Header() {
                       onClick={closeMenu}
                     >
                       <House className="size-5" aria-hidden />
-                      Home page
+                      {m.nav_home_page()}
                     </Link>
                   ) : null}
                   <Link
@@ -333,7 +336,7 @@ export default function Header() {
                     onClick={closeMenu}
                   >
                     <Mail className="size-5" aria-hidden />
-                    Contact
+                    {m.nav_contact()}
                   </Link>
                   {isAuthenticated ? (
                     <Link
@@ -350,10 +353,10 @@ export default function Header() {
                           <UnreadDot className="-top-0.5 -right-0.5" />
                         ) : null}
                       </span>
-                      Tickets
+                      {m.nav_tickets()}
                       {unreadTickets > 0 ? (
                         <span className="text-xs font-medium text-red-600">
-                          New reply
+                          {m.nav_tickets_new_reply()}
                         </span>
                       ) : null}
                     </Link>
@@ -367,7 +370,7 @@ export default function Header() {
                     onClick={closeMenu}
                   >
                     <ShieldCheck className="size-5" aria-hidden />
-                    Privacy policy
+                    {m.nav_privacy()}
                   </Link>
                   <Link
                     to="/terms"
@@ -378,7 +381,7 @@ export default function Header() {
                     onClick={closeMenu}
                   >
                     <FileText className="size-5" aria-hidden />
-                    Terms of service
+                    {m.nav_terms()}
                   </Link>
                 </>
                 <Link
@@ -388,7 +391,7 @@ export default function Header() {
                   activeProps={{ className: drawerActiveClass }}
                   onClick={closeMenu}
                 >
-                  Services
+                  {m.nav_services()}
                 </Link>
                 {SERVICES.map((service) => (
                   <Link
@@ -417,7 +420,7 @@ export default function Header() {
                   onClick={closeMenu}
                 >
                   <ShoppingBag className="size-5" aria-hidden />
-                  Shop
+                  {m.nav_shop()}
                 </Link>
                 {isAdmin ? (
                   <Link
@@ -426,12 +429,13 @@ export default function Header() {
                     activeProps={{ className: drawerActiveClass }}
                     onClick={closeMenu}
                   >
-                    Admin
+                    {m.nav_admin()}
                   </Link>
                 ) : null}
               </div>
 
               <div className="mt-auto border-t border-[var(--line)] bg-white p-4">
+                <LanguageButtons className="mb-4 flex-wrap" />
                 {isLoading ? null : isAuthenticated ? (
                   <>
                     {user ? (
@@ -451,7 +455,7 @@ export default function Header() {
                       className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                     >
                       <LogOut className="size-4" aria-hidden />
-                      Log out
+                      {m.nav_log_out()}
                     </button>
                   </>
                 ) : (
@@ -461,14 +465,14 @@ export default function Header() {
                       className="block rounded-[var(--radius-sm)] border border-[var(--line)] bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--ink)] no-underline transition hover:border-[var(--ink)]"
                       onClick={closeMenu}
                     >
-                      Log in
+                      {m.nav_log_in()}
                     </Link>
                     <Link
                       to="/register"
                       className="block rounded-[var(--radius-sm)] bg-[var(--navy)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
                       onClick={closeMenu}
                     >
-                      Sign up
+                      {m.nav_sign_up()}
                     </Link>
                   </div>
                 )}
@@ -505,34 +509,34 @@ function DashboardMenu({
       ? [
           {
             to: '/dashboard' as const,
-            label: 'Dashboard',
-            hint: 'Your services and tickets',
+            label: m.nav_dashboard(),
+            hint: m.nav_dashboard_hint(),
             icon: LayoutDashboard,
           },
         ]
       : []),
     {
       to: '/' as const,
-      label: signedIn ? 'Home page' : 'Home',
-      hint: 'What we offer',
+      label: signedIn ? m.nav_home_page() : m.nav_home(),
+      hint: m.nav_home_hint(),
       icon: House,
     },
   ]
   const allShortcuts = [
     {
       to: '/contact' as const,
-      label: 'Contact',
-      hint: 'Email, phone and address',
+      label: m.nav_contact(),
+      hint: m.nav_contact_hint(),
       icon: Mail,
       unread: 0,
     },
     {
       to: '/support' as const,
-      label: 'Tickets',
+      label: m.nav_tickets(),
       hint:
         unreadTickets > 0
-          ? `${unreadTickets} with a new reply`
-          : 'Ask us for help',
+          ? m.nav_tickets_unread({ count: unreadTickets })
+          : m.nav_tickets_hint(),
       icon: LifeBuoy,
       unread: unreadTickets,
     },
@@ -541,8 +545,8 @@ function DashboardMenu({
     ? allShortcuts
     : allShortcuts.filter(({ to }) => to !== '/support')
   const legal = [
-    { to: '/privacy' as const, label: 'Privacy policy', icon: ShieldCheck },
-    { to: '/terms' as const, label: 'Terms of service', icon: FileText },
+    { to: '/privacy' as const, label: m.nav_privacy(), icon: ShieldCheck },
+    { to: '/terms' as const, label: m.nav_terms(), icon: FileText },
   ]
   const current = items.find((item) =>
     item.to === '/' ? pathname === '/' : pathname.startsWith(item.to),
@@ -555,7 +559,7 @@ function DashboardMenu({
           'group cursor-pointer border-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]',
         )}
       >
-        {current?.label ?? (signedIn ? 'Dashboard' : 'Home')}
+        {current?.label ?? (signedIn ? m.nav_dashboard() : m.nav_home())}
         <ChevronDown
           className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180"
           aria-hidden
@@ -654,7 +658,7 @@ function ServicesMenu({ className }: { className: string }) {
           'group cursor-pointer border-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]',
         )}
       >
-        Services
+        {m.nav_services()}
         <ChevronDown
           className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180"
           aria-hidden
@@ -697,7 +701,7 @@ function ServicesMenu({ className }: { className: string }) {
             to="/services"
             className="flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[var(--ink)] no-underline"
           >
-            All services
+            {m.nav_all_services()}
             <ArrowRight className="size-4" aria-hidden />
           </Link>
         </DropdownMenuItem>
@@ -722,7 +726,7 @@ function AccountMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={`Account menu (${email})`}
+        aria-label={m.nav_account_menu({ email })}
         data-tour="profile"
         className="group inline-flex cursor-pointer items-center gap-1 rounded-full border-0 bg-transparent p-1 outline-none transition hover:bg-[var(--surface)] focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
       >
@@ -739,7 +743,7 @@ function AccountMenu({
       >
         <DropdownMenuLabel className="px-3 py-2">
           <span className="block text-xs font-normal text-[var(--muted)]">
-            Signed in as
+            {m.nav_signed_in_as()}
           </span>
           <span className="block truncate text-sm font-medium text-[var(--ink)]">
             {email}
@@ -749,14 +753,14 @@ function AccountMenu({
         <DropdownMenuItem asChild className="p-0">
           <Link to="/profile" className={itemClass}>
             <UserRound className="size-4" aria-hidden />
-            Profile
+            {m.nav_profile()}
           </Link>
         </DropdownMenuItem>
         {isAdmin ? (
           <DropdownMenuItem asChild className="p-0">
             <Link to="/admin" className={itemClass}>
               <ShieldCheck className="size-4" aria-hidden />
-              Admin
+              {m.nav_admin()}
             </Link>
           </DropdownMenuItem>
         ) : null}
@@ -766,7 +770,7 @@ function AccountMenu({
           className={cn(itemClass, 'text-red-600 focus:text-red-600')}
         >
           <LogOut className="size-4 text-red-600" aria-hidden />
-          Log out
+          {m.nav_log_out()}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -778,8 +782,8 @@ function BasketLink({ count }: { count: number }) {
   return (
     <Link
       to="/checkout"
-      aria-label={count > 0 ? `Basket, ${count} products` : 'Basket'}
-      title="Basket"
+      aria-label={count > 0 ? m.nav_basket_count({ count }) : m.nav_basket()}
+      title={m.nav_basket()}
       className="relative inline-flex size-10 items-center justify-center rounded-full text-[var(--ink)] no-underline transition hover:bg-[var(--surface)]"
     >
       <ShoppingCart className="size-5" aria-hidden />

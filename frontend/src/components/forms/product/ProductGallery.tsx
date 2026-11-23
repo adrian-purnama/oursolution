@@ -4,6 +4,7 @@ import ProductImage from '#/components/forms/product/ProductImage'
 import { toAbsoluteMediaUrl } from '#/lib/api'
 import type { PricingProduct } from '#/lib/product'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const arrowClassName =
   'absolute top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[var(--ink)] shadow-sm transition hover:bg-white disabled:pointer-events-none disabled:opacity-0'
@@ -63,7 +64,7 @@ export default function ProductGallery({
       className={cn('space-y-3', className)}
       role="region"
       aria-roledescription="carousel"
-      aria-label={`${product.name} images`}
+      aria-label={m.gallery_images({ name: product.name })}
     >
       <div className="relative">
         <div
@@ -84,7 +85,11 @@ export default function ProductGallery({
             <img
               key={src}
               src={src}
-              alt={`${product.name}, image ${index + 1} of ${images.length}`}
+              alt={m.gallery_alt({
+                name: product.name,
+                index: index + 1,
+                total: images.length,
+              })}
               loading={index === 0 ? 'eager' : 'lazy'}
               draggable={false}
               className="size-full shrink-0 snap-center object-cover"
@@ -94,7 +99,7 @@ export default function ProductGallery({
 
         <button
           type="button"
-          aria-label="Previous image"
+          aria-label={m.gallery_prev()}
           disabled={current === 0}
           onClick={() => show(current - 1)}
           className={`${arrowClassName} left-3`}
@@ -103,7 +108,7 @@ export default function ProductGallery({
         </button>
         <button
           type="button"
-          aria-label="Next image"
+          aria-label={m.gallery_next()}
           disabled={current === images.length - 1}
           onClick={() => show(current + 1)}
           className={`${arrowClassName} right-3`}
@@ -121,7 +126,7 @@ export default function ProductGallery({
           <button
             key={src}
             type="button"
-            aria-label={`Show image ${index + 1}`}
+            aria-label={m.gallery_show({ index: index + 1 })}
             aria-current={index === current}
             onClick={() => show(index)}
             className={cn(

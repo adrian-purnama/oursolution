@@ -1,3 +1,10 @@
+/**
+ * Who bills a customer: "ID" is Indonesia (rupiah, Midtrans), "INTL" is
+ * everyone else (US dollars, Paddle).
+ */
+export const BILLING_REGIONS = ["ID", "INTL"] as const;
+export type BillingRegion = (typeof BILLING_REGIONS)[number];
+
 export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
@@ -17,6 +24,13 @@ export interface UserInterface {
    * another user already has it. Set at the first deploy, then fixed.
    */
   deployUsername?: string | null;
+  /** Where the user is billed. Null until chosen: treated as "ID". */
+  billingRegion?: BillingRegion | null;
+  /**
+   * Set at the first checkout: from then on only an admin changes the
+   * region, so prices cannot be picked by switching.
+   */
+  billingRegionLocked?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

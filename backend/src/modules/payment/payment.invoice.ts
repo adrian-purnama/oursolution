@@ -3,7 +3,7 @@ import { UserModel } from "../../models/user/user.model";
 import { appConfigService } from "../appConfig/appConfig.service";
 import { mailer } from "../mail/mail.service";
 import { notificationService } from "../notification/notification.service";
-import { buildInvoicePdf, formatIdr } from "./invoice.pdf";
+import { buildInvoicePdf, formatMoney } from "./invoice.pdf";
 import { mongoPaymentStore, type PaymentRecord } from "./payment.service";
 
 function siteUrl(): string {
@@ -55,6 +55,7 @@ export async function invoicePdfFor(
       amountIdr: item.amountIdr,
     })),
     amountIdr: payment.amountIdr,
+    currency: payment.currency ?? "IDR",
     payUrl: payment.status === "pending" ? invoicePageUrl(payment.id) : null,
   });
   return { buffer, filename: `${payment.invoiceNumber}.pdf` };
@@ -64,7 +65,7 @@ function emailItems(payment: PaymentRecord) {
   return payment.items.map((item) => ({
     name: item.name,
     quantity: item.quantity,
-    amount: formatIdr(item.amountIdr),
+    amount: formatMoney(item.amountIdr, payment.currency ?? "IDR"),
   }));
 }
 
@@ -75,7 +76,7 @@ function emailItems(payment: PaymentRecord) {
 export async function notifyInvoiceIssued(paymentId: string): Promise<void> {
   const payment = await mongoPaymentStore.get(paymentId);
   if (!payment || payment.status !== "pending") return;
-  const total = formatIdr(payment.amountIdr);
+  const total = formatMoney(payment.amountIdr, payment.currency ?? "IDR");
   const dueAt = payment.expiresAt.toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
@@ -112,7 +113,7 @@ export async function notifyInvoiceIssued(paymentId: string): Promise<void> {
 export async function notifyPaymentReceived(paymentId: string): Promise<void> {
   const payment = await mongoPaymentStore.get(paymentId);
   if (!payment) return;
-  const total = formatIdr(payment.amountIdr);
+  const total = formatMoney(payment.amountIdr, payment.currency ?? "IDR");
   await notificationService.send(
     {
       userId: payment.userId,

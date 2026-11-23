@@ -1,5 +1,6 @@
 import { Button } from '#/components/ui/button'
 import { hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 type Props = {
   page: number
@@ -24,7 +25,7 @@ export default function ListPagination({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p className={`text-sm ${hintClassName}`}>
-        Showing {from}–{to} of {totalItems}
+        {m.pagination_showing({ from, to, total: totalItems })}
       </p>
       <div className="flex items-center gap-2">
         <Button
@@ -34,10 +35,10 @@ export default function ListPagination({
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
-          Previous
+          {m.pagination_prev()}
         </Button>
         <span className={`text-sm ${hintClassName}`}>
-          Page {page} of {totalPages}
+          {m.pagination_page({ page, total: totalPages })}
         </span>
         <Button
           type="button"
@@ -46,7 +47,7 @@ export default function ListPagination({
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         >
-          Next
+          {m.pagination_next()}
         </Button>
       </div>
     </div>

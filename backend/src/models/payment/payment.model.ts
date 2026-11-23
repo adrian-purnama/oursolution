@@ -2,6 +2,7 @@ import { VARIANT_APPLY_MODES } from "../userProductPeriod/userProductPeriod.inte
 import { model, Schema } from "mongoose";
 import {
   CHECKOUT_PLACEMENTS,
+  PAYMENT_CURRENCIES,
   PAYMENT_ITEM_KINDS,
   PAYMENT_SOURCES,
   PAYMENT_STATUSES,
@@ -22,6 +23,7 @@ const paymentItemSchema = new Schema<PaymentItem>(
     applyVariant: { type: String, enum: VARIANT_APPLY_MODES, default: null },
     placement: { type: String, enum: CHECKOUT_PLACEMENTS, default: null },
     amountIdr: { type: Number, required: true, min: 0 },
+    providerPriceId: { type: String, default: null },
     periodIds: {
       type: [{ type: Schema.Types.ObjectId, ref: "UserProductPeriod" }],
       default: [],
@@ -37,6 +39,7 @@ const paymentSchema = new Schema<PaymentInterface>(
     invoiceNumber: { type: String, required: true },
     items: { type: [paymentItemSchema], required: true },
     amountIdr: { type: Number, required: true, min: 0 },
+    currency: { type: String, enum: PAYMENT_CURRENCIES, default: "IDR" },
     status: {
       type: String,
       required: true,
@@ -52,6 +55,7 @@ const paymentSchema = new Schema<PaymentInterface>(
     },
     provider: { type: String, required: true },
     reference: { type: String, default: null },
+    subscriptionRef: { type: String, default: null },
     redirectUrl: { type: String, default: null },
     snapToken: { type: String, default: null },
     paymentType: { type: String, default: null },
@@ -72,5 +76,18 @@ paymentSchema.index({ invoiceNumber: 1 }, { unique: true });
 paymentSchema.index({ userId: 1, createdAt: -1 });
 paymentSchema.index({ "items.productId": 1 });
 paymentSchema.index({ status: 1, checkedAt: 1 });
+// Webhooks find a payment by the provider's transaction id.
+paymentSchema.index({ provider: 1, reference: 1 });
+// One invoice per Paddle transaction, even when a webhook arrives twice.
+paymentSchema.index(
+  { reference: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      provider: "paddle",
+      reference: { $type: "string" },
+    },
+  },
+);
 
 export const PaymentModel = model<PaymentInterface>("Payment", paymentSchema);

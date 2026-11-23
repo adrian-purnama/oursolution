@@ -1,6 +1,9 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
-import type { PaymentStatus } from "../../models/payment/payment.interface";
+import type {
+  PaymentCurrency,
+  PaymentStatus,
+} from "../../models/payment/payment.interface";
 
 export type InvoicePdfInput = {
   brand: string;
@@ -21,6 +24,8 @@ export type InvoicePdfInput = {
     amountIdr: number;
   }[];
   amountIdr: number;
+  /** What the amounts are in: whole rupiah, or US cents. */
+  currency: PaymentCurrency;
   /** Shown as a QR code on an unpaid invoice. */
   payUrl: string | null;
 };
@@ -46,6 +51,17 @@ const WIDTH = RIGHT - LEFT;
 /** "Rp 50.000" */
 export function formatIdr(value: number): string {
   return `Rp ${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value)}`;
+}
+
+/** "Rp 50.000" for rupiah, "$9.00" for US cents. */
+export function formatMoney(value: number, currency: PaymentCurrency): string {
+  if (currency === "USD") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(value / 100);
+  }
+  return formatIdr(value);
 }
 
 function formatDateTime(date: Date): string {
@@ -246,11 +262,11 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
         .fontSize(9)
         .fillColor(C.text)
         .text(String(item.quantity), qtyX, y + 2, { width: 36, align: "right" })
-        .text(formatIdr(item.unitPriceIdr), unitX, y + 2, {
+        .text(formatMoney(item.unitPriceIdr, input.currency), unitX, y + 2, {
           width: 75,
           align: "right",
         })
-        .text(formatIdr(item.amountIdr), amountX, y + 2, {
+        .text(formatMoney(item.amountIdr, input.currency), amountX, y + 2, {
           width: 77,
           align: "right",
         });
@@ -270,8 +286,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
         .fillColor(C.text)
         .text(value, valueX, top, { width: 97, align: "right" });
     y += 6;
-    row("Subtotal", formatIdr(input.amountIdr), y);
-    row("Paid", formatIdr(isPaid ? input.amountIdr : 0), y + 16);
+    row("Subtotal", formatMoney(input.amountIdr, input.currency), y);
+    row("Paid", formatMoney(isPaid ? input.amountIdr : 0, input.currency), y + 16);
     const dueTop = y + 38;
     doc
       .save()
@@ -290,7 +306,7 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
       .font("Helvetica-Bold")
       .fontSize(12)
       .fillColor(isPaid ? C.green : C.primary)
-      .text(formatIdr(input.amountIdr), valueX, dueTop + 1, {
+      .text(formatMoney(input.amountIdr, input.currency), valueX, dueTop + 1, {
         width: 97,
         align: "right",
       });

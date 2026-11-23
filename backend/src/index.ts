@@ -30,6 +30,7 @@ import {
 import productRoutes from "./modules/product/product.route";
 import redeemRoutes from "./modules/redeemCode/redeemCode.route";
 import { productService } from "./modules/product/product.service";
+import { startExpiryReminderSweep } from "./modules/userProduct/expiryReminder.scheduler";
 import ticketRoutes from "./modules/ticket/ticket.route";
 import userProductRoutes from "./modules/userProduct/userProduct.route";
 
@@ -43,6 +44,11 @@ function createApp(): Express {
       // The frontend lives on another origin and loads /media images from here.
       crossOriginResourcePolicy: { policy: "cross-origin" },
     }),
+  );
+  // Paddle signs the exact bytes it sends: keep them unparsed there.
+  app.use(
+    "/payments/paddle/webhook",
+    express.raw({ type: "*/*", limit: "1mb" }),
   );
   app.use(express.json({ limit: "100kb" }));
   app.use(
@@ -110,6 +116,8 @@ async function bootstrap() {
   await deploymentService.recoverInterruptedRuns();
   // Services whose subscription ended are turned off by themselves.
   startLapsedSubscriptionSweep();
+  // Owners hear a few days before a subscription ends, unless it renews.
+  startExpiryReminderSweep();
   // Older one-product payments get an invoice; pending ones are checked.
   await migrateLegacyPayments();
   startPaymentSweep();

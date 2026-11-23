@@ -21,6 +21,7 @@ import {
 } from '#/lib/notification'
 import type { AppNotification } from '#/lib/notification'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 function badgeText(count: number): string {
   return count > 9 ? '9+' : String(count)
@@ -49,7 +50,7 @@ export default function NotificationMenu() {
 
   async function markAll() {
     if (!(await markAllNotificationsRead())) {
-      toast.error('Could not mark notifications as read')
+      toast.error(m.notif_mark_failed())
     }
   }
 
@@ -58,10 +59,10 @@ export default function NotificationMenu() {
       <DropdownMenuTrigger
         aria-label={
           unreadCount > 0
-            ? `Notifications, ${unreadCount} unread`
-            : 'Notifications'
+            ? m.notif_aria_unread({ count: unreadCount })
+            : m.notif_title()
         }
-        title="Notifications"
+        title={m.notif_title()}
         className="relative inline-flex size-10 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--ink)] outline-none transition hover:bg-[var(--surface)] focus-visible:ring-2 focus-visible:ring-[var(--navy)] data-[state=open]:bg-[var(--surface)]"
       >
         <Bell className="size-5" aria-hidden />
@@ -81,7 +82,7 @@ export default function NotificationMenu() {
       >
         <div className="flex items-center justify-between gap-2 px-1">
           <DropdownMenuLabel className="px-2 py-1.5 text-sm font-semibold text-[var(--ink)]">
-            Notifications
+            {m.notif_title()}
           </DropdownMenuLabel>
           {unreadCount > 0 ? (
             <DropdownMenuItem
@@ -92,7 +93,7 @@ export default function NotificationMenu() {
               className="cursor-pointer gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[var(--muted)] focus:text-[var(--ink)]"
             >
               <CheckCheck className="size-3.5" aria-hidden />
-              Mark all as read
+              {m.notif_mark_all()}
             </DropdownMenuItem>
           ) : null}
         </div>
@@ -101,12 +102,12 @@ export default function NotificationMenu() {
         <div className="max-h-[min(26rem,65vh)] overflow-y-auto">
           {!loaded && loading ? (
             <p className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-              Loading…
+              {m.notif_loading()}
             </p>
           ) : !loaded && error ? (
             <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
               <p className="text-sm text-[var(--muted)]">
-                Could not load notifications.
+                {m.notif_load_failed()}
               </p>
               <DropdownMenuItem
                 onSelect={(event) => {
@@ -115,12 +116,12 @@ export default function NotificationMenu() {
                 }}
                 className="cursor-pointer rounded-full px-3 py-1 text-sm font-medium text-[var(--ink)]"
               >
-                Retry
+                {m.common_retry()}
               </DropdownMenuItem>
             </div>
           ) : items.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-              You have no notifications yet.
+              {m.notif_empty()}
             </p>
           ) : (
             <>
@@ -150,7 +151,7 @@ export default function NotificationMenu() {
                         )}
                       >
                         {unread ? (
-                          <span className="sr-only">Unread: </span>
+                          <span className="sr-only">{m.notif_unread()}</span>
                         ) : null}
                         {notification.title}
                       </span>
@@ -176,12 +177,12 @@ export default function NotificationMenu() {
                   disabled={loading}
                   className="mt-1 cursor-pointer justify-center rounded-xl py-2 text-sm font-medium text-[var(--ink)]"
                 >
-                  {loading ? 'Loading…' : 'Load more'}
+                  {loading ? m.notif_loading() : m.notif_load_more()}
                 </DropdownMenuItem>
               ) : null}
               {loaded && error ? (
                 <p className="px-3 py-2 text-center text-xs text-red-600">
-                  Could not load more. Try again.
+                  {m.notif_more_failed()}
                 </p>
               ) : null}
             </>

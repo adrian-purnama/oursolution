@@ -14,6 +14,7 @@ import {
   inputClassNameCompact,
 } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const readOnlyInputClassName = cn(
   inputClassNameCompact,
@@ -36,7 +37,7 @@ export default function ResetPasswordForm() {
     event.preventDefault()
 
     if (!hasRequiredParams) {
-      toast.error('Invalid reset link')
+      toast.error(m.auth_reset_invalid_toast())
       return
     }
 
@@ -47,7 +48,7 @@ export default function ResetPasswordForm() {
     }
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match')
+      toast.error(m.common_passwords_mismatch())
       return
     }
 
@@ -63,14 +64,14 @@ export default function ResetPasswordForm() {
       )
 
       if (!response.success) {
-        toast.error(response.message || 'Password reset failed')
+        toast.error(response.message || m.auth_reset_failed())
         return
       }
 
-      toast.success(response.message || 'Password reset successfully')
+      toast.success(response.message || m.auth_reset_success())
       await navigate({ to: '/login' })
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
     } finally {
       setLoading(false)
     }
@@ -80,17 +81,14 @@ export default function ResetPasswordForm() {
     return (
       <div className={`${cardClassName} w-full p-6 sm:p-8`}>
         <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">
-          Reset password
+          {m.auth_reset_title()}
         </h1>
-        <p className={`mb-6 ${hintClassName}`}>
-          This reset link is invalid or incomplete. Request a new one to
-          continue.
-        </p>
+        <p className={`mb-6 ${hintClassName}`}>{m.auth_reset_invalid()}</p>
         <Link
           to="/forgot-password"
           className="text-sm text-[var(--ink)] underline"
         >
-          Request a new reset link
+          {m.auth_reset_request_new()}
         </Link>
       </div>
     )
@@ -99,7 +97,7 @@ export default function ResetPasswordForm() {
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`}>
       <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">
-        Reset password
+        {m.auth_reset_title()}
       </h1>
 
       <form className="w-full space-y-4" onSubmit={handleSubmit}>
@@ -108,7 +106,7 @@ export default function ResetPasswordForm() {
             htmlFor="reset-email"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            Email
+            {m.common_email()}
           </label>
           <input
             id="reset-email"
@@ -124,7 +122,7 @@ export default function ResetPasswordForm() {
             htmlFor="reset-otp"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            OTP
+            {m.auth_reset_otp()}
           </label>
           <input
             id="reset-otp"
@@ -140,7 +138,7 @@ export default function ResetPasswordForm() {
             htmlFor="reset-password"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            New password
+            {m.auth_reset_new_password()}
           </label>
           <PasswordInput
             id="reset-password"
@@ -156,7 +154,7 @@ export default function ResetPasswordForm() {
             htmlFor="reset-confirm-password"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            Confirm password
+            {m.common_confirm_password()}
           </label>
           <PasswordInput
             id="reset-confirm-password"
@@ -171,13 +169,13 @@ export default function ResetPasswordForm() {
           disabled={loading}
           className={buttonClassNameFull}
         >
-          {loading ? 'Resetting…' : 'Reset password'}
+          {loading ? m.auth_reset_resetting() : m.auth_reset_title()}
         </button>
       </form>
 
       <p className={`mt-6 ${hintClassName}`}>
         <Link to="/login" className="text-[var(--ink)] underline">
-          Back to sign in
+          {m.common_back_to_signin()}
         </Link>
       </p>
     </div>

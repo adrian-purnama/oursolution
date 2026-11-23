@@ -15,6 +15,7 @@ import {
 import type { TicketClosure, TicketMessage, TicketStatus } from '#/lib/ticket'
 import { hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 export function TicketStatusBadge({ status }: { status: TicketStatus }) {
   return (
@@ -92,7 +93,7 @@ export function ImagePicker({
         <div className="relative inline-block">
           <img
             src={preview}
-            alt="Photo to send"
+            alt={m.ticket_photo_alt()}
             className="max-h-40 rounded-md border border-[var(--line)] object-contain"
           />
           <Button
@@ -100,7 +101,7 @@ export function ImagePicker({
             variant="outline"
             size="icon-xs"
             className="absolute top-1.5 right-1.5 bg-white"
-            aria-label="Remove the photo"
+            aria-label={m.ticket_photo_remove()}
             disabled={disabled}
             onClick={() => {
               setProblem(null)
@@ -119,7 +120,7 @@ export function ImagePicker({
           onClick={() => inputRef.current?.click()}
         >
           <ImagePlus aria-hidden />
-          Add a photo
+          {m.ticket_photo_add()}
         </Button>
       )}
       <p
@@ -129,7 +130,7 @@ export function ImagePicker({
         )}
         role={problem ? 'alert' : undefined}
       >
-        {problem ?? 'Optional. One JPEG, PNG or WebP, up to 2 MB.'}
+        {problem ?? m.ticket_photo_hint()}
       </p>
     </div>
   )
@@ -162,11 +163,11 @@ export function MessageComposer({
     event.preventDefault()
     const length = [...body.trim()].length
     if (length === 0) {
-      setError('Write a message first')
+      setError(m.ticket_write_first())
       return
     }
     if (length > BODY_MAX) {
-      setError(`The message must be at most ${BODY_MAX} characters`)
+      setError(m.ticket_message_max({ max: BODY_MAX }))
       return
     }
     setError(null)
@@ -213,7 +214,7 @@ export function MessageComposer({
           ) : (
             <Send aria-hidden />
           )}
-          {sending ? 'Sending…' : submitLabel}
+          {sending ? m.ticket_sending() : submitLabel}
         </Button>
       </div>
     </form>
@@ -268,7 +269,7 @@ function ClosureCard({
   return (
     <li className="space-y-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">
       <p className={`text-xs ${hintClassName}`}>
-        Closed {formatDateTime(closure.closedAt)}
+        {m.ticket_closed_on({ date: formatDateTime(closure.closedAt) })}
         {viewer === 'admin' ? (
           <>
             {' · '}Product:{' '}
@@ -282,18 +283,19 @@ function ClosureCard({
         <div className="space-y-1">
           <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink)]">
             <Sparkles className="size-3.5 text-[var(--muted)]" aria-hidden />
-            Summary
+            {m.ticket_summary()}
           </p>
           <p className="break-words whitespace-pre-wrap">{closure.summary}</p>
           <p className={`text-xs ${hintClassName}`}>
-            Written by AI. The conversation before this point was replaced by
-            this summary.
+            {m.ticket_summary_note()}
           </p>
         </div>
       ) : null}
       {closure.resolution ? (
         <div className="space-y-1">
-          <p className="text-xs font-medium text-[var(--ink)]">Resolution</p>
+          <p className="text-xs font-medium text-[var(--ink)]">
+            {m.ticket_resolution()}
+          </p>
           <p className="break-words whitespace-pre-wrap">
             {closure.resolution}
           </p>
@@ -320,8 +322,8 @@ function ThreadEntry({
         <span>
           {viewer === 'admin' && message.senderEmail
             ? message.senderEmail
-            : 'Support'}{' '}
-          changed the status to{' '}
+            : m.ticket_support()}{' '}
+          {m.ticket_changed_status()}{' '}
           <strong className="font-medium text-[var(--ink)]">
             {message.toStatus ? TICKET_STATUS_LABELS[message.toStatus] : '—'}
           </strong>{' '}
@@ -339,9 +341,9 @@ function ThreadEntry({
     message.senderRole === 'admin'
       ? viewer === 'admin'
         ? `Support · ${message.senderEmail ?? 'admin'}`
-        : 'Support'
+        : m.ticket_support()
       : viewer === 'customer'
-        ? 'You'
+        ? m.ticket_you()
         : (message.senderEmail ?? 'Customer')
   const image = toAbsoluteMediaUrl(message.imageUrl)
   return (
@@ -385,7 +387,7 @@ function ThreadEntry({
           >
             <img
               src={image}
-              alt="Attached photo"
+              alt={m.ticket_attached_alt()}
               loading="lazy"
               referrerPolicy="no-referrer"
               className={cn(

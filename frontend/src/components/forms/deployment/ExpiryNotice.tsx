@@ -5,6 +5,7 @@ import { Button } from '#/components/ui/button'
 import { expiryOf, formatDaysLeft } from '#/lib/deployment'
 import type { Deployment, Expiry } from '#/lib/deployment'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const DISMISS_KEY = 'expiry-notice-dismissed'
 
@@ -20,8 +21,11 @@ function readDismissed(): string | null {
 
 function describe({ deployment, expiry }: Row): string {
   return expiry.kind === 'expired'
-    ? `${deployment.product.name} has expired`
-    : `${deployment.product.name} ends ${formatDaysLeft(expiry.daysLeft)}`
+    ? m.expiry_expired({ name: deployment.product.name })
+    : m.expiry_ends({
+        name: deployment.product.name,
+        when: formatDaysLeft(expiry.daysLeft),
+      })
 }
 
 /**
@@ -86,13 +90,15 @@ export default function ExpiryNotice({
         {rest.length > 0 ? (
           <span className="text-[var(--muted)]">
             {' '}
-            and {rest.length} more {rest.length === 1 ? 'service' : 'services'}
+            {rest.length === 1
+              ? m.expiry_and_more_one()
+              : m.expiry_and_more_other({ count: rest.length })}
           </span>
         ) : (
           <span className="text-[var(--muted)]">
             {first.expiry.kind === 'expired'
-              ? '. Extend it to turn it back on.'
-              : '. Extend it to keep it running.'}
+              ? m.expiry_extend_on()
+              : m.expiry_extend_keep()}
           </span>
         )}
       </p>
@@ -103,7 +109,7 @@ export default function ExpiryNotice({
             search={{ productId: first.deployment.product.id }}
             className="no-underline"
           >
-            Extend
+            {m.expiry_extend()}
           </Link>
         </Button>
       ) : (
@@ -113,7 +119,7 @@ export default function ExpiryNotice({
             search={{ tab: 'products' }}
             className="no-underline"
           >
-            Review
+            {m.expiry_review()}
           </Link>
         </Button>
       )}
@@ -121,7 +127,7 @@ export default function ExpiryNotice({
         type="button"
         size="icon-xs"
         variant="ghost"
-        aria-label="Dismiss"
+        aria-label={m.common_dismiss()}
         onClick={dismiss}
       >
         <X aria-hidden />

@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { regionForRequest } from "../payment/billingRegion";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   CheckDeploymentOutDto,
@@ -38,9 +39,12 @@ function ok<T>(res: Response, status: number, message: string, data: T) {
 
 export class ProductController {
   /** Public: the products listed on the pricing page. */
-  listPricing = async (_req: Request, res: Response) => {
+  /** Public: priced for where the visitor is (see billingRegion.ts). */
+  listPricing = async (req: Request, res: Response) => {
     try {
-      const data = await productService.listPricing();
+      const data = await productService.listPricing(
+        await regionForRequest(req),
+      );
       return ok<PricingProductOutDto[]>(res, 200, "Pricing retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load pricing");
@@ -50,7 +54,10 @@ export class ProductController {
   /** Public: one published product, for its own page. */
   getPricing = async (req: Request, res: Response) => {
     try {
-      const data = await productService.getPricing(parseRouteId(req.params.id));
+      const data = await productService.getPricing(
+        parseRouteId(req.params.id),
+        await regionForRequest(req),
+      );
       return ok<PricingProductOutDto>(res, 200, "Product retrieved", data);
     } catch (error) {
       if (error instanceof ProductNotFoundError) {

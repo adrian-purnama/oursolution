@@ -3,11 +3,12 @@ import { ArrowLeft } from 'lucide-react'
 import DeploymentPanel from '#/components/forms/deployment/DeploymentPanel'
 import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute(
   '/_authenticated/dashboard/deployments/$productId',
 )({
-  head: () => privatePage('Deployment'),
+  head: () => privatePage(m.seo_deployment()),
   component: DeploymentPage,
 })
 
@@ -20,7 +21,7 @@ function DeploymentPage() {
         className={`mb-6 inline-flex items-center gap-1.5 no-underline hover:text-[var(--ink)] ${hintClassName}`}
       >
         <ArrowLeft className="size-4" aria-hidden />
-        Dashboard
+        {m.dash_title()}
       </Link>
       <DeploymentPanel
         key={productId}

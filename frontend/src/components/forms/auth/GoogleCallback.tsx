@@ -6,6 +6,7 @@ import { apiFetch } from '#/lib/api'
 import { takeGoogleIntent } from '#/lib/google'
 import { safeRedirect } from '#/lib/redirect'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** Long enough to read "sign in with your password, then link Google". */
 const ERROR_TOAST_MS = 8000
@@ -48,7 +49,7 @@ export default function GoogleCallback({
       if (!intent || !code || error) {
         // "access_denied" is the user pressing Cancel at Google.
         if (error !== 'access_denied') {
-          toast.error('Google sign-in failed, please try again')
+          toast.error(m.google_failed())
         }
         await back()
         return
@@ -61,12 +62,12 @@ export default function GoogleCallback({
             body: JSON.stringify({ code }),
           })
           if (!response.success) {
-            toast.error(response.message || 'Linking Google failed', {
+            toast.error(response.message || m.google_link_failed(), {
               duration: ERROR_TOAST_MS,
             })
           } else {
             await refreshAuth()
-            toast.success('Google account linked')
+            toast.success(m.google_linked())
           }
           await back()
           return
@@ -80,7 +81,7 @@ export default function GoogleCallback({
           },
         )
         if (!response.success || !response.data?.jwt) {
-          toast.error(response.message || 'Google sign-in failed', {
+          toast.error(response.message || m.google_signin_failed(), {
             duration: ERROR_TOAST_MS,
           })
           await back()
@@ -88,11 +89,11 @@ export default function GoogleCallback({
         }
 
         await login(response.data.jwt)
-        toast.success('Logged in successfully')
+        toast.success(m.auth_signin_success())
         if (redirect) router.history.replace(redirect)
         else await navigate({ to: '/dashboard', replace: true })
       } catch {
-        toast.error('Unable to reach the server. Please try again.')
+        toast.error(m.common_error_network())
         await back()
       }
     }
@@ -104,9 +105,9 @@ export default function GoogleCallback({
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`} role="status">
       <h1 className="mb-2 text-2xl font-medium text-[var(--ink)]">
-        Finishing up…
+        {m.google_finishing()}
       </h1>
-      <p className={hintClassName}>Checking your Google account.</p>
+      <p className={hintClassName}>{m.google_checking()}</p>
     </div>
   )
 }

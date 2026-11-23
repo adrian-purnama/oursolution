@@ -7,6 +7,7 @@ import { Button } from '#/components/ui/button'
 import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** The account tab: who is signed in, and a password reset link. */
 export default function ProfileForm() {
@@ -23,13 +24,13 @@ export default function ProfileForm() {
         body: JSON.stringify({ email: user.email, isResetPassword: true }),
       })
       if (!response.success) {
-        toast.error(response.message || 'Failed to send the reset link')
+        toast.error(response.message || m.profile_reset_failed())
         return
       }
       setSent(true)
-      toast.success('Reset link sent to your email')
+      toast.success(m.profile_reset_sent_toast())
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setSending(false)
     }
@@ -44,7 +45,7 @@ export default function ProfileForm() {
       >
         <UserAvatar email={user.email} className="size-12 text-sm" />
         <div className="min-w-0 flex-1">
-          <p className={`text-xs ${hintClassName}`}>Email</p>
+          <p className={`text-xs ${hintClassName}`}>{m.profile_email()}</p>
           <p className="truncate text-sm font-medium">{user.email}</p>
         </div>
         <Button
@@ -54,11 +55,15 @@ export default function ProfileForm() {
           onClick={() => void handleResetPassword()}
         >
           <KeyRound aria-hidden />
-          {sending ? 'Sending…' : sent ? 'Link sent' : 'Reset password'}
+          {sending
+            ? m.profile_sending()
+            : sent
+              ? m.profile_link_sent()
+              : m.profile_reset_password()}
         </Button>
         {sent ? (
           <p className={`w-full text-xs ${hintClassName}`}>
-            Check your inbox and follow the link to choose a new password.
+            {m.profile_check_inbox()}
           </p>
         ) : null}
       </section>
@@ -70,20 +75,24 @@ export default function ProfileForm() {
           <GoogleMark className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Google</p>
+          <p className="text-sm font-medium">{m.profile_google()}</p>
           <p className={`text-xs ${hintClassName}`}>
             {user.googleLinked
-              ? 'You can sign in with your Google account.'
-              : 'Link a Google account to sign in without your password.'}
+              ? m.profile_google_linked_copy()
+              : m.profile_google_link_copy()}
           </p>
         </div>
         {user.googleLinked ? (
           <p className="flex items-center gap-1.5 text-sm">
             <Check className="size-4" aria-hidden />
-            Linked
+            {m.profile_linked()}
           </p>
         ) : (
-          <GoogleButton label="Link Google" mode="link" className="" />
+          <GoogleButton
+            label={m.profile_link_google()}
+            mode="link"
+            className=""
+          />
         )}
       </section>
     </div>

@@ -2,12 +2,18 @@ import type { Request, Response } from "express";
 import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   AdminPaymentListOutDto,
+  BillingRegionOutDto,
   CheckoutOutDto,
   CheckoutQuoteOutDto,
   PaymentConfigOutDto,
   PaymentListOutDto,
   PaymentOutDto,
+  PaddleSubscriptionOutDto,
 } from "../../dto/payment.dto";
+import {
+  BILLING_REGIONS,
+  type BillingRegion,
+} from "../../models/user/user.interface";
 import { env } from "../../environment/env";
 import { logger } from "../../logger/logger";
 import { UserModel } from "../../models/user/user.model";
@@ -22,6 +28,8 @@ import { basketService } from "../basket/basket.service";
 import { AlreadyOwnedError } from "../purchase/purchase.service";
 import { PlanScheduleError } from "../userProduct/userProduct.planner";
 import { MidtransProvider, midtransStatus } from "./midtrans.provider";
+import { verifyPaddleSignature } from "./paddle.provider";
+import { PaddleEventError, paddleService, type PaddleEvent } from "./paddle.service";
 import { notifyInvoiceIssued, invoicePdfFor } from "./payment.invoice";
 import {
   CheckoutError,
@@ -30,6 +38,7 @@ import {
   mongoPaymentStore,
   PAYMENT_GROUPS,
   type PaymentGroup,
+  paddleProvider,
   paymentProvider,
   paymentService,
   toPaymentOut,
@@ -37,6 +46,22 @@ import {
 } from "./payment.service";
 
 const logSource = "modules/payment/payment.controller.ts";
+
+function parseRegion(body: unknown): BillingRegion {
+  const region = (body as { region?: unknown } | null)?.region;
+  if (
+    typeof region !== "string" ||
+    !(BILLING_REGIONS as readonly string[]).includes(region)
+  ) {
+    throw new Error(`region must be one of ${BILLING_REGIONS.join(", ")}`);
+  }
+  return region as BillingRegion;
+}
+
+async function regionOut(userId: string): Promise<BillingRegionOutDto> {
+  const { region, locked } = await paymentService.regionOf(userId);
+  return { region, locked, international: paddleProvider !== null };
+}
 
 function statusOf(error: unknown): number {
   if (
@@ -93,11 +118,155 @@ export class PaymentController {
             clientKey: env.midtransClientKey,
           }
         : null;
+    const paddle =
+      paddleProvider && env.paddleClientToken
+        ? {
+            clientToken: env.paddleClientToken,
+            environment: env.paddleSandbox
+              ? ("sandbox" as const)
+              : ("production" as const),
+          }
+        : null;
     return res.status(200).json({
       success: true,
       message: "Payment config",
-      data: { provider: paymentProvider?.name ?? null, snap },
+      data: { provider: paymentProvider?.name ?? null, snap, paddle },
     } satisfies ApiResponseDto<PaymentConfigOutDto>);
+  };
+
+  /** Admin: a user's region, locked or not. */
+  getUserRegion = async (req: Request, res: Response) => {
+    try {
+      const userId = parseRouteId(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: "Billing region",
+        data: await regionOut(userId),
+      } satisfies ApiResponseDto<BillingRegionOutDto>);
+    } catch (error) {
+      return fail(res, error, "Could not load the billing region");
+    }
+  };
+
+  /** Admin: body `{ region, locked? }`. Unlocking lets the user choose again. */
+  setUserRegion = async (req: Request, res: Response) => {
+    try {
+      const userId = parseRouteId(req.params.id);
+      const region = parseRegion(req.body);
+      const rawLocked = (req.body as { locked?: unknown }).locked;
+      if (rawLocked !== undefined && typeof rawLocked !== "boolean") {
+        throw new Error("locked must be true or false");
+      }
+      const updated = await UserModel.updateOne(
+        { _id: userId },
+        {
+          $set: {
+            billingRegion: region,
+            ...(rawLocked !== undefined
+              ? { billingRegionLocked: rawLocked }
+              : {}),
+          },
+        },
+      ).exec();
+      if (updated.matchedCount === 0) throw new Error("User not found");
+      return res.status(200).json({
+        success: true,
+        message: "Billing region saved",
+        data: await regionOut(userId),
+      } satisfies ApiResponseDto<BillingRegionOutDto>);
+    } catch (error) {
+      return fail(res, error, "Could not save the billing region");
+    }
+  };
+
+  listOwnSubscriptions = async (req: Request, res: Response) => {
+    try {
+      return res.status(200).json({
+        success: true,
+        message: "Subscriptions retrieved",
+        data: await paddleService.listFor(req.user!.id),
+      } satisfies ApiResponseDto<PaddleSubscriptionOutDto[]>);
+    } catch (error) {
+      return fail(res, error, "Could not load subscriptions");
+    }
+  };
+
+  /** A one-time link to Paddle's page for cancelling renewal or the card. */
+  billingPortal = async (req: Request, res: Response) => {
+    try {
+      const url = await paddleService.portalUrl(req.user!.id);
+      return res.status(200).json({
+        success: true,
+        message: "Billing portal",
+        data: { url },
+      } satisfies ApiResponseDto<{ url: string }>);
+    } catch (error) {
+      return fail(res, error, "Could not open the billing portal");
+    }
+  };
+
+  /**
+   * Paddle's webhook. Public: trusted only when the Paddle-Signature header
+   * signs the raw body with our secret. Answers 500 when an event cannot be
+   * applied yet, so Paddle sends it again later.
+   */
+  paddleWebhook = async (req: Request, res: Response) => {
+    if (!paddleProvider || !env.paddleWebhookSecret) {
+      return res.status(404).json({
+        success: false,
+        message: "Paddle is not set up",
+        data: null,
+      } satisfies ApiResponseDto);
+    }
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (
+      !verifyPaddleSignature(
+        raw,
+        req.header("paddle-signature"),
+        env.paddleWebhookSecret,
+      )
+    ) {
+      logger.warn(
+        "Paddle webhook with a bad signature",
+        logSource,
+        "paddleWebhook",
+      );
+      return res.status(403).json({
+        success: false,
+        message: "Invalid signature",
+        data: null,
+      } satisfies ApiResponseDto);
+    }
+    let event: PaddleEvent;
+    try {
+      event = JSON.parse(raw.toString("utf8")) as PaddleEvent;
+    } catch {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid JSON",
+        data: null,
+      } satisfies ApiResponseDto);
+    }
+    try {
+      await paddleService.handle(event);
+      return res.status(200).json({
+        success: true,
+        message: "OK",
+        data: null,
+      } satisfies ApiResponseDto);
+    } catch (error) {
+      const level = error instanceof PaddleEventError ? "warn" : "error";
+      logger[level](
+        `Paddle ${event.event_type ?? "event"} ${event.event_id ?? ""}: ${error instanceof Error ? error.message : String(error)}`,
+        logSource,
+        "paddleWebhook",
+      );
+      return res.status(500).json({
+        success: false,
+        message: "Could not process the webhook",
+        data: null,
+      } satisfies ApiResponseDto);
+    }
   };
 
   quote = async (req: Request, res: Response) => {

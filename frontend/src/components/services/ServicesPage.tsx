@@ -2,6 +2,7 @@ import FinalCta from '#/components/home/FinalCta'
 import RevealScope from '#/components/home/RevealScope'
 import ServiceCard from '#/components/services/ServiceCard'
 import { SERVICES } from '#/lib/services'
+import { m } from '#/paraglide/messages'
 
 /** /services: the three services side by side, each leading to its own page. */
 export default function ServicesPage() {
@@ -13,14 +14,12 @@ export default function ServicesPage() {
           className="bg-dot-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_25%,transparent_70%)]"
         />
         <div className="relative mx-auto max-w-6xl px-6 py-16 text-center sm:py-24">
-          <p className="eyebrow mb-3">Services</p>
+          <p className="eyebrow mb-3">{m.services_eyebrow()}</p>
           <h1 className="font-display mx-auto mb-5 max-w-3xl text-4xl sm:text-6xl">
-            Three ways we can help.
+            {m.services_title()}
           </h1>
           <p className="mx-auto max-w-xl text-lg leading-relaxed text-[var(--muted)]">
-            Have us build your software, run a ready-made tool on our servers,
-            or add our AI chatbot to your site. Pick one to see what you get and
-            how it works.
+            {m.services_copy()}
           </p>
         </div>
       </section>

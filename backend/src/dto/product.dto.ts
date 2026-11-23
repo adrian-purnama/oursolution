@@ -33,6 +33,12 @@ export interface ProductOutDto {
   description: string;
   notices: ProductNotice[];
   priceIdr: number;
+  /** Outside Indonesia, in US cents; null when not sold there. */
+  priceUsdCents: number | null;
+  /** Read-only: the Paddle price kept in step with `priceUsdCents`. */
+  paddlePriceId: string | null;
+  /** Read-only: the Paddle product holding the prices. */
+  paddleProductId: string | null;
   /** Subscription only. */
   durationDays: number | null;
   /** Subscription only; admin-only. */
@@ -63,6 +69,13 @@ export interface PricingProductOutDto {
   description: string;
   notices: ProductNotice[];
   durationDays: number | null;
+  /** What `price` and every variant's price are in, for this visitor. */
+  currency: "IDR" | "USD";
+  /**
+   * The lowest price the visitor can pay, in `currency` (whole rupiah, or
+   * US cents); null when it is not sold in their region.
+   */
+  price: number | null;
   /**
    * Subscription only: every variant, the base one first. Just the base
    * when the product has no others.
@@ -82,7 +95,8 @@ export interface PricingVariantOutDto {
   pricingText: string;
   /** Markdown shown once chosen: its own, else the product's. */
   description: string;
-  priceIdr: number;
+  /** In the product's `currency`: whole rupiah, or US cents. */
+  price: number;
   durationDays: number | null;
 }
 
@@ -104,6 +118,8 @@ export interface CreateProductDto {
   description: string;
   notices: ProductNotice[];
   priceIdr: number;
+  /** Outside Indonesia, in US cents; null when not sold there. */
+  priceUsdCents: number | null;
   durationDays: number | null;
   deployment: ProductDeployment | null;
   variantName: string;

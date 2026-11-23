@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react'
 import { getToken } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
 import { API_BASE_URL } from '#/lib/config'
+import { m } from '#/paraglide/messages'
+import { getLocale } from '#/paraglide/runtime'
 
 export type AppNotification = {
   id: string
@@ -36,7 +38,6 @@ export function isSafeInternalLink(link: string | null): link is string {
   }
 }
 
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
 const STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['second', 60],
   ['minute', 60],
@@ -49,8 +50,11 @@ const STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
 
 /** "5 minutes ago", "yesterday", … */
 export function formatRelativeTime(iso: string, now = Date.now()): string {
+  const relative = new Intl.RelativeTimeFormat(getLocale(), {
+    numeric: 'auto',
+  })
   let value = (new Date(iso).getTime() - now) / 1000
-  if (Math.abs(value) < 45) return 'just now'
+  if (Math.abs(value) < 45) return m.time_just_now()
   for (const [unit, size] of STEPS) {
     if (Math.abs(value) < size) return relative.format(Math.round(value), unit)
     value /= size

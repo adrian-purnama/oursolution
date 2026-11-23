@@ -7,9 +7,14 @@ import {
   TableHeader,
   TableRow,
 } from '#/components/ui/table'
-import { PAYMENT_STATUS_LABELS, formatDateTime, formatIdr } from '#/lib/billing'
+import {
+  PAYMENT_STATUS_LABELS,
+  formatDateTime,
+  formatMoney,
+} from '#/lib/billing'
 import type { Payment, PaymentStatus } from '#/lib/billing'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const STATUS_CLASSES: Record<PaymentStatus, string> = {
   paid: 'bg-emerald-50 text-emerald-700',
@@ -67,14 +72,18 @@ export function PaymentTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Invoice</TableHead>
-            {showCustomer ? <TableHead>Customer</TableHead> : null}
-            <TableHead>Products</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>{m.payment_col_invoice()}</TableHead>
+            {showCustomer ? (
+              <TableHead>{m.payment_col_customer()}</TableHead>
+            ) : null}
+            <TableHead>{m.payment_col_products()}</TableHead>
+            <TableHead className="text-right">
+              {m.payment_col_total()}
+            </TableHead>
+            <TableHead>{m.payment_col_status()}</TableHead>
             {actions ? (
               <TableHead>
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{m.payment_col_actions()}</span>
               </TableHead>
             ) : null}
           </TableRow>
@@ -104,11 +113,13 @@ export function PaymentTable({
                   {itemsSummary(payment)}
                 </p>
                 {payment.needsReview ? (
-                  <p className="text-xs text-red-600">Needs review</p>
+                  <p className="text-xs text-red-600">
+                    {m.payment_needs_review()}
+                  </p>
                 ) : null}
               </TableCell>
               <TableCell className="text-right align-top tabular-nums">
-                {formatIdr(payment.amountIdr)}
+                {formatMoney(payment.amountIdr, payment.currency)}
               </TableCell>
               <TableCell className="align-top">
                 <PaymentStatusBadge status={payment.status} />

@@ -12,6 +12,7 @@ import { apiFetch } from '#/lib/api'
 import { EMPTY_CONTACT } from '#/lib/contact'
 import type { ContactDetails } from '#/lib/contact'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 type Row = {
   icon: LucideIcon
@@ -26,7 +27,7 @@ function rowsOf(contact: ContactDetails): Row[] {
   if (contact.email) {
     rows.push({
       icon: Mail,
-      label: 'Email',
+      label: m.contact_email(),
       value: contact.email,
       href: `mailto:${contact.email}`,
     })
@@ -34,7 +35,7 @@ function rowsOf(contact: ContactDetails): Row[] {
   if (contact.phone) {
     rows.push({
       icon: Phone,
-      label: 'Phone',
+      label: m.contact_phone(),
       value: contact.phone,
       href: `tel:${contact.phone.replace(/[^\d+]/g, '')}`,
     })
@@ -42,7 +43,7 @@ function rowsOf(contact: ContactDetails): Row[] {
   if (contact.whatsapp) {
     rows.push({
       icon: MessageCircle,
-      label: 'WhatsApp',
+      label: m.contact_whatsapp(),
       value: `+${contact.whatsapp}`,
       href: `https://wa.me/${contact.whatsapp}`,
       external: true,
@@ -51,14 +52,14 @@ function rowsOf(contact: ContactDetails): Row[] {
   if (contact.address) {
     rows.push({
       icon: MapPin,
-      label: 'Address',
+      label: m.contact_address(),
       value: contact.address,
       href: contact.mapUrl || undefined,
       external: true,
     })
   }
   if (contact.hours) {
-    rows.push({ icon: Clock, label: 'Opening hours', value: contact.hours })
+    rows.push({ icon: Clock, label: m.contact_hours(), value: contact.hours })
   }
   return rows
 }
@@ -93,17 +94,15 @@ export default function ContactDetailsView() {
   return (
     <section
       className={`${cardClassName} max-w-2xl p-6`}
-      aria-label="Contact details"
+      aria-label={m.contact_details_label()}
     >
       {!contact && !failed ? (
         <div className={`flex items-center gap-2 ${hintClassName}`}>
           <LoaderCircle className="size-4 animate-spin" aria-hidden />
-          Loading…
+          {m.contact_loading()}
         </div>
       ) : rows.length === 0 ? (
-        <p className={hintClassName}>
-          Contact details are not available right now.
-        </p>
+        <p className={hintClassName}>{m.contact_unavailable()}</p>
       ) : (
         <dl className="space-y-5">
           {rows.map(({ icon: Icon, label, value, href, external }) => (
