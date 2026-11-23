@@ -1,5 +1,6 @@
 import { MousePointer2 } from 'lucide-react'
 import type { HTMLAttributes } from 'react'
+import { gsap } from '#/lib/gsap'
 
 /**
  * The three teammates whose cursors build the landing page: the hero on
@@ -43,6 +44,38 @@ export function offscreen(root: HTMLElement, point: { x: number; y: number }) {
     x: window.innerWidth * point.x - box.left,
     y: window.innerHeight * point.y - box.top,
   }
+}
+
+/**
+ * Shows only the part of `content` that lies under `frame`. Called on every
+ * tick while the frame is dragged out, so the content is drawn into the
+ * frame as it grows rather than moving in from outside it.
+ */
+export function clipToFrame(content: HTMLElement, frame: HTMLElement) {
+  const box = content.getBoundingClientRect()
+  const area = frame.getBoundingClientRect()
+  const inset = [
+    area.top - box.top,
+    box.right - area.right,
+    box.bottom - area.bottom,
+    area.left - box.left,
+  ].map((side) => `${Math.max(0, side)}px`)
+  content.style.clipPath = `inset(${inset.join(' ')})`
+  content.style.opacity = '1'
+}
+
+/**
+ * Lets go of the clip once the frame is done: whatever the frame did not
+ * cover (a tall block below the fold) keeps being drawn in, in the same
+ * direction, then the clip is cleared.
+ */
+export function releaseClip(content: HTMLElement): gsap.core.Tween {
+  return gsap.to(content, {
+    clipPath: 'inset(0px 0px 0px 0px)',
+    duration: 0.5,
+    ease: 'power2.out',
+    clearProps: 'clipPath',
+  })
 }
 
 /** A builder's labelled cursor, moved from its top left corner. */

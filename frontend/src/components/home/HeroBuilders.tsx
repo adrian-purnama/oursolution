@@ -4,9 +4,11 @@ import {
   BuildFrame,
   BuilderCursor,
   MOVE,
+  clipToFrame,
   offscreen,
+  releaseClip,
 } from '#/components/home/builders'
-import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '#/lib/gsap'
+import { MOTION_OK, gsap, useGSAP } from '#/lib/gsap'
 
 /**
  * What each builder lays out, in order. `target` matches a `data-build`
@@ -24,8 +26,8 @@ export const BUILD_SECONDS = 2.8
 /**
  * The hero's entrance: three labelled cursors fly in from different sides
  * of the screen, each drags out a
- * selection frame for a block of the hero, and the block's content appears
- * inside it. Place it as a child of the hero's positioned container; the
+ * selection frame for a block of the hero, and the block's content is drawn
+ * in place under the frame as it grows. Place it as a child of the hero's positioned container; the
  * blocks are the `data-build` elements in there, and their content starts
  * hidden through `data-hero-line` / `data-hero-fade`. With
  * reduced motion nothing here shows and the hero is simply there.
@@ -63,6 +65,10 @@ export default function HeroBuilders() {
             const block = q(`[data-build="${target}"]`).at(0)
             const frame = q(`[data-build-frame="${target}"]`).at(0)
             if (!block || !frame) continue
+            // What is drawn into the frame: a headline line, or the block.
+            const line = block.querySelector('[data-hero-line]')
+            const content = line instanceof HTMLElement ? line : block
+            const draw = () => clipToFrame(content, frame)
             // Measured when each step starts, after fonts and layout settle.
             const across = () => span(root, block)
             const left = () => across().left
@@ -83,7 +89,13 @@ export default function HeroBuilders() {
                 height: 0,
                 autoAlpha: 1,
               })
-              .to(frame, { width, height, ...MOVE })
+              .to(frame, {
+                width,
+                height,
+                ...MOVE,
+                onStart: draw,
+                onUpdate: draw,
+              })
               .to(
                 cursor,
                 {
@@ -93,10 +105,10 @@ export default function HeroBuilders() {
                 },
                 '<',
               )
-            // The content appears and the frame lets go while the cursor
-            // already heads for its next block.
+            // The content is in; the frame lets go while the cursor already
+            // heads for its next block.
             const dragged = tl.labels.next + arrive.duration + MOVE.duration
-            tl.add(reveal(block), dragged - 0.15).to(
+            tl.add(() => void releaseClip(content), dragged).to(
               frame,
               { autoAlpha: 0, duration: 0.45 },
               dragged + 0.2,
@@ -179,13 +191,4 @@ function span(root: HTMLElement, block: HTMLElement) {
     left: text.left - root.getBoundingClientRect().left - TEXT_PAD,
     width: text.width + TEXT_PAD * 2,
   }
-}
-
-/** Shows a block's content: a headline line slides up, anything else fades in. */
-function reveal(block: HTMLElement): gsap.core.Tween {
-  const line = block.querySelector('[data-hero-line]')
-  if (line) {
-    return gsap.to(line, { y: 0, duration: 0.8, ease: 'power4.out' })
-  }
-  return gsap.to(block, { opacity: 1, y: 0, duration: 0.7, ease: EASE_OUT })
 }
