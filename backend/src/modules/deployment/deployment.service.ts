@@ -1633,13 +1633,12 @@ export class DeploymentService {
       await deployment.save();
     }
     if (!deployment.dokploy) {
-      const taken = await DeploymentModel.exists({
-        _id: { $ne: deployment._id },
-        name: resolved.name,
-      });
-      if (taken) {
+      const holder = await this.liveHolderOf(resolved.name, deployment._id);
+      if (holder) {
         throw new Error(
-          `Another customer's deployment is already named "${resolved.name}"`,
+          holder.userId.equals(deployment.userId)
+            ? `This customer's deployment of another product is already named "${resolved.name}"`
+            : `Another customer's deployment is already named "${resolved.name}"`,
         );
       }
       if (environment.composes.some((item) => item.name === resolved.name)) {
@@ -2032,6 +2031,34 @@ export class DeploymentService {
         })),
       );
     }
+  }
+
+  /**
+   * The other deployment that holds `name` with a compose still in Dokploy.
+   * A holder whose compose is gone (e.g. the deployment of a deleted product)
+   * gives the name up, so it no longer blocks a new deployment.
+   */
+  private async liveHolderOf(
+    name: string,
+    exceptId: DeploymentDoc["_id"],
+  ): Promise<DeploymentDoc | null> {
+    const holders = await DeploymentModel.find({
+      _id: { $ne: exceptId },
+      name,
+    }).exec();
+    for (const holder of holders) {
+      if (
+        holder.dokploy &&
+        (await dokployService.composeExists(holder.dokploy.composeId))
+      ) {
+        return holder;
+      }
+      await DeploymentModel.updateOne(
+        { _id: holder._id, name },
+        { $set: { name: null, dokploy: null } },
+      ).exec();
+    }
+    return null;
   }
 
   private async stepUnroute({ deployment }: RunContext): Promise<void> {
