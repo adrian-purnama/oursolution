@@ -49,6 +49,21 @@ export interface PaddleTransaction {
   checkout: { url: string | null } | null;
 }
 
+/** What Paddle says an update would do (the fields we read). */
+export interface PaddleUpdatePreview {
+  update_summary?: {
+    credit?: { amount?: string; currency_code?: string } | null;
+    charge?: { amount?: string; currency_code?: string } | null;
+    result?: { action?: string; amount?: string; currency_code?: string } | null;
+  } | null;
+  immediate_transaction?: {
+    details?: {
+      totals?: { grand_total?: string; total?: string; currency_code?: string };
+    };
+  } | null;
+  next_billed_at?: string | null;
+}
+
 export class PaddleClient {
   private fetchImpl: FetchLike = fetch;
 
@@ -134,6 +149,63 @@ export class PaddleClient {
 
   getPrice(id: string): Promise<PaddlePrice> {
     return this.request("GET", `/prices/${encodeURIComponent(id)}`);
+  }
+
+  /** Stop renewing at the end of the period already paid for. */
+  cancelSubscription(id: string): Promise<{
+    scheduled_change: { action: string; effective_at: string } | null;
+  }> {
+    return this.request(
+      "POST",
+      `/subscriptions/${encodeURIComponent(id)}/cancel`,
+      { effective_from: "next_billing_period" },
+    );
+  }
+
+  /** What changing the subscription to one price would charge or credit now. */
+  previewPriceChange(
+    id: string,
+    items: { price_id: string; quantity: number }[],
+  ): Promise<PaddleUpdatePreview> {
+    return this.request(
+      "PATCH",
+      `/subscriptions/${encodeURIComponent(id)}/preview`,
+      {
+        items,
+        proration_billing_mode: "prorated_immediately",
+        on_payment_failure: "prevent_change",
+      },
+    );
+  }
+
+  /**
+   * Change the subscription's price now, billing the difference for the rest
+   * of the period. Paddle leaves the change out when the payment fails.
+   */
+  changePrice(
+    id: string,
+    items: { price_id: string; quantity: number }[],
+  ): Promise<{ id: string }> {
+    return this.request("PATCH", `/subscriptions/${encodeURIComponent(id)}`, {
+      items,
+      proration_billing_mode: "prorated_immediately",
+      on_payment_failure: "prevent_change",
+    });
+  }
+
+  /** Take back a scheduled cancellation. */
+  resumeSubscription(id: string): Promise<{ status: string }> {
+    return this.request("PATCH", `/subscriptions/${encodeURIComponent(id)}`, {
+      scheduled_change: null,
+    });
+  }
+
+  /** The transaction that, paid in checkout, replaces the card on a subscription. */
+  updatePaymentMethodTransaction(id: string): Promise<{ id: string }> {
+    return this.request(
+      "GET",
+      `/subscriptions/${encodeURIComponent(id)}/update-payment-method-transaction`,
+    );
   }
 
   /** A link to Paddle's page where the customer manages their billing. */

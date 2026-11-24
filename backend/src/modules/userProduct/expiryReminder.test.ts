@@ -122,15 +122,16 @@ describe("expiry reminder sweep", () => {
     assert.equal(sent.length, 1);
   });
 
-  it("skips what Paddle renews and products that are gone", async () => {
+  it("tells what Paddle renews, and skips products that are gone", async () => {
     const renewing = await product("Vaultwarden");
     const gone = await product("Old thing", new Date());
     const end = new Date(NOW.getTime() + 2 * DAY);
     await period(new Types.ObjectId(), renewing, NOW, end);
     await period(new Types.ObjectId(), gone, NOW, end);
     const { sent, deps } = recorder((id) => id === renewing.toString());
-    assert.equal(await remindExpiring(NOW, deps), 0);
-    assert.equal(sent.length, 0);
+    assert.equal(await remindExpiring(NOW, deps), 1);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].productId, renewing.toString());
   });
 
   it("tries again next sweep when sending fails", async () => {

@@ -9,6 +9,8 @@ import type {
   PaymentListOutDto,
   PaymentOutDto,
   PaddleSubscriptionOutDto,
+  UpgradeChoiceOutDto,
+  UpgradePreviewOutDto,
 } from "../../dto/payment.dto";
 import {
   BILLING_REGIONS,
@@ -188,6 +190,96 @@ export class PaymentController {
       } satisfies ApiResponseDto<PaddleSubscriptionOutDto[]>);
     } catch (error) {
       return fail(res, error, "Could not load subscriptions");
+    }
+  };
+
+  cancelRenewal = async (req: Request, res: Response) => {
+    try {
+      await paddleService.cancelRenewal(req.user!.id, String(req.params.id));
+      return res.status(200).json({
+        success: true,
+        message: "Renewal cancelled",
+        data: null,
+      } satisfies ApiResponseDto);
+    } catch (error) {
+      return fail(res, error, "Could not cancel the renewal");
+    }
+  };
+
+  resumeRenewal = async (req: Request, res: Response) => {
+    try {
+      await paddleService.resumeRenewal(req.user!.id, String(req.params.id));
+      return res.status(200).json({
+        success: true,
+        message: "Renewal resumed",
+        data: null,
+      } satisfies ApiResponseDto);
+    } catch (error) {
+      return fail(res, error, "Could not resume the renewal");
+    }
+  };
+
+  upgradeChoices = async (req: Request, res: Response) => {
+    try {
+      return res.status(200).json({
+        success: true,
+        message: "Upgrade choices",
+        data: await paddleService.upgradeChoices(
+          req.user!.id,
+          String(req.params.id),
+        ),
+      } satisfies ApiResponseDto<UpgradeChoiceOutDto[]>);
+    } catch (error) {
+      return fail(res, error, "Could not load the variants");
+    }
+  };
+
+  upgradePreview = async (req: Request, res: Response) => {
+    try {
+      return res.status(200).json({
+        success: true,
+        message: "Upgrade preview",
+        data: await paddleService.previewUpgrade(
+          req.user!.id,
+          String(req.params.id),
+          String(req.body?.variantId ?? ""),
+        ),
+      } satisfies ApiResponseDto<UpgradePreviewOutDto>);
+    } catch (error) {
+      return fail(res, error, "Could not preview the change");
+    }
+  };
+
+  upgrade = async (req: Request, res: Response) => {
+    try {
+      await paddleService.upgrade(
+        req.user!.id,
+        String(req.params.id),
+        String(req.body?.variantId ?? ""),
+      );
+      return res.status(200).json({
+        success: true,
+        message: "Subscription changed",
+        data: null,
+      } satisfies ApiResponseDto);
+    } catch (error) {
+      return fail(res, error, "Could not change the subscription");
+    }
+  };
+
+  cardTransaction = async (req: Request, res: Response) => {
+    try {
+      const transactionId = await paddleService.cardTransactionId(
+        req.user!.id,
+        String(req.params.id),
+      );
+      return res.status(200).json({
+        success: true,
+        message: "Card update",
+        data: { transactionId },
+      } satisfies ApiResponseDto<{ transactionId: string }>);
+    } catch (error) {
+      return fail(res, error, "Could not start the card update");
     }
   };
 

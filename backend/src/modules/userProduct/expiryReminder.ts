@@ -37,6 +37,23 @@ export function reminderText(
   };
 }
 
+/** The notice for a product Paddle renews by itself. Pure; exported for tests. */
+export function autoRenewText(
+  productName: string,
+  endsAt: Date,
+): { title: string; body: string } {
+  const date = endsAt.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  });
+  return {
+    title: `${productName} renews automatically`,
+    body: `Your ${productName} subscription renews on ${date}, charged to the card you paid with. To change your card or stop renewing, do it from Billing before then.`,
+  };
+}
+
 export interface ReminderDeps {
   /** Whether Paddle renews this product for the user by itself. */
   renewsAutomatically(userId: string, productId: string): Promise<boolean>;
@@ -44,14 +61,15 @@ export interface ReminderDeps {
     userId: string,
     productId: string,
     text: { title: string; body: string },
+    automatic?: boolean,
   ): Promise<void>;
 }
 
 const defaultDeps: ReminderDeps = {
   renewsAutomatically: (userId, productId) =>
     mongoBillingProfiles.renewsAutomatically(userId, productId),
-  async notify(userId, productId, { title, body }) {
-    const link = `/products/${productId}`;
+  async notify(userId, productId, { title, body }, automatic = false) {
+    const link = automatic ? "/billing" : `/products/${productId}`;
     await notificationService.send(
       { userId, title, body, link, channels: "both" },
       {
@@ -60,7 +78,7 @@ const defaultDeps: ReminderDeps = {
             title,
             body,
             url: absoluteLink(env.appBaseUrl, link),
-            buttonLabel: "Renew now",
+            buttonLabel: automatic ? "Manage billing" : "Renew now",
           }),
       },
     );
@@ -70,8 +88,8 @@ const defaultDeps: ReminderDeps = {
 /**
  * Tell owners of subscriptions ending within EXPIRY_REMINDER_DAYS, once per
  * period, by email and in the app. Skipped (but marked) when another period
- * follows right after, when Paddle renews it by itself, or when the product
- * is gone. Returns how many reminders were sent.
+ * follows right after or the product is gone. A product Paddle renews gets
+ * a "renews automatically" notice instead of a renew-now one. Returns how many reminders were sent.
  */
 export async function remindExpiring(
   now: Date = new Date(),
@@ -111,14 +129,21 @@ export async function remindExpiring(
         },
       });
       if (continued) continue;
-      if (await deps.renewsAutomatically(userId, productId)) continue;
+      const automatic = await deps.renewsAutomatically(userId, productId);
       const product = await ProductModel.findById(productId)
         .select("name deletedAt")
         .lean()
         .exec();
       if (!product || product.deletedAt) continue;
 
-      await deps.notify(userId, productId, reminderText(product.name, endsAt, now));
+      await deps.notify(
+        userId,
+        productId,
+        automatic
+          ? autoRenewText(product.name, endsAt)
+          : reminderText(product.name, endsAt, now),
+        automatic,
+      );
       sent += 1;
     } catch (error) {
       // Let the next sweep try again.

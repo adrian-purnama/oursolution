@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import PaddlePay from '#/components/forms/billing/PaddlePay'
 import BillingHistory from '#/components/forms/billing/BillingHistory'
 import UnpaidNotice from '#/components/forms/billing/UnpaidNotice'
 import ProductsPlansForm from '#/components/forms/profile/ProductsPlansForm'
@@ -13,15 +14,24 @@ type ProfileTab = 'account' | 'products' | 'billing'
 
 export const Route = createFileRoute('/_authenticated/profile/')({
   head: () => privatePage(m.seo_profile()),
-  validateSearch: (search: Record<string, unknown>): { tab?: ProfileTab } =>
-    search.tab === 'products' || search.tab === 'billing'
-      ? { tab: search.tab }
-      : {},
+  validateSearch: (search: Record<string, unknown>): {
+    tab?: ProfileTab
+    ptxn?: string
+  } => {
+    const ptxn =
+      typeof search.ptxn === 'string' && search.ptxn.startsWith('txn_')
+        ? search.ptxn
+        : undefined
+    if (search.tab === 'products' || search.tab === 'billing') {
+      return { tab: search.tab, ...(ptxn ? { ptxn } : {}) }
+    }
+    return {}
+  },
   component: ProfilePage,
 })
 
 function ProfilePage() {
-  const { tab = 'account' } = Route.useSearch()
+  const { tab = 'account', ptxn } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
   return (
@@ -51,7 +61,20 @@ function ProfilePage() {
         <TabsContent value="products">
           <ProductsPlansForm />
         </TabsContent>
-        <TabsContent value="billing">
+        <TabsContent value="billing" className="space-y-4">
+          {ptxn ? (
+            <section className="rounded-xl border border-[var(--line)] bg-white">
+              <h2 className="border-b border-[var(--line)] px-4 py-3 text-sm font-semibold">
+                {m.billing_update_card_title()}
+              </h2>
+              <PaddlePay
+                transactionId={ptxn}
+                onChange={() =>
+                  void navigate({ search: { tab: 'billing' }, replace: true })
+                }
+              />
+            </section>
+          ) : null}
           <BillingHistory />
         </TabsContent>
       </Tabs>

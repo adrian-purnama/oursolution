@@ -549,3 +549,76 @@ export async function openBillingPortal(): Promise<string | null> {
   if (!res.success || !res.data) throw new Error(res.message)
   return res.data.url
 }
+
+/** Stop a subscription renewing after the period already paid for. */
+export async function cancelRenewal(id: string): Promise<void> {
+  const res = await apiFetch(`/me/subscriptions/${id}/cancel`, {
+    method: 'POST',
+  })
+  if (!res.success) throw new Error(res.message)
+}
+
+/** Take back a cancellation that has not taken effect yet. */
+export async function resumeRenewal(id: string): Promise<void> {
+  const res = await apiFetch(`/me/subscriptions/${id}/resume`, {
+    method: 'POST',
+  })
+  if (!res.success) throw new Error(res.message)
+}
+
+/** The Paddle transaction to open in checkout to change the card. */
+export async function cardTransactionId(id: string): Promise<string> {
+  const res = await apiFetch<{ transactionId: string }>(
+    `/me/subscriptions/${id}/card`,
+    { method: 'POST' },
+  )
+  if (!res.success || !res.data) throw new Error(res.message)
+  return res.data.transactionId
+}
+
+/** A variant a renewing subscription can move to. */
+export type UpgradeChoice = {
+  variantId: string
+  name: string
+  priceCents: number
+}
+
+/** What moving to a variant costs now. */
+export type UpgradePreview = {
+  variantId: string
+  name: string
+  currency: string
+  amountCents: number
+  credit: boolean
+  nextBilledAt: string | null
+  renewalCents: number
+}
+
+export async function upgradeChoices(id: string): Promise<UpgradeChoice[]> {
+  const res = await apiFetch<UpgradeChoice[]>(`/me/subscriptions/${id}/upgrade`)
+  if (!res.success || !res.data) throw new Error(res.message)
+  return res.data
+}
+
+export async function previewUpgrade(
+  id: string,
+  variantId: string,
+): Promise<UpgradePreview> {
+  const res = await apiFetch<UpgradePreview>(
+    `/me/subscriptions/${id}/upgrade/preview`,
+    { method: 'POST', body: JSON.stringify({ variantId }) },
+  )
+  if (!res.success || !res.data) throw new Error(res.message)
+  return res.data
+}
+
+export async function applyUpgrade(
+  id: string,
+  variantId: string,
+): Promise<void> {
+  const res = await apiFetch(`/me/subscriptions/${id}/upgrade`, {
+    method: 'POST',
+    body: JSON.stringify({ variantId }),
+  })
+  if (!res.success) throw new Error(res.message)
+}

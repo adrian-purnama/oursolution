@@ -1,5 +1,9 @@
 import { Types } from "mongoose";
-import type { PaddleSubscriptionOutDto } from "../../dto/payment.dto";
+import type {
+  PaddleSubscriptionOutDto,
+  UpgradeChoiceOutDto,
+  UpgradePreviewOutDto,
+} from "../../dto/payment.dto";
 import { logger } from "../../logger/logger";
 import type {
   PaddleSubscriptionInterface,
@@ -8,9 +12,17 @@ import type {
 } from "../../models/paddleSubscription/paddleSubscription.interface";
 import { PADDLE_SUBSCRIPTION_STATUSES } from "../../models/paddleSubscription/paddleSubscription.interface";
 import { PaddleSubscriptionModel } from "../../models/paddleSubscription/paddleSubscription.model";
+import { ProductModel } from "../../models/product/product.model";
+import { lineName } from "../product/product.variants";
+import { itemsAfterSwitch, upgradeOptions } from "./paddle.upgrade";
+import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
+import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
 import type { PaddleClient, PaddleTransaction } from "./paddle.client";
 import { paddleClient } from "./paddle.client";
+import { env } from "../../environment/env";
+import { mailer } from "../mail/mail.service";
+import { absoluteLink, notificationService } from "../notification/notification.service";
 import { paddleStatus } from "./paddle.provider";
 import {
   mongoPaymentStore,
@@ -89,6 +101,26 @@ export function subscriptionItemsOf(
   );
 }
 
+/** Tell a user their renewal could not be charged. */
+async function notifyPaymentFailed(userId: string, names: string[]): Promise<void> {
+  const what = names.length > 0 ? names.join(", ") : "your subscription";
+  const title = "We could not charge your card";
+  const body = `The renewal of ${what} was declined. Update your card before it expires or the service will be turned off. We will keep retrying for a few days.`;
+  const link = "/billing";
+  await notificationService.send(
+    { userId, title, body, link, channels: "both" },
+    {
+      customEmail: (to) =>
+        mailer.sendNotification(to, {
+          title,
+          body,
+          url: absoluteLink(env.appBaseUrl, link),
+          buttonLabel: "Update card",
+        }),
+    },
+  );
+}
+
 /**
  * The Paddle side that is not a single payment: webhooks (payments
  * confirmed, renewals charged, subscriptions changed, refunds), the
@@ -138,6 +170,19 @@ export class PaddleService {
       return;
     }
     if (txn.subscription_id && txn.status === "completed") {
+      // A change or one-off charge on a subscription is not a renewal: it
+      // grants no new period (a variant change is applied when it is made).
+      if (
+        txn.origin === "subscription_update" ||
+        txn.origin === "subscription_charge"
+      ) {
+        logger.info(
+          `Paddle transaction ${txn.id} (${txn.origin}) grants no period`,
+          logSource,
+          "onTransaction",
+        );
+        return;
+      }
       await this.onRenewal(txn, payment);
       return;
     }
@@ -290,11 +335,31 @@ export class PaddleService {
       cancelsAt,
     };
 
-    const updated = await PaddleSubscriptionModel.updateOne(
+    const before = await PaddleSubscriptionModel.findOneAndUpdate(
       { subscriptionId: data.id },
       { $set: fields },
-    ).exec();
-    if (updated.matchedCount > 0) return;
+      { returnDocument: "before" },
+    )
+      .lean()
+      .exec();
+    if (before) {
+      // Tell the user once, when the subscription first falls behind.
+      if (status === "past_due" && before.status !== "past_due") {
+        try {
+          await notifyPaymentFailed(
+            before.userId.toString(),
+            before.items.map((item) => item.name),
+          );
+        } catch (error) {
+          logger.error(
+            `Payment-failed notice for ${data.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+            logSource,
+            "onSubscription",
+          );
+        }
+      }
+      return;
+    }
 
     // Before its first payment was confirmed: make it from that checkout.
     const paymentId = str(data.custom_data?.paymentId);
@@ -339,6 +404,35 @@ export class PaddleService {
       },
       "notification",
     );
+    // A chargeback takes the access back; a refund is looked at by hand.
+    if (action === "chargeback") await this.revokeAccessOf(payment.id);
+  }
+
+  /**
+   * Take back what a payment granted: periods that have not started are
+   * removed, the running one ends now, one-time purchases are removed.
+   * Periods already over stay as history. Safe to run twice.
+   */
+  async revokeAccessOf(paymentId: string, now: Date = new Date()): Promise<void> {
+    const id = new Types.ObjectId(paymentId);
+    const removed = await UserProductPeriodModel.deleteMany({
+      paymentId: id,
+      startsAt: { $gte: now },
+    }).exec();
+    const ended = await UserProductPeriodModel.updateMany(
+      {
+        paymentId: id,
+        startsAt: { $lt: now },
+        $or: [{ endsAt: null }, { endsAt: { $gt: now } }],
+      },
+      { $set: { endsAt: now } },
+    ).exec();
+    const purchases = await PurchaseModel.deleteMany({ paymentId: id }).exec();
+    logger.warn(
+      `Chargeback on payment ${paymentId}: removed ${removed.deletedCount} periods, ended ${ended.modifiedCount}, removed ${purchases.deletedCount} purchases`,
+      logSource,
+      "revokeAccessOf",
+    );
   }
 
   /** The user's subscriptions Paddle renews or renewed, newest first. */
@@ -357,6 +451,182 @@ export class PaddleService {
       nextBilledAt: doc.nextBilledAt?.toISOString() ?? null,
       cancelsAt: doc.cancelsAt?.toISOString() ?? null,
     }));
+  }
+
+  /** The user's own subscription that is still renewing; throws otherwise. */
+  private async ownRenewing(
+    userId: string,
+    subscriptionId: string,
+  ): Promise<PaddleSubscriptionInterface> {
+    if (!this.client) throw new Error("Paddle is not set up");
+    const doc = await PaddleSubscriptionModel.findOne({ userId, subscriptionId })
+      .lean()
+      .exec();
+    if (!doc) throw new Error("Subscription not found");
+    if (!(RENEWING_STATUSES as readonly string[]).includes(doc.status)) {
+      throw new Error("This subscription is no longer renewing");
+    }
+    return doc;
+  }
+
+  /**
+   * Stop renewing after the period the user has paid for; what they have
+   * keeps running until then.
+   */
+  async cancelRenewal(userId: string, subscriptionId: string): Promise<void> {
+    const doc = await this.ownRenewing(userId, subscriptionId);
+    if (doc.cancelsAt) return;
+    const result = await this.client!.cancelSubscription(subscriptionId);
+    await PaddleSubscriptionModel.updateOne(
+      { subscriptionId },
+      {
+        $set: {
+          cancelsAt: dateOrNull(result.scheduled_change?.effective_at) ?? doc.nextBilledAt,
+        },
+      },
+    ).exec();
+  }
+
+  /** Take back a cancellation that has not taken effect yet. */
+  async resumeRenewal(userId: string, subscriptionId: string): Promise<void> {
+    const doc = await this.ownRenewing(userId, subscriptionId);
+    if (!doc.cancelsAt) return;
+    await this.client!.resumeSubscription(subscriptionId);
+    await PaddleSubscriptionModel.updateOne(
+      { subscriptionId },
+      { $set: { cancelsAt: null } },
+    ).exec();
+  }
+
+  /** The one product line a subscription can change variants on, with its product. */
+  private async upgradeContext(userId: string, subscriptionId: string) {
+    const doc = await this.ownRenewing(userId, subscriptionId);
+    if (doc.status === "past_due") {
+      throw new Error("Update your card first: the last renewal was declined");
+    }
+    if (doc.cancelsAt) {
+      throw new Error("Keep renewing first: this subscription is set to end");
+    }
+    if (doc.items.length !== 1) {
+      throw new Error(
+        "Subscriptions with several products cannot be changed here",
+      );
+    }
+    const line = doc.items[0];
+    const product = await ProductModel.findById(line.productId).lean().exec();
+    if (!product || product.deletedAt) {
+      throw new Error("This product is no longer available");
+    }
+    return { doc, line, product };
+  }
+
+  /** The variants the user can move this subscription to. */
+  async upgradeChoices(
+    userId: string,
+    subscriptionId: string,
+  ): Promise<UpgradeChoiceOutDto[]> {
+    const { line, product } = await this.upgradeContext(userId, subscriptionId);
+    return upgradeOptions(product, line).map((variant) => ({
+      variantId: variant.id,
+      name: variant.name,
+      priceCents: variant.priceUsdCents ?? 0,
+    }));
+  }
+
+  private async targetOf(
+    userId: string,
+    subscriptionId: string,
+    variantId: string,
+  ) {
+    const context = await this.upgradeContext(userId, subscriptionId);
+    const target = upgradeOptions(context.product, context.line).find(
+      (variant) => variant.id === variantId,
+    );
+    if (!target || !target.paddlePriceId) {
+      throw new Error("That variant is not available");
+    }
+    const items = itemsAfterSwitch(
+      context.doc.items.map((item) => item.priceId),
+      context.line.priceId,
+      target.paddlePriceId,
+    );
+    return { ...context, target, items };
+  }
+
+  /** What moving to this variant would cost now, before the user agrees. */
+  async previewUpgrade(
+    userId: string,
+    subscriptionId: string,
+    variantId: string,
+  ): Promise<UpgradePreviewOutDto> {
+    const { items, target } = await this.targetOf(
+      userId,
+      subscriptionId,
+      variantId,
+    );
+    const preview = await this.client!.previewPriceChange(subscriptionId, items);
+    const result = preview.update_summary?.result;
+    const totals = preview.immediate_transaction?.details?.totals;
+    const amount = Number(
+      result?.amount ?? totals?.grand_total ?? totals?.total ?? 0,
+    );
+    const currency = result?.currency_code ?? totals?.currency_code ?? "USD";
+    return {
+      variantId: target.id,
+      name: target.name,
+      currency,
+      amountCents: Number.isFinite(amount) ? Math.abs(amount) : 0,
+      // "credit": the user is owed money; otherwise they pay now.
+      credit: result?.action === "credit",
+      nextBilledAt: dateOrNull(preview.next_billed_at)?.toISOString() ?? null,
+      renewalCents: target.priceUsdCents ?? 0,
+    };
+  }
+
+  /**
+   * Move the subscription to another variant now. Paddle charges the
+   * difference for the rest of the period and keeps the billing date; if the
+   * payment fails, nothing changes. Then the running and scheduled periods
+   * of the product are put on the new variant.
+   */
+  async upgrade(
+    userId: string,
+    subscriptionId: string,
+    variantId: string,
+  ): Promise<void> {
+    const { doc, line, product, target, items } = await this.targetOf(
+      userId,
+      subscriptionId,
+      variantId,
+    );
+    await this.client!.changePrice(subscriptionId, items);
+
+    await PaddleSubscriptionModel.updateOne(
+      { subscriptionId, "items.priceId": line.priceId },
+      {
+        $set: {
+          "items.$.priceId": target.paddlePriceId,
+          "items.$.variantId": target.id,
+          "items.$.name": lineName(product, target),
+        },
+      },
+    ).exec();
+    const now = new Date();
+    await UserProductPeriodModel.updateMany(
+      {
+        userId: doc.userId,
+        productId: line.productId,
+        $or: [{ endsAt: null }, { endsAt: { $gt: now } }],
+      },
+      { $set: { variantId: target.id, applyVariant: line.applyVariant } },
+    ).exec();
+  }
+
+  /** The Paddle transaction to open in checkout to change the card. */
+  async cardTransactionId(userId: string, subscriptionId: string): Promise<string> {
+    await this.ownRenewing(userId, subscriptionId);
+    const txn = await this.client!.updatePaymentMethodTransaction(subscriptionId);
+    return txn.id;
   }
 
   /**

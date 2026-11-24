@@ -233,3 +233,24 @@ export interface PaymentConfigOutDto {
   /** Paddle.js: public client token and environment, or null. */
   paddle: { clientToken: string; environment: "sandbox" | "production" } | null;
 }
+
+/** A variant a renewing subscription can move to. */
+export interface UpgradeChoiceOutDto {
+  variantId: string;
+  name: string;
+  /** What it renews at, in US cents. */
+  priceCents: number;
+}
+
+/** What moving to a variant costs now. */
+export interface UpgradePreviewOutDto {
+  variantId: string;
+  name: string;
+  currency: string;
+  /** Charged now, or credited when `credit`, in the lowest unit. */
+  amountCents: number;
+  credit: boolean;
+  nextBilledAt: string | null;
+  /** What each renewal costs from now on, in US cents (before tax). */
+  renewalCents: number;
+}

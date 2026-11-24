@@ -22,6 +22,15 @@ router.get("/payments/:id", paymentController.getOwn);
 router.post("/payments/:id/cancel", paymentController.cancelOwn);
 router.get("/payments/:id/invoice.pdf", paymentController.invoiceOwn);
 router.get("/subscriptions", paymentController.listOwnSubscriptions);
+router.post("/subscriptions/:id/cancel", paymentController.cancelRenewal);
+router.post("/subscriptions/:id/resume", paymentController.resumeRenewal);
+router.post("/subscriptions/:id/card", paymentController.cardTransaction);
+router.get("/subscriptions/:id/upgrade", paymentController.upgradeChoices);
+router.post(
+  "/subscriptions/:id/upgrade/preview",
+  paymentController.upgradePreview,
+);
+router.post("/subscriptions/:id/upgrade", paymentController.upgrade);
 router.post("/billing-portal", paymentController.billingPortal);
 
 export default router;
