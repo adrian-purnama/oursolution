@@ -19,7 +19,7 @@ import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
 import type { PaddleClient, PaddleTransaction } from "./paddle.client";
-import { paddleClient } from "./paddle.client";
+import { PaddleApiError, paddleClient } from "./paddle.client";
 import { env } from "../../environment/env";
 import { mailer } from "../mail/mail.service";
 import { absoluteLink, notificationService } from "../notification/notification.service";
@@ -57,6 +57,19 @@ type TransactionItem = {
   price: { id: string; unit_price?: { amount: string } } | null;
   quantity: number;
 };
+
+/** A refused card or change, said so a customer can act on it. */
+function declinedAsMessage(error: unknown): unknown {
+  if (
+    error instanceof PaddleApiError &&
+    /declin|authenticat|payment/i.test(`${error.code ?? ""} ${error.message}`)
+  ) {
+    return new Error(
+      "Your card was declined or needs extra verification, so the plan was not changed. Change your card and try again.",
+    );
+  }
+  return error;
+}
 
 /** Thrown when an event cannot be applied yet; Paddle retries it later. */
 export class PaddleEventError extends Error {}
@@ -184,6 +197,16 @@ export class PaddleService {
         return;
       }
       await this.onRenewal(txn, payment);
+      return;
+    }
+    if (txn.subscription_id) {
+      // A charge on a subscription that did not go through (a declined
+      // upgrade, say): nothing was bought, so there is nothing to record.
+      logger.info(
+        `Paddle transaction ${txn.id} (${txn.status}, ${txn.origin}) of ${txn.subscription_id} needs no invoice`,
+        logSource,
+        "onTransaction",
+      );
       return;
     }
     logger.warn(
@@ -564,7 +587,12 @@ export class PaddleService {
       subscriptionId,
       variantId,
     );
-    const preview = await this.client!.previewPriceChange(subscriptionId, items);
+    let preview;
+    try {
+      preview = await this.client!.previewPriceChange(subscriptionId, items);
+    } catch (error) {
+      throw declinedAsMessage(error);
+    }
     const result = preview.update_summary?.result;
     const totals = preview.immediate_transaction?.details?.totals;
     const amount = Number(
@@ -599,7 +627,11 @@ export class PaddleService {
       subscriptionId,
       variantId,
     );
-    await this.client!.changePrice(subscriptionId, items);
+    try {
+      await this.client!.changePrice(subscriptionId, items);
+    } catch (error) {
+      throw declinedAsMessage(error);
+    }
 
     await PaddleSubscriptionModel.updateOne(
       { subscriptionId, "items.priceId": line.priceId },
