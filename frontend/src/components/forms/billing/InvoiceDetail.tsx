@@ -344,7 +344,6 @@ export default function InvoiceDetail({
             {payment.paddleTransactionId ? (
               <PaddlePay
                 transactionId={payment.paddleTransactionId}
-                amount={formatMoney(payment.amountIdr, payment.currency)}
                 onChange={() => void load(true)}
               />
             ) : payment.snapToken || payment.redirectUrl ? (

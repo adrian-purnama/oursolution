@@ -441,7 +441,16 @@ type PaddleJs = {
   Checkout: {
     open: (options: {
       transactionId: string
-      settings?: { displayMode?: 'overlay'; theme?: 'light'; locale?: string }
+      settings?: {
+        displayMode?: 'overlay' | 'inline'
+        variant?: 'one-page' | 'multi-page'
+        theme?: 'light'
+        locale?: string
+        /** Inline: the class of the element Paddle fills. */
+        frameTarget?: string
+        frameInitialHeight?: number
+        frameStyle?: string
+      }
     }) => void
     close: () => void
   }
@@ -489,22 +498,47 @@ export function loadPaddle(): Promise<PaddleJs | null> {
 }
 
 /**
- * Open Paddle's checkout over the page for a transaction. `onEvent` hears
- * what happens ("checkout.completed", "checkout.closed", ...) until the
- * returned function is called. False when Paddle.js is not available.
+ * Show Paddle's checkout for a transaction inside the page, in the element
+ * with class `frameTarget`, on one page. `onEvent` hears what happens
+ * ("checkout.loaded", "checkout.completed", ...) until `stop` is called,
+ * which also removes the checkout. `opened` is false when Paddle.js is not
+ * available, or `signal` was aborted while it loaded (nothing is shown).
  */
 export async function openPaddleCheckout(
   transactionId: string,
+  frameTarget: string,
   onEvent: (event: PaddleEvent) => void,
+  signal?: AbortSignal,
 ): Promise<{ opened: boolean; stop: () => void }> {
   const paddle = await loadPaddle()
-  if (!paddle) return { opened: false, stop: () => undefined }
+  if (!paddle || signal?.aborted) {
+    return { opened: false, stop: () => undefined }
+  }
   paddleListeners.add(onEvent)
   paddle.Checkout.open({
     transactionId,
-    settings: { displayMode: 'overlay', theme: 'light', locale: getLocale() },
+    settings: {
+      displayMode: 'inline',
+      variant: 'one-page',
+      theme: 'light',
+      locale: getLocale(),
+      frameTarget,
+      frameInitialHeight: 450,
+      frameStyle:
+        'width: 100%; min-width: 312px; background-color: transparent; border: none;',
+    },
   })
-  return { opened: true, stop: () => paddleListeners.delete(onEvent) }
+  return {
+    opened: true,
+    stop: () => {
+      paddleListeners.delete(onEvent)
+      try {
+        paddle.Checkout.close()
+      } catch {
+        // Already gone with the page.
+      }
+    },
+  }
 }
 
 /** A one-time link to Paddle's page for cancelling renewal or the card. */

@@ -4,6 +4,7 @@ import {
   cloudflareTunnelId,
   isDevelopmentBuild,
   midtransNotificationUrl,
+  paddleSandbox,
 } from "./env";
 
 describe("midtransNotificationUrl", () => {
@@ -75,5 +76,42 @@ describe("cloudflareTunnelId", () => {
   it("is null when unset or unreadable", () => {
     assert.equal(cloudflareTunnelId(undefined), null);
     assert.equal(cloudflareTunnelId("not-a-tunnel"), null);
+  });
+});
+
+describe("paddleSandbox", () => {
+  const SANDBOX = "https://sandbox-api.paddle.com";
+  const LIVE = "https://api.paddle.com";
+
+  it("reads the environment from PADDLE_URL", () => {
+    assert.equal(paddleSandbox(SANDBOX, "pdl_sdbx_apikey_1", "test_1"), true);
+    assert.equal(paddleSandbox(LIVE, "pdl_live_apikey_1", "live_1"), false);
+  });
+
+  it("does not matter while Paddle is off", () => {
+    assert.equal(paddleSandbox(undefined, undefined, undefined), true);
+    assert.equal(paddleSandbox(LIVE, "", "live_1"), true);
+  });
+
+  it("refuses to guess when PADDLE_URL is missing", () => {
+    assert.throws(
+      () => paddleSandbox(undefined, "pdl_sdbx_apikey_1", "test_1"),
+      /PADDLE_URL is required/,
+    );
+  });
+
+  it("refuses keys from the other environment", () => {
+    assert.throws(
+      () => paddleSandbox(LIVE, "pdl_sdbx_apikey_1", undefined),
+      /sandbox key/,
+    );
+    assert.throws(
+      () => paddleSandbox(SANDBOX, "pdl_live_apikey_1", undefined),
+      /live key/,
+    );
+    assert.throws(
+      () => paddleSandbox(SANDBOX, "pdl_sdbx_apikey_1", "live_1"),
+      /live token/,
+    );
   });
 });

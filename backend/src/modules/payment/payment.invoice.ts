@@ -84,7 +84,7 @@ export async function notifyInvoiceIssued(paymentId: string): Promise<void> {
   });
   await notificationService.send(
     {
-      userId: payment.userId,
+      userId: payment.userId.toString(),
       title: `Invoice ${payment.invoiceNumber} is ready`,
       body: `${total} is due by ${dueAt}.`,
       link: `/billing/${payment.id}`,
@@ -116,7 +116,7 @@ export async function notifyPaymentReceived(paymentId: string): Promise<void> {
   const total = formatMoney(payment.amountIdr, payment.currency ?? "IDR");
   await notificationService.send(
     {
-      userId: payment.userId,
+      userId: payment.userId.toString(),
       title: "Payment received",
       body: `Invoice ${payment.invoiceNumber} (${total}) is paid. Anything you bought is now active.`,
       link: `/billing/${payment.id}`,

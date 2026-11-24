@@ -1,58 +1,60 @@
-import { useEffect, useRef, useState } from 'react'
-import { CircleCheck, LoaderCircle, Lock } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { useEffect, useId, useRef, useState } from 'react'
+import { CircleCheck, LoaderCircle } from 'lucide-react'
 import { openPaddleCheckout } from '#/lib/billing'
 import { m } from '#/paraglide/messages'
 
-type Phase = 'idle' | 'opening' | 'open' | 'completed' | 'unavailable'
+type Phase = 'loading' | 'shown' | 'completed' | 'unavailable'
 
 /**
- * Paddle's checkout for an invoice billed outside Indonesia. It opens over
- * the page by itself the first time, and again from the button.
+ * Paddle's checkout for an invoice billed outside Indonesia, inside the
+ * page like Midtrans' form: details and card on one page.
  */
 export default function PaddlePay({
   transactionId,
-  amount,
   onChange,
 }: {
   transactionId: string
-  /** Formatted, e.g. "$9.00". */
-  amount: string
   /** Paddle says something happened: look the payment up again. */
   onChange: () => void
 }) {
-  const [phase, setPhase] = useState<Phase>('idle')
-  const stopRef = useRef<() => void>(() => undefined)
-  const openedFor = useRef<string | null>(null)
+  // Paddle finds the element by class name.
+  const frameClass = `paddle-frame-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
+  const [phase, setPhase] = useState<Phase>('loading')
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
-  async function open() {
-    stopRef.current()
-    setPhase('opening')
-    const { opened, stop } = await openPaddleCheckout(
+  useEffect(() => {
+    const controller = new AbortController()
+    let stop: () => void = () => undefined
+    setPhase('loading')
+    void openPaddleCheckout(
       transactionId,
+      frameClass,
       (event) => {
-        if (event.name === 'checkout.completed') {
+        if (event.name === 'checkout.loaded') {
+          setPhase('shown')
+        } else if (event.name === 'checkout.completed') {
           setPhase('completed')
           onChangeRef.current()
-        } else if (event.name === 'checkout.closed') {
-          setPhase((current) => (current === 'completed' ? current : 'idle'))
+        } else if (event.name === 'checkout.error') {
           onChangeRef.current()
         }
       },
-    )
-    stopRef.current = stop
-    setPhase(opened ? 'open' : 'unavailable')
-  }
-
-  useEffect(() => {
-    if (openedFor.current !== transactionId) {
-      openedFor.current = transactionId
-      void open()
+      controller.signal,
+    ).then((result) => {
+      // Unmounted just after it opened: take it away again.
+      if (controller.signal.aborted) {
+        result.stop()
+        return
+      }
+      stop = result.stop
+      if (!result.opened) setPhase('unavailable')
+    })
+    return () => {
+      controller.abort()
+      stop()
     }
-    return () => stopRef.current()
-  }, [transactionId])
+  }, [transactionId, frameClass])
 
   if (phase === 'completed') {
     return (
@@ -64,26 +66,26 @@ export default function PaddlePay({
   }
 
   return (
-    <div className="space-y-3 p-5">
-      <Button
-        type="button"
-        size="lg"
-        className="w-full"
-        disabled={phase === 'opening'}
-        onClick={() => void open()}
-      >
-        {phase === 'opening' ? (
+    <div>
+      {phase === 'loading' ? (
+        <div className="flex h-40 items-center justify-center gap-2 text-sm text-[var(--muted)]">
           <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        ) : (
-          <Lock className="size-4" aria-hidden />
-        )}
-        {m.invoice_paddle_open({ amount })}
-      </Button>
-      <p className="text-xs text-[var(--muted)]">
-        {phase === 'unavailable'
-          ? m.invoice_paddle_unavailable()
-          : m.invoice_paddle_hint()}
-      </p>
+          {m.snap_loading()}
+        </div>
+      ) : null}
+      {phase === 'unavailable' ? (
+        <p className="p-5 text-sm text-[var(--muted)]">
+          {m.invoice_paddle_unavailable()}
+        </p>
+      ) : null}
+      <div
+        className={phase === 'unavailable' ? 'hidden' : `${frameClass} px-2`}
+      />
+      {phase === 'shown' ? (
+        <p className="px-5 pb-4 text-xs text-[var(--muted)]">
+          {m.invoice_paddle_hint()}
+        </p>
+      ) : null}
     </div>
   )
 }
