@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type { CheckoutQuoteOutDto } from "../../dto/payment.dto";
 import { parseParam } from "../../validation/parseParam";
 import {
@@ -7,22 +6,7 @@ import {
   parseBasketLinePatchInDto,
 } from "../../validation/payment";
 import { basketService } from "./basket.service";
-
-function ok(res: Response, message: string, data: CheckoutQuoteOutDto) {
-  return res.status(200).json({
-    success: true,
-    message,
-    data,
-  } satisfies ApiResponseDto<CheckoutQuoteOutDto>);
-}
-
-function fail(res: Response, error: unknown, fallback: string) {
-  return res.status(400).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
+import { fail, ok } from "../../utils/respond";
 
 function productIdParam(req: Request): string {
   return parseParam(req.params.productId, {
@@ -35,7 +19,11 @@ function productIdParam(req: Request): string {
 export class BasketController {
   get = async (req: Request, res: Response) => {
     try {
-      return ok(res, "Basket retrieved", await basketService.get(req.user!.id));
+      return ok<CheckoutQuoteOutDto>(
+        res,
+        "Basket retrieved",
+        await basketService.get(req.user!.id),
+      );
     } catch (error) {
       return fail(res, error, "Failed to load the basket");
     }
@@ -83,7 +71,11 @@ export class BasketController {
 
   clear = async (req: Request, res: Response) => {
     try {
-      return ok(res, "Basket emptied", await basketService.clear(req.user!.id));
+      return ok<CheckoutQuoteOutDto>(
+        res,
+        "Basket emptied",
+        await basketService.clear(req.user!.id),
+      );
     } catch (error) {
       return fail(res, error, "Could not empty the basket");
     }

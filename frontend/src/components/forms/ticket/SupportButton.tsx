@@ -3,6 +3,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { LifeBuoy } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
+import { m } from '#/paraglide/messages'
 
 /**
  * How many of the signed-in customer's tickets have an admin reply or
@@ -68,12 +69,12 @@ export default function SupportButton() {
         className="no-underline"
         aria-label={
           unread > 0
-            ? `Support tickets, ${unread} with a new reply`
-            : 'Support tickets'
+            ? m.support_aria_unread({ count: unread })
+            : m.support_aria()
         }
       >
         <LifeBuoy aria-hidden />
-        Tickets
+        {m.support_tickets()}
         {unread > 0 ? <UnreadDot /> : null}
       </Link>
     </Button>

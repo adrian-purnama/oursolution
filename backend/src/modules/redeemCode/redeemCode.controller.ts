@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import {
   REDEEM_CODE_GROUPS,
   type RedeemCodeGroup,
@@ -13,15 +12,8 @@ import {
   parseCreateRedeemCodesDto,
   parseRedeemCode,
 } from "../../validation/redeemCode";
-import { RedeemError, redeemCodeService } from "./redeemCode.service";
-
-function fail(res: Response, error: unknown, fallback: string) {
-  return res.status(error instanceof RedeemError ? 409 : 400).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
+import { redeemCodeService } from "./redeemCode.service";
+import { fail, ok } from "../../utils/respond";
 
 /** Admin: make, list and delete redeem codes. Users: redeem one. */
 export class RedeemCodeController {
@@ -35,11 +27,7 @@ export class RedeemCodeController {
         ? (raw as RedeemCodeGroup)
         : "all";
       const data = await redeemCodeService.list(group, page, pageSize);
-      return res.status(200).json({
-        success: true,
-        message: "Redeem codes retrieved",
-        data,
-      } satisfies ApiResponseDto<RedeemCodeListOutDto>);
+      return ok<RedeemCodeListOutDto>(res, "Redeem codes retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load redeem codes");
     }
@@ -51,12 +39,12 @@ export class RedeemCodeController {
         parseCreateRedeemCodesDto(req.body),
         req.user!.id,
       );
-      return res.status(201).json({
-        success: true,
-        message:
-          data.length === 1 ? "Code created" : `${data.length} codes created`,
+      return ok<RedeemCodeOutDto[]>(
+        res,
+        data.length === 1 ? "Code created" : `${data.length} codes created`,
         data,
-      } satisfies ApiResponseDto<RedeemCodeOutDto[]>);
+        201,
+      );
     } catch (error) {
       return fail(res, error, "Failed to create codes");
     }
@@ -65,11 +53,7 @@ export class RedeemCodeController {
   remove = async (req: Request, res: Response) => {
     try {
       await redeemCodeService.remove(parseRouteId(req.params.id));
-      return res.status(200).json({
-        success: true,
-        message: "Code deleted",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "Code deleted", null);
     } catch (error) {
       return fail(res, error, "Failed to delete the code");
     }
@@ -81,11 +65,7 @@ export class RedeemCodeController {
         req.user!.id,
         parseRedeemCode(req.body),
       );
-      return res.status(200).json({
-        success: true,
-        message: `${data.product.name} redeemed`,
-        data,
-      } satisfies ApiResponseDto<RedeemResultOutDto>);
+      return ok<RedeemResultOutDto>(res, `${data.product.name} redeemed`, data);
     } catch (error) {
       return fail(res, error, "Failed to redeem the code");
     }

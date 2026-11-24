@@ -2,9 +2,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import SupportForm from '#/components/forms/ticket/SupportForm'
 import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authenticated/support/')({
-  head: () => privatePage('Support'),
+  head: () => privatePage(m.seo_support()),
   component: SupportPage,
 })
 

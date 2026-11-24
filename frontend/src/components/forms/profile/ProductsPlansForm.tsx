@@ -7,6 +7,7 @@ import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
 import type { Purchase, UserPlan, UserProductRow } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** The user's subscriptions on a timeline, and the one-time products they own. */
 export default function ProductsPlansForm() {
@@ -68,7 +69,7 @@ export default function ProductsPlansForm() {
     return (
       <div className={`flex items-center gap-2 ${hintClassName}`}>
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading your products…
+        {m.profile_products_loading()}
       </div>
     )
   }
@@ -76,14 +77,14 @@ export default function ProductsPlansForm() {
   if (failed || !overview) {
     return (
       <div className="flex items-center gap-3">
-        <p className={hintClassName}>Your products could not be loaded.</p>
+        <p className={hintClassName}>{m.profile_products_failed()}</p>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => void load()}
         >
-          Retry
+          {m.common_retry()}
         </Button>
       </div>
     )
@@ -92,7 +93,7 @@ export default function ProductsPlansForm() {
   return (
     <div className="space-y-10">
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">Plan</h2>
+        <h2 className="text-sm font-medium">{m.profile_plan()}</h2>
         <PlanGantt
           plan={overview}
           rowActions={(row) =>
@@ -104,14 +105,14 @@ export default function ProductsPlansForm() {
               </Button>
             ) : null
           }
-          emptyText="No products yet. Check one out on the pricing page."
+          emptyText={m.profile_plan_empty()}
         />
       </section>
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">Purchases and links</h2>
+        <h2 className="text-sm font-medium">{m.profile_purchases()}</h2>
         <PurchaseList
           purchases={purchases}
-          emptyText="No purchases yet. One-time products you buy stay here for good."
+          emptyText={m.profile_purchases_empty()}
         />
       </section>
     </div>

@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import CheckoutForm from '#/components/forms/billing/CheckoutForm'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 type CheckoutSearch = {
   productId?: string
@@ -10,7 +11,7 @@ type CheckoutSearch = {
 }
 
 export const Route = createFileRoute('/_authenticated/checkout/')({
-  head: () => privatePage('Checkout'),
+  head: () => privatePage(m.seo_checkout()),
   validateSearch: (search: Record<string, unknown>): CheckoutSearch => {
     const productId =
       typeof search.productId === 'string' &&

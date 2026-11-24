@@ -5,6 +5,7 @@ import { Button } from '#/components/ui/button'
 import { startGoogle } from '#/lib/google'
 import { cn } from '#/lib/utils'
 import type { GoogleIntent } from '#/lib/google'
+import { m } from '#/paraglide/messages'
 
 /** Google's "G" mark; lucide has no brand icons. */
 export function GoogleMark({ className = 'size-4' }: { className?: string }) {
@@ -70,7 +71,7 @@ export default function GoogleButton({
       className={cn('border-[var(--line)]', className)}
     >
       {mode === 'link' ? <Link2 aria-hidden /> : <GoogleMark />}
-      {starting ? 'Opening Google…' : label}
+      {starting ? m.google_opening() : label}
     </Button>
   )
 }

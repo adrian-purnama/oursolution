@@ -19,16 +19,16 @@ export function clampQuantity(kind: ProductKind, quantity: number): number {
   return Math.min(maxQuantity(kind), Math.max(1, whole));
 }
 
-export function lineAmount(unitPriceIdr: number, quantity: number): number {
-  return unitPriceIdr * quantity;
+export function lineAmount(unitPrice: number, quantity: number): number {
+  return unitPrice * quantity;
 }
 
 /** Sum of line amounts, in whole rupiah. */
 export function totalAmount(
-  lines: { unitPriceIdr: number; quantity: number }[],
+  lines: { unitPrice: number; quantity: number }[],
 ): number {
   return lines.reduce(
-    (sum, line) => sum + lineAmount(line.unitPriceIdr, line.quantity),
+    (sum, line) => sum + lineAmount(line.unitPrice, line.quantity),
     0,
   );
 }

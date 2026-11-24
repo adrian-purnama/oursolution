@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '#/context/authContext'
 import { hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** Top of /pricing: the Our Solution Hosting logo and one line about it. */
 export default function PricingHero() {
@@ -20,7 +21,7 @@ export default function PricingHero() {
             className={`inline-flex items-center gap-1.5 no-underline hover:text-[var(--ink)] ${hintClassName}`}
           >
             <ArrowLeft className="size-4" aria-hidden />
-            Dashboard
+            {m.nav_dashboard()}
           </Link>
         </div>
       )}
@@ -35,7 +36,7 @@ export default function PricingHero() {
           />
         </h1>
         <p className="mx-auto mt-6 max-w-xl text-[var(--muted)]">
-          Hosting runs by the period. Workflows are yours after one purchase.
+          {m.pricing_hero_copy()}
         </p>
       </div>
     </section>

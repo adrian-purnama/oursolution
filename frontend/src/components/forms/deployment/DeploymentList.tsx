@@ -26,6 +26,7 @@ import {
 import type { Deployment } from '#/lib/deployment'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const REFRESH_MS = 60_000
 
@@ -39,18 +40,18 @@ function needsAttention(deployment: Deployment): boolean {
 
 /** What to say about a service that has no checks to show. */
 function quietLine(deployment: Deployment): string {
-  if (BUSY_STATES.includes(deployment.state)) return 'Working on it…'
+  if (BUSY_STATES.includes(deployment.state)) return m.dep_list_working()
   switch (deployment.state) {
     case 'notDeployed':
       return deployment.entitled
-        ? 'Ready to deploy.'
-        : 'Expired. Extend the subscription to deploy.'
+        ? m.dep_list_ready()
+        : m.dep_list_expired_deploy()
     case 'stopped':
-      return 'Turned off. Your data is kept.'
+      return m.dep_list_stopped()
     case 'failed':
-      return 'Something went wrong. Open it to try again.'
+      return m.dep_list_failed()
     default:
-      return 'Running.'
+      return m.dep_list_running()
   }
 }
 
@@ -109,7 +110,7 @@ function ServiceCard({
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{deployment.product.name}</p>
           <p className={`truncate text-sm ${hintClassName}`}>
-            {deployment.hosts.at(0) ?? 'No address yet'}
+            {deployment.hosts.at(0) ?? m.dep_list_no_address()}
           </p>
         </div>
         <StateBadge state={deployment.state} />
@@ -132,12 +133,14 @@ function ServiceCard({
       <div className="mt-auto flex items-center gap-3 text-xs text-[var(--muted)]">
         {status?.state === 'down' ? (
           <span className="font-medium text-[var(--destructive)]">
-            Not responding
+            {m.dep_list_down()}
           </span>
         ) : status && status.uptime !== null ? (
           <span>
-            {formatUptime(status.uptime)} uptime
-            {status.responseMs !== null ? ` · ${status.responseMs} ms` : ''}
+            {m.dep_list_uptime({ uptime: formatUptime(status.uptime) })}
+            {status.responseMs !== null
+              ? m.dep_list_ms({ ms: status.responseMs })
+              : ''}
           </span>
         ) : null}
         <span
@@ -149,11 +152,13 @@ function ServiceCard({
           )}
         >
           {expiry?.kind === 'expired'
-            ? 'Expired'
+            ? m.dep_list_expired()
             : expiry?.kind === 'expiring'
-              ? `Ends ${formatDaysLeft(expiry.daysLeft)}`
+              ? m.dep_list_ends({ when: formatDaysLeft(expiry.daysLeft) })
               : deployment.subscriptionEndsAt
-                ? `Until ${formatDate(deployment.subscriptionEndsAt)}`
+                ? m.dep_list_until({
+                    date: formatDate(deployment.subscriptionEndsAt),
+                  })
                 : ''}
         </span>
         <ArrowRight
@@ -209,14 +214,14 @@ export default function DeploymentList({
     return (
       <div className={`${cardClassName} px-5 py-8 text-center`}>
         <p className={`mb-3 ${hintClassName}`}>
-          {admin ? 'Deployments' : 'Your services'} could not be loaded.
+          {admin ? m.dep_list_failed_load_admin() : m.dep_list_failed_load()}
         </p>
         <Button
           type="button"
           variant="outline"
           onClick={() => void load(false)}
         >
-          Retry
+          {m.common_retry()}
         </Button>
       </div>
     )
@@ -225,27 +230,21 @@ export default function DeploymentList({
     return (
       <p className={`flex items-center gap-2 ${hintClassName}`}>
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        {admin ? 'Loading deployments…' : 'Loading your services…'}
+        {admin ? m.dep_list_loading_admin() : m.dep_list_loading()}
       </p>
     )
   }
   if (deployments.length === 0 && admin) {
-    return (
-      <p className={hintClassName}>
-        This user has no subscription with something to deploy.
-      </p>
-    )
+    return <p className={hintClassName}>{m.dep_list_user_none()}</p>
   }
   if (deployments.length === 0) {
     return (
       <div className={`${cardClassName} px-5 py-10 text-center`}>
-        <p className="font-medium">No services yet</p>
-        <p className={`mt-1 mb-4 ${hintClassName}`}>
-          Pick a product and it shows up here, ready to deploy.
-        </p>
+        <p className="font-medium">{m.dep_list_none_title()}</p>
+        <p className={`mt-1 mb-4 ${hintClassName}`}>{m.dep_list_none_copy()}</p>
         <Button asChild>
           <Link to="/pricing" className="no-underline">
-            See products
+            {m.dep_list_see_products()}
           </Link>
         </Button>
       </div>
@@ -298,11 +297,11 @@ export default function DeploymentList({
     <Tabs defaultValue="active">
       <TabsList className="mb-4">
         <TabsTrigger value="active">
-          Active
+          {m.dep_list_tab_active()}
           <span className="text-[var(--muted)]">{active.length}</span>
         </TabsTrigger>
         <TabsTrigger value="expired">
-          Expired
+          {m.dep_list_tab_expired()}
           <span className="text-[var(--muted)]">{expired.length}</span>
         </TabsTrigger>
       </TabsList>
@@ -311,18 +310,16 @@ export default function DeploymentList({
           <Overview deployments={active} onSelect={onSelect} admin={admin} />
         ) : (
           <div className={`${cardClassName} px-5 py-10 text-center`}>
-            <p className="font-medium">No active services</p>
+            <p className="font-medium">{m.dep_list_no_active_title()}</p>
             <p className={`mt-1 ${hintClassName}`}>
-              Your expired services are in the Expired tab. Extend one to turn
-              it back on.
+              {m.dep_list_no_active_copy()}
             </p>
           </div>
         )}
       </TabsContent>
       <TabsContent value="expired" className="space-y-3">
         <p className={`text-sm ${hintClassName}`}>
-          These are off. Your data is kept; extend a subscription to turn its
-          service back on.
+          {m.dep_list_expired_copy()}
         </p>
         <ServiceGrid deployments={expired} onSelect={onSelect} />
       </TabsContent>
@@ -356,7 +353,7 @@ function ServiceGrid({
             <Checkbox
               className="mt-5 bg-white"
               checked={selection.has(deployment.product.id)}
-              aria-label={`Select ${deployment.product.name}`}
+              aria-label={m.dep_list_select({ name: deployment.product.name })}
               onCheckedChange={(checked) =>
                 selection.toggle(deployment.product.id, checked === true)
               }
@@ -395,14 +392,13 @@ function Overview({
       <dl
         className={`${cardClassName} grid grid-cols-3 gap-px overflow-hidden bg-[var(--line)]`}
       >
-        <Stat label="Running">
+        <Stat label={m.dep_list_stat_running()}>
           {running}
           <span className="text-sm font-normal text-[var(--muted)]">
-            {' '}
-            of {deployments.length}
+            {m.dep_list_of({ count: deployments.length })}
           </span>
         </Stat>
-        <Stat label="Uptime, last 24 hours">
+        <Stat label={m.dep_list_stat_uptime()}>
           {uptimes.length > 0
             ? formatUptime(
                 uptimes.reduce((sum, uptime) => sum + uptime, 0) /
@@ -410,15 +406,14 @@ function Overview({
               )
             : '—'}
         </Stat>
-        <Stat label="Needs attention">
+        <Stat label={m.dep_list_stat_attention()}>
           {attention > 0 ? (
             <span className="text-[var(--destructive)]">{attention}</span>
           ) : (
             <span>
               0
               <span className="hidden text-sm font-normal text-[var(--muted)] sm:inline">
-                {' '}
-                all good
+                {m.dep_list_all_good()}
               </span>
             </span>
           )}

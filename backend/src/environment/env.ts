@@ -66,6 +66,43 @@ export function midtransSandbox(raw: string | undefined): boolean {
   return !value || /sandbox/i.test(value);
 }
 
+/**
+ * Whether Paddle is the sandbox, from PADDLE_URL like MIDTRANS_URL: a URL
+ * with "sandbox" (https://sandbox-api.paddle.com) or without
+ * (https://api.paddle.com). Never guessed: with an API key set, PADDLE_URL
+ * is required, and keys of the other environment stop the app, so it never
+ * charges on the wrong Paddle account. Without an API key it does not
+ * matter (Paddle is off) and is sandbox.
+ */
+export function paddleSandbox(
+  url: string | undefined,
+  apiKey: string | undefined,
+  clientToken: string | undefined,
+): boolean {
+  const key = apiKey?.trim();
+  if (!key) return true;
+  const value = url?.trim();
+  if (!value) {
+    throw new Error(
+      "PADDLE_URL is required with PADDLE_API_KEY: https://sandbox-api.paddle.com or https://api.paddle.com",
+    );
+  }
+  const sandbox = /sandbox/i.test(value);
+  const where = sandbox ? "the sandbox" : "live";
+  if (key.startsWith(sandbox ? "pdl_live_" : "pdl_sdbx_")) {
+    throw new Error(
+      `PADDLE_URL points at ${where}, but PADDLE_API_KEY is a ${sandbox ? "live" : "sandbox"} key`,
+    );
+  }
+  const token = clientToken?.trim();
+  if (token && token.startsWith(sandbox ? "live_" : "test_")) {
+    throw new Error(
+      `PADDLE_URL points at ${where}, but PADDLE_CLIENT_TOKEN is a ${sandbox ? "live" : "sandbox"} token`,
+    );
+  }
+  return sandbox;
+}
+
 /** Where Midtrans reaches us, relative to the backend's public URL. */
 export const MIDTRANS_NOTIFICATION_PATH = "/payments/midtrans/notification";
 
@@ -233,6 +270,20 @@ export const env = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || null,
   // How long an unpaid invoice can still be paid.
   paymentTtlMinutes: Number(process.env.PAYMENT_TTL_MINUTES) || 60,
+  // Paddle bills customers outside Indonesia in USD. Optional: without an
+  // API key only the Indonesian region can check out.
+  paddleApiKey: process.env.PADDLE_API_KEY?.trim() || null,
+  // Public: lets the browser open Paddle Checkout.
+  paddleClientToken: process.env.PADDLE_CLIENT_TOKEN?.trim() || null,
+  paddleWebhookSecret: process.env.PADDLE_WEBHOOK_SECRET?.trim() || null,
+  paddleSandbox: paddleSandbox(
+    process.env.PADDLE_URL,
+    process.env.PADDLE_API_KEY,
+    process.env.PADDLE_CLIENT_TOKEN,
+  ),
+  paddleTaxCategory: process.env.PADDLE_TAX_CATEGORY?.trim() || "standard",
+  // Days before a subscription ends that its owner is reminded.
+  expiryReminderDays: positiveInt(process.env.EXPIRY_REMINDER_DAYS) ?? 5,
   // An OpenAI-compatible chat endpoint (base only; /v1/chat/completions is
   // appended). Optional: without it, tickets close without a summary.
   llmBaseUrl:

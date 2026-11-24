@@ -1,4 +1,12 @@
 import { BRAND_NAME } from '#/lib/config'
+import { OG_LOCALE } from '#/lib/i18n'
+import { m } from '#/paraglide/messages'
+import {
+  baseLocale,
+  getLocale,
+  locales,
+  localizeHref,
+} from '#/paraglide/runtime'
 
 /**
  * The site's public origin, used for canonical links, share previews and the
@@ -29,7 +37,6 @@ export const DEFAULT_KEYWORDS = [
 
 /** 1200x630, under 300 KB so WhatsApp shows it too. */
 export const DEFAULT_OG_IMAGE = '/og-image.png'
-const DEFAULT_OG_IMAGE_ALT = `${SITE_NAME} — ${SITE_TAGLINE}`
 
 export const THEME_COLOR = '#002060'
 
@@ -65,13 +72,16 @@ export function seo(input: SeoInput = {}): {
   meta: MetaTag[]
   links: LinkTag[]
 } {
+  const locale = getLocale()
+  const tagline = m.seo_tagline()
   const title = input.title
     ? `${input.title} | ${SITE_NAME}`
-    : `${SITE_NAME} — ${SITE_TAGLINE}`
-  const description = input.description ?? DEFAULT_DESCRIPTION
+    : `${SITE_NAME} — ${tagline}`
+  const description = input.description ?? m.seo_description()
   const image = absoluteUrl(input.image ?? DEFAULT_OG_IMAGE)
   const imageAlt =
-    input.imageAlt ?? (input.image ? title : DEFAULT_OG_IMAGE_ALT)
+    input.imageAlt ??
+    (input.image ? title : m.seo_og_image_alt({ site: SITE_NAME, tagline }))
   const isDefaultImage = !input.image
 
   const meta: MetaTag[] = [
@@ -89,7 +99,7 @@ export function seo(input: SeoInput = {}): {
     { property: 'og:description', content: description },
     { property: 'og:image', content: image },
     { property: 'og:image:alt', content: imageAlt },
-    { property: 'og:locale', content: 'en_US' },
+    { property: 'og:locale', content: OG_LOCALE[locale] },
     { name: 'twitter:card', content: 'summary_large_image' },
     { name: 'twitter:title', content: title },
     { name: 'twitter:description', content: description },
@@ -110,12 +120,40 @@ export function seo(input: SeoInput = {}): {
 
   const links: LinkTag[] = []
   if (input.path !== undefined) {
-    const url = absoluteUrl(input.path)
+    const url = absoluteUrl(localizeHref(input.path, { locale }))
     meta.push({ property: 'og:url', content: url })
-    if (!input.noindex) links.push({ rel: 'canonical', href: url })
+    if (!input.noindex) {
+      links.push({ rel: 'canonical', href: url })
+      links.push(...languageAlternates(input.path))
+    }
   }
 
   return { meta, links }
+}
+
+/**
+ * hreflang links to every language version of a public page, so search
+ * engines show each searcher the right one. App pages share one URL across
+ * languages and get none.
+ */
+export function languageAlternates(path: string): LinkTag[] {
+  const hrefs = locales.map((locale) => ({
+    locale,
+    href: absoluteUrl(localizeHref(path, { locale })),
+  }))
+  if (new Set(hrefs.map(({ href }) => href)).size < 2) return []
+  return [
+    ...hrefs.map(({ locale, href }) => ({
+      rel: 'alternate',
+      hrefLang: locale,
+      href,
+    })),
+    {
+      rel: 'alternate',
+      hrefLang: 'x-default',
+      href: absoluteUrl(localizeHref(path, { locale: baseLocale })),
+    },
+  ]
 }
 
 /** Head for signed-in and admin pages: a title, and no indexing. */
@@ -137,7 +175,9 @@ export const ORGANIZATION_LD = {
   name: SITE_NAME,
   url: SITE_URL,
   logo: absoluteUrl('/oursolution-logo.png'),
-  description: DEFAULT_DESCRIPTION,
+  get description() {
+    return m.seo_description()
+  },
 }
 
 export const WEBSITE_LD = {

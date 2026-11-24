@@ -10,6 +10,7 @@ import { formatDateTime } from '#/lib/product'
 import { formatRedeemInput } from '#/lib/redeem'
 import type { RedeemResult } from '#/lib/redeem'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** A user redeems a code for a product. */
 export default function RedeemCodeForm() {
@@ -31,20 +32,27 @@ export default function RedeemCodeForm() {
         body: JSON.stringify({ code }),
       })
       if (!res.success || !res.data) {
-        setError(res.message || 'Could not redeem the code')
+        setError(res.message || m.redeem_failed())
         return
       }
       const { product, startsAt, endsAt } = res.data
       const starts = Date.parse(startsAt) > Date.now() + 60_000
       toast.success(
         product.kind === 'oneTime'
-          ? `${product.name} is yours`
-          : `${product.name} ${starts ? `starts ${formatDateTime(startsAt)}` : 'is active'}${endsAt ? ` until ${formatDateTime(endsAt)}` : ''}`,
+          ? m.redeem_yours({ name: product.name })
+          : `${
+              starts
+                ? m.redeem_starts({
+                    name: product.name,
+                    date: formatDateTime(startsAt),
+                  })
+                : m.redeem_active({ name: product.name })
+            }${endsAt ? m.redeem_until_suffix({ date: formatDateTime(endsAt) }) : ''}`,
       )
       setCode('')
       await refreshAuth()
     } catch {
-      setError('Unable to reach the server')
+      setError(m.common_error_network_short())
     } finally {
       setBusy(false)
     }
@@ -53,10 +61,8 @@ export default function RedeemCodeForm() {
   return (
     <section className={`${cardClassName} space-y-3 px-4 py-4`}>
       <div>
-        <h2 className="text-sm font-medium">Redeem a code</h2>
-        <p className={`text-xs ${hintClassName}`}>
-          Got a code? Enter it to add the product to your account.
-        </p>
+        <h2 className="text-sm font-medium">{m.redeem_title()}</h2>
+        <p className={`text-xs ${hintClassName}`}>{m.redeem_copy()}</p>
       </div>
       <form
         className="flex flex-col gap-2 sm:flex-row"
@@ -69,7 +75,7 @@ export default function RedeemCodeForm() {
             setError(null)
           }}
           placeholder="XXXX-XXXX-XXXX"
-          aria-label="Redeem code"
+          aria-label={m.redeem_aria()}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'redeem-error' : undefined}
           autoComplete="off"
@@ -80,7 +86,7 @@ export default function RedeemCodeForm() {
         />
         <Button type="submit" variant="outline" disabled={busy || !complete}>
           <Gift aria-hidden />
-          {busy ? 'Redeeming…' : 'Redeem'}
+          {busy ? m.redeem_busy() : m.redeem_button()}
         </Button>
       </form>
       {error ? (

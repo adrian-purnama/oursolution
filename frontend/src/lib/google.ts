@@ -1,4 +1,5 @@
 import { apiFetch } from '#/lib/api'
+import { m } from '#/paraglide/messages'
 
 const STORAGE_KEY = 'google_oauth'
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -36,9 +37,9 @@ export async function startGoogle(
     }>('/auth/google')
     config = response.data
   } catch {
-    return 'Unable to reach the server. Please try again.'
+    return m.common_error_network()
   }
-  if (!config?.clientId) return 'Google sign-in is not available'
+  if (!config?.clientId) return m.google_unavailable()
 
   const state = randomState()
   try {
@@ -47,7 +48,7 @@ export async function startGoogle(
       JSON.stringify({ ...intent, state } satisfies GoogleIntent),
     )
   } catch {
-    return 'Google sign-in needs browser storage to be allowed'
+    return m.google_needs_storage()
   }
 
   const params = new URLSearchParams({

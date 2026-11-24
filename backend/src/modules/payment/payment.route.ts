@@ -9,5 +9,7 @@ const paymentController = new PaymentController();
 router.get("/config", paymentController.config);
 // Called by Midtrans, which proves itself with a signature, not a user token.
 router.post("/midtrans/notification", paymentController.midtransNotification);
+// Called by Paddle, which signs the raw body (parsed as raw in index.ts).
+router.post("/paddle/webhook", paymentController.paddleWebhook);
 
 export default router;

@@ -1,9 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import ForgotPasswordForm from '#/components/forms/auth/ForgotPasswordForm'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_auth/forgot-password')({
-  head: () => privatePage('Forgot password'),
+  head: () => privatePage(m.seo_forgot_title()),
   component: ForgotPasswordPage,
 })
 

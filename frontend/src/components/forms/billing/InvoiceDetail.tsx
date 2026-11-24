@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { PaymentStatusBadge } from '#/components/forms/billing/PaymentParts'
+import PaddlePay from '#/components/forms/billing/PaddlePay'
 import SnapEmbed from '#/components/forms/billing/SnapEmbed'
 import { Button } from '#/components/ui/button'
 import {
@@ -34,11 +35,12 @@ import { apiFetch } from '#/lib/api'
 import {
   downloadInvoice,
   formatDateTime,
-  formatIdr,
+  formatMoney,
   periodLabel,
 } from '#/lib/billing'
 import type { Payment } from '#/lib/billing'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /** While unpaid, ask the server (which asks Midtrans) this often. */
 const POLL_MS = 4000
@@ -50,18 +52,24 @@ type State =
 
 function paidWith(payment: Payment): string {
   if (payment.paymentType) return payment.paymentType.replace(/_/g, ' ')
+  if (payment.provider === 'paddle') return 'Paddle'
   return payment.provider === 'midtrans' ? 'Midtrans' : payment.provider
 }
 
 /** One line under the invoice number: when it was issued and how it stands. */
 function metaLine(payment: Payment): string {
-  const issued = `Issued ${formatDateTime(payment.createdAt)}`
+  const issued = m.invoice_issued({ date: formatDateTime(payment.createdAt) })
   const who = payment.user ? ` · ${payment.user.email}` : ''
   if (payment.status === 'paid' && payment.paidAt) {
-    return `${issued} · Paid ${formatDateTime(payment.paidAt)} with ${paidWith(payment)}${who}`
+    return `${issued} · ${m.invoice_paid({
+      date: formatDateTime(payment.paidAt),
+      method: paidWith(payment),
+    })}${who}`
   }
   if (payment.status === 'pending') {
-    return `${issued} · Pay before ${formatDateTime(payment.expiresAt)}${who}`
+    return `${issued} · ${m.invoice_pay_before({
+      date: formatDateTime(payment.expiresAt),
+    })}${who}`
   }
   return `${issued}${who}`
 }
@@ -96,7 +104,7 @@ export default function InvoiceDetail({
       if (!res.success || !res.data) {
         setState({
           status: 'missing',
-          message: res.message || 'Invoice not found',
+          message: res.message || m.invoice_not_found(),
         })
         return
       }
@@ -106,13 +114,13 @@ export default function InvoiceDetail({
         lastStatus.current === 'pending' &&
         payment.status === 'paid'
       ) {
-        toast.success('Payment received. Your products are active.')
+        toast.success(m.invoice_paid_toast())
         void refreshAuth()
       }
       lastStatus.current = payment.status
       setState({ status: 'ready', payment })
     } catch {
-      if (!quiet) toast.error('Unable to reach the server')
+      if (!quiet) toast.error(m.common_error_network_short())
     } finally {
       if (!quiet) setRefreshing(false)
     }
@@ -144,7 +152,9 @@ export default function InvoiceDetail({
         `${payment.invoiceNumber}.pdf`,
       )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not download')
+      toast.error(
+        error instanceof Error ? error.message : m.invoice_download_failed(),
+      )
     } finally {
       setDownloading(false)
     }
@@ -155,15 +165,15 @@ export default function InvoiceDetail({
     try {
       const res = await apiFetch<Payment>(`${base}/cancel`, { method: 'POST' })
       if (!res.success || !res.data) {
-        toast.error(res.message || 'Could not cancel the invoice')
+        toast.error(res.message || m.invoice_cancel_failed())
         return
       }
       lastStatus.current = res.data.status
       setState({ status: 'ready', payment: res.data })
       setConfirmCancel(false)
-      toast.success('Invoice cancelled')
+      toast.success(m.invoice_cancelled())
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setCancelling(false)
     }
@@ -173,7 +183,7 @@ export default function InvoiceDetail({
     return (
       <div className="flex items-center gap-2 py-12 text-sm text-[var(--muted)]">
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading invoice…
+        {m.invoice_loading()}
       </div>
     )
   }
@@ -185,7 +195,7 @@ export default function InvoiceDetail({
         {admin ? null : (
           <Button asChild variant="outline">
             <Link to="/profile" search={{ tab: 'billing' }}>
-              All invoices
+              {m.invoice_all()}
             </Link>
           </Button>
         )}
@@ -205,7 +215,7 @@ export default function InvoiceDetail({
           className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] no-underline hover:text-[var(--ink)]"
         >
           <ArrowLeft className="size-4" aria-hidden />
-          Billing
+          {m.invoice_back()}
         </Link>
       )}
 
@@ -233,14 +243,14 @@ export default function InvoiceDetail({
                 className={refreshing ? 'size-4 animate-spin' : 'size-4'}
                 aria-hidden
               />
-              Check status
+              {m.invoice_check_status()}
             </Button>
           ) : null}
           <Button
             type="button"
             variant="outline"
             disabled={downloading}
-            aria-label="Download invoice PDF"
+            aria-label={m.invoice_download_aria()}
             className="size-9 px-0 sm:size-auto sm:px-4"
             onClick={() => void download(payment)}
           >
@@ -249,7 +259,7 @@ export default function InvoiceDetail({
             ) : (
               <Download className="size-4" aria-hidden />
             )}
-            <span className="hidden sm:inline">Invoice PDF</span>
+            <span className="hidden sm:inline">{m.invoice_pdf()}</span>
           </Button>
         </div>
       </div>
@@ -257,9 +267,7 @@ export default function InvoiceDetail({
       {payment.needsReview && payment.reviewNote ? (
         <p className="flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm whitespace-pre-line text-red-700">
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {admin
-            ? payment.reviewNote
-            : 'Something about this payment needs a check by our team. We will be in touch.'}
+          {admin ? payment.reviewNote : m.invoice_review_user()}
         </p>
       ) : null}
 
@@ -280,7 +288,7 @@ export default function InvoiceDetail({
               className="-ml-3 text-[var(--muted)]"
               onClick={() => setConfirmCancel(true)}
             >
-              Cancel invoice
+              {m.invoice_cancel()}
             </Button>
           ) : null}
 
@@ -291,16 +299,14 @@ export default function InvoiceDetail({
               ) : (
                 <LoaderCircle className="size-4 animate-spin" aria-hidden />
               )}
-              {payment.grantedAt
-                ? 'Added to your account.'
-                : 'Adding to your account…'}
+              {payment.grantedAt ? m.invoice_granted() : m.invoice_granting()}
               {payment.grantedAt ? (
                 <Link
                   to="/profile"
                   search={{ tab: 'products' }}
                   className="text-[var(--ink)] underline-offset-4 hover:underline"
                 >
-                  View your products
+                  {m.invoice_view_products()}
                 </Link>
               ) : null}
             </p>
@@ -309,29 +315,38 @@ export default function InvoiceDetail({
           {payment.status !== 'pending' && payment.status !== 'paid' ? (
             <p className="text-sm text-[var(--muted)]">
               {payment.status === 'refunded'
-                ? 'This payment was refunded.'
+                ? m.invoice_refunded()
                 : payment.failureReason
-                  ? `Not paid: ${payment.failureReason}`
-                  : 'Not paid. Nothing was charged.'}
+                  ? m.invoice_not_paid_reason({
+                      reason: payment.failureReason,
+                    })
+                  : m.invoice_not_paid()}
             </p>
           ) : null}
         </div>
 
         {payHere ? (
           <section
-            aria-label="Pay"
+            aria-label={m.invoice_pay_aria()}
             className="order-first overflow-hidden rounded-xl border border-[var(--line)] bg-white lg:order-none"
           >
             <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
               <p className="text-sm font-medium text-[var(--ink)]">
-                Pay {formatIdr(payment.amountIdr)}
+                {m.invoice_pay_amount({
+                  amount: formatMoney(payment.amount, payment.currency),
+                })}
               </p>
               <p className="flex items-center gap-1.5 text-xs text-amber-700">
                 <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
-                Waiting for payment
+                {m.invoice_waiting()}
               </p>
             </div>
-            {payment.snapToken || payment.redirectUrl ? (
+            {payment.paddleTransactionId ? (
+              <PaddlePay
+                transactionId={payment.paddleTransactionId}
+                onChange={() => void load(true)}
+              />
+            ) : payment.snapToken || payment.redirectUrl ? (
               <SnapEmbed
                 token={payment.snapToken}
                 redirectUrl={payment.redirectUrl}
@@ -339,7 +354,7 @@ export default function InvoiceDetail({
               />
             ) : (
               <p className="p-5 text-sm text-[var(--muted)]">
-                This invoice can no longer be paid.
+                {m.invoice_no_longer()}
               </p>
             )}
           </section>
@@ -349,11 +364,10 @@ export default function InvoiceDetail({
       <Dialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel {payment.invoiceNumber}?</DialogTitle>
-            <DialogDescription>
-              You won’t be able to pay this invoice anymore. If you already paid
-              at Midtrans, your products are still activated.
-            </DialogDescription>
+            <DialogTitle>
+              {m.invoice_cancel_title({ number: payment.invoiceNumber })}
+            </DialogTitle>
+            <DialogDescription>{m.invoice_cancel_copy()}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -361,7 +375,7 @@ export default function InvoiceDetail({
               variant="outline"
               onClick={() => setConfirmCancel(false)}
             >
-              Keep it
+              {m.invoice_keep()}
             </Button>
             <Button
               type="button"
@@ -369,7 +383,7 @@ export default function InvoiceDetail({
               disabled={cancelling}
               onClick={() => void cancel()}
             >
-              {cancelling ? 'Cancelling…' : 'Cancel invoice'}
+              {cancelling ? m.invoice_cancelling() : m.invoice_cancel()}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -379,19 +393,22 @@ export default function InvoiceDetail({
 }
 
 function ItemsTable({ payment }: { payment: Payment }) {
+  const money = (value: number) => formatMoney(value, payment.currency)
   return (
     <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Item</TableHead>
+            <TableHead>{m.invoice_col_item()}</TableHead>
             <TableHead className="hidden text-right sm:table-cell">
-              Qty
+              {m.invoice_col_qty()}
             </TableHead>
             <TableHead className="hidden text-right sm:table-cell">
-              Unit price
+              {m.invoice_col_unit()}
             </TableHead>
-            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="text-right">
+              {m.invoice_col_amount()}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -402,13 +419,13 @@ function ItemsTable({ payment }: { payment: Payment }) {
                 {item.kind === 'custom' ? null : (
                   <p className="text-xs text-[var(--muted)]">
                     {item.kind === 'oneTime'
-                      ? 'One-time purchase'
+                      ? m.product_kind_onetime()
                       : periodLabel(item.quantity, item.durationDays)}
                   </p>
                 )}
                 {item.quantity > 1 ? (
                   <p className="text-xs text-[var(--muted)] tabular-nums sm:hidden">
-                    {item.quantity} × {formatIdr(item.unitPriceIdr)}
+                    {item.quantity} × {money(item.unitPrice)}
                   </p>
                 ) : null}
                 {item.description ? (
@@ -421,10 +438,10 @@ function ItemsTable({ payment }: { payment: Payment }) {
                 {item.quantity}
               </TableCell>
               <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                {formatIdr(item.unitPriceIdr)}
+                {money(item.unitPrice)}
               </TableCell>
               <TableCell className="text-right align-top tabular-nums">
-                {formatIdr(item.amountIdr)}
+                {money(item.amount)}
               </TableCell>
             </TableRow>
           ))}
@@ -432,9 +449,11 @@ function ItemsTable({ payment }: { payment: Payment }) {
         <TableFooter>
           <TableRow>
             <TableCell colSpan={2} className="hidden sm:table-cell" />
-            <TableCell className="text-right font-medium">Total</TableCell>
+            <TableCell className="text-right font-medium">
+              {m.common_total()}
+            </TableCell>
             <TableCell className="text-right font-semibold tabular-nums">
-              {formatIdr(payment.amountIdr)}
+              {money(payment.amount)}
             </TableCell>
           </TableRow>
         </TableFooter>

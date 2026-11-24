@@ -7,6 +7,7 @@ import type {
 } from '#/lib/deployment'
 import { formatDateTime } from '#/lib/product'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const STATE_DOT: Record<DeploymentState, string> = {
   notDeployed: 'bg-[var(--line)]',
@@ -61,7 +62,10 @@ export function BeatBar({
     <div
       className={cn('flex h-3.5 gap-[3px]', className)}
       role="img"
-      aria-label={`Last ${status.beats.length} checks of ${status.host}, oldest first`}
+      aria-label={m.svc_status_aria({
+        count: status.beats.length,
+        host: status.host,
+      })}
     >
       {status.beats.map((beat) => (
         <span

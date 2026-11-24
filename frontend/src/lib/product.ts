@@ -1,12 +1,21 @@
+import { m } from '#/paraglide/messages'
+import { formatMoney } from '#/lib/billing'
+import type { Currency } from '#/lib/billing'
+import { getLocale } from '#/paraglide/runtime'
 /**
  * - subscription: active for a period (hosting); shown on the plan Gantt chart.
  * - oneTime: bought once and kept for good (e.g. an n8n workflow).
  */
 export type ProductKind = 'subscription' | 'oneTime'
 
+/** Getters, so the text follows the current language each time it is read. */
 export const PRODUCT_KIND_LABELS: Record<ProductKind, string> = {
-  subscription: 'Subscription',
-  oneTime: 'One-time purchase',
+  get subscription() {
+    return m.product_kind_subscription()
+  },
+  get oneTime() {
+    return m.product_kind_onetime()
+  },
 }
 
 export type ProductSummary = {
@@ -42,11 +51,21 @@ export type VariableVisibility =
   'editable' | 'readOnly' | 'hidden' | 'setOnce' | 'setOnceHidden'
 
 export const VARIABLE_VISIBILITY_LABELS: Record<VariableVisibility, string> = {
-  editable: 'Can see and edit',
-  readOnly: 'Can see',
-  hidden: 'Hidden',
-  setOnce: 'Must fill once, then can see',
-  setOnceHidden: 'Must fill once, then hidden',
+  get editable() {
+    return m.var_vis_editable()
+  },
+  get readOnly() {
+    return m.var_vis_readonly()
+  },
+  get hidden() {
+    return m.var_vis_hidden()
+  },
+  get setOnce() {
+    return m.var_vis_setonce()
+  },
+  get setOnceHidden() {
+    return m.var_vis_setonce_hidden()
+  },
 }
 
 export type DeploymentVariable = {
@@ -150,6 +169,10 @@ export type ProductVariant = {
   /** Markdown; empty shows the product's description. */
   description: string
   priceIdr: number
+  /** Outside Indonesia, in US cents; null when not sold there. */
+  priceUsdCents: number | null
+  /** Read-only: the Paddle price for it, once synced. */
+  paddlePriceId: string | null
   durationDays: number
   /** null deploys the product's settings. */
   deployment: VariantDeployment | null
@@ -166,7 +189,8 @@ export type PricingVariant = {
   pricingText: string
   /** Markdown: its own, else the product's. */
   description: string
-  priceIdr: number
+  /** In the product's `currency`: whole rupiah, or US cents. */
+  price: number
   durationDays: number | null
 }
 
@@ -189,6 +213,11 @@ export type Product = ProductSummary & {
   description: string
   notices: ProductNotice[]
   priceIdr: number
+  /** Outside Indonesia, in US cents; null when not sold there. */
+  priceUsdCents: number | null
+  /** Read-only: the Paddle price and product, once synced. */
+  paddlePriceId: string | null
+  paddleProductId: string | null
   /** Subscription only. */
   durationDays: number | null
   /** Subscription only. */
@@ -212,8 +241,24 @@ export type PricingProduct = ProductSummary & {
   description: string
   notices: ProductNotice[]
   durationDays: number | null
+  /** The visitor's currency; the API sends only their region's prices. */
+  currency: Currency
+  /** The lowest price they can pay; null when not sold in their region. */
+  price: number | null
   /** Subscription only: every variant, the base one first. */
   variants: PricingVariant[]
+}
+
+/**
+ * What a shop card or product page shows as the price: the admin's text
+ * (Indonesia), else the price itself, "from" the cheapest variant.
+ */
+export function shopPriceText(product: PricingProduct): string {
+  if (product.pricingText) return product.pricingText
+  if (product.price === null) return m.pricing_contact_us()
+  const price = formatMoney(product.price, product.currency)
+  const differ = new Set(product.variants.map((variant) => variant.price))
+  return differ.size > 1 ? m.pricing_from({ price }) : price
 }
 
 /** A one-time product a user owns. */
@@ -261,15 +306,13 @@ export function formatIdr(amount: number): string {
   return idrFormatter.format(amount)
 }
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
-
 export function formatDateTime(iso: string): string {
-  return dateTimeFormatter.format(new Date(iso))
+  return new Intl.DateTimeFormat(getLocale(), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(iso))
 }
 
 export function formatDays(days: number): string {
-  return days === 1 ? '1 day' : `${days} days`
+  return days === 1 ? m.days_one() : m.days_other({ count: days })
 }

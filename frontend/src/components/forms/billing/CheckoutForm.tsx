@@ -21,18 +21,20 @@ import {
 import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
 import type { ApiResponse } from '#/lib/api'
-import { formatIdr, periodLabel, syncBasket } from '#/lib/billing'
+import { emptyQuote, formatMoney, periodLabel, syncBasket } from '#/lib/billing'
 import type {
   CheckoutItem,
   CheckoutLine,
   CheckoutQuote,
   CheckoutResult,
+  Currency,
   Payment,
   PaymentList,
 } from '#/lib/billing'
 import { formatDateTime, PRODUCT_KIND_LABELS } from '#/lib/product'
 import type { CheckoutPlacement, VariantApplyMode } from '#/lib/product'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 type State =
   | { status: 'loading' }
@@ -98,14 +100,14 @@ export default function CheckoutForm({
       if (!res.success || !res.data) {
         setState({
           status: 'error',
-          message: res.message || 'Could not load your checkout',
+          message: res.message || m.checkout_load_failed(),
         })
         return
       }
       setState({ status: 'ready', quote: res.data })
       if (!direct) syncBasket(res.data)
     } catch {
-      setState({ status: 'error', message: 'Unable to reach the server' })
+      setState({ status: 'error', message: m.common_error_network_short() })
     }
   }
 
@@ -139,18 +141,18 @@ export default function CheckoutForm({
         directItems.current = directItems.current.map((item) =>
           item.productId === id ? { ...item, ...patch } : item,
         )
-        applyQuote(await priceDirect(), 'Could not update the product')
+        applyQuote(await priceDirect(), m.checkout_update_failed())
       } else {
         applyQuote(
           await apiFetch<CheckoutQuote>(`/me/basket/items/${id}`, {
             method: 'PATCH',
             body: JSON.stringify(patch),
           }),
-          'Could not update the product',
+          m.checkout_update_failed(),
         )
       }
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setBusyLine(null)
     }
@@ -162,10 +164,11 @@ export default function CheckoutForm({
       directItems.current = directItems.current.filter(
         (item) => item.productId !== id,
       )
-      setState({
-        status: 'ready',
-        quote: { lines: [], totalIdr: 0, canCheckout: false },
-      })
+      setState((current) =>
+        current.status === 'ready'
+          ? { status: 'ready', quote: emptyQuote(current.quote) }
+          : current,
+      )
       return
     }
     setBusyLine(id)
@@ -174,10 +177,10 @@ export default function CheckoutForm({
         await apiFetch<CheckoutQuote>(`/me/basket/items/${id}`, {
           method: 'DELETE',
         }),
-        'Could not remove the product',
+        m.checkout_remove_failed(),
       )
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setBusyLine(null)
     }
@@ -204,23 +207,24 @@ export default function CheckoutForm({
         }),
       })
       if (!res.success || !res.data) {
-        toast.error(res.message || 'Checkout failed')
+        toast.error(res.message || m.checkout_failed())
         // Prices or availability may have changed: show the fresh state.
         void load()
         return
       }
-      if (!direct) syncBasket({ lines: [], totalIdr: 0, canCheckout: false })
+      if (!direct) syncBasket(emptyQuote(quote))
       if (res.data.status === 'paid') {
-        toast.success('Payment received')
+        toast.success(m.checkout_paid())
         await refreshAuth()
       }
-      // The invoice page shows Midtrans' payment form and waits for it.
+      // The invoice page shows the payment form (Midtrans or Paddle) and
+      // waits for it.
       void navigate({
         to: '/billing/$paymentId',
         params: { paymentId: res.data.paymentId },
       })
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setPaying(false)
     }
@@ -230,7 +234,7 @@ export default function CheckoutForm({
     return (
       <div className="flex items-center gap-2 py-16 text-sm text-[var(--muted)]">
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading your checkout…
+        {m.checkout_loading()}
       </div>
     )
   }
@@ -240,7 +244,7 @@ export default function CheckoutForm({
       <div className="flex flex-col items-start gap-3 py-12">
         <p className="text-sm text-[var(--muted)]">{state.message}</p>
         <Button type="button" variant="outline" onClick={() => void load()}>
-          Retry
+          {m.common_retry()}
         </Button>
       </div>
     )
@@ -256,28 +260,27 @@ export default function CheckoutForm({
           aria-hidden
         />
         <p className="text-sm font-medium text-[var(--ink)]">
-          {direct ? 'Nothing to buy' : 'Your basket is empty'}
+          {direct ? m.checkout_nothing() : m.checkout_empty()}
         </p>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Pick a product on the pricing page.
-        </p>
+        <p className="mt-1 text-sm text-[var(--muted)]">{m.checkout_pick()}</p>
         <Button asChild variant="outline" className="mt-5">
-          <Link to="/pricing">Browse the shop</Link>
+          <Link to="/pricing">{m.common_browse_shop()}</Link>
         </Button>
       </div>
     )
   }
 
   const blocked = quote.lines.some((line) => line.problem)
+  const money = (value: number) => formatMoney(value, quote.currency)
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
-      <section aria-label="Products" className="min-w-0">
+      <section aria-label={m.checkout_products()} className="min-w-0">
         {direct ? (
           <p className="mb-4 text-sm text-[var(--muted)]">
-            Buying now. Your basket stays as it is.{' '}
+            {m.checkout_buying_now()}{' '}
             <Link to="/checkout" className="text-[var(--ink)] underline">
-              Go to basket
+              {m.checkout_go_basket()}
             </Link>
           </p>
         ) : null}
@@ -290,6 +293,7 @@ export default function CheckoutForm({
                 user?.products.some((item) => item.id === line.product.id) ??
                 false
               }
+              currency={quote.currency}
               busy={busyLine === line.product.id || paying}
               onChange={(patch) => void updateLine(line, patch)}
               onRemove={() => void remove(line)}
@@ -299,7 +303,9 @@ export default function CheckoutForm({
       </section>
 
       <aside className="h-fit min-w-0 rounded-xl border border-[var(--line)] bg-white p-5 lg:sticky lg:top-20">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">Summary</h2>
+        <h2 className="text-sm font-semibold text-[var(--ink)]">
+          {m.checkout_summary()}
+        </h2>
         <dl className="mt-4 space-y-2 text-sm">
           {quote.lines.map((line) => (
             <div key={line.product.id} className="flex justify-between gap-3">
@@ -310,16 +316,14 @@ export default function CheckoutForm({
                   : ''}
                 {line.quantity > 1 ? ` × ${line.quantity}` : ''}
               </dt>
-              <dd className="shrink-0 tabular-nums">
-                {formatIdr(line.amountIdr)}
-              </dd>
+              <dd className="shrink-0 tabular-nums">{money(line.amount)}</dd>
             </div>
           ))}
         </dl>
         <div className="mt-4 flex items-baseline justify-between border-t border-[var(--line)] pt-4">
-          <span className="text-sm font-medium">Total</span>
+          <span className="text-sm font-medium">{m.common_total()}</span>
           <span className="font-display text-2xl tabular-nums">
-            {formatIdr(quote.totalIdr)}
+            {money(quote.total)}
           </span>
         </div>
         <Button
@@ -332,22 +336,25 @@ export default function CheckoutForm({
           {paying ? (
             <>
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
-              Starting payment…
+              {m.checkout_starting()}
             </>
           ) : (
-            `Pay ${formatIdr(quote.totalIdr)}`
+            m.invoice_pay_amount({ amount: money(quote.total) })
           )}
         </Button>
         <p className="mt-3 text-xs text-[var(--muted)]">
           {blocked
-            ? 'Remove or fix the products marked above to continue.'
-            : 'Pay by bank transfer, e-wallet, QRIS or card.'}
+            ? m.checkout_blocked()
+            : quote.currency === 'USD'
+              ? m.checkout_methods_intl()
+              : m.checkout_methods()}
         </p>
         {openCheckout ? (
           <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Your unpaid checkout {openCheckout.invoiceNumber} (
-            {formatIdr(openCheckout.amountIdr)}) will be cancelled and replaced
-            by this one.
+            {m.checkout_replace({
+              number: openCheckout.invoiceNumber,
+              amount: formatMoney(openCheckout.amount, openCheckout.currency),
+            })}
           </p>
         ) : null}
       </aside>
@@ -357,12 +364,14 @@ export default function CheckoutForm({
 
 function CheckoutLineRow({
   line,
+  currency,
   subscribed,
   busy,
   onChange,
   onRemove,
 }: {
   line: CheckoutLine
+  currency: Currency
   /** The user has this subscription already. */
   subscribed: boolean
   busy: boolean
@@ -373,6 +382,8 @@ function CheckoutLineRow({
   const period = periodLabel(line.quantity, line.durationDays)
   const onQuantity = (quantity: number) => onChange({ quantity })
   const hasVariants = line.variants.length > 1
+  // Paddle renews it every period: one period at a time.
+  const renews = currency === 'USD' && isSubscription
 
   return (
     <li className="flex gap-3 py-5 sm:gap-4">
@@ -404,24 +415,28 @@ function CheckoutLineRow({
               {line.product.name}
             </Link>
             <p className="mt-0.5 text-sm text-[var(--muted)]">
-              {formatIdr(line.unitPriceIdr)}
+              {formatMoney(line.unitPrice, currency)}
               {line.durationDays !== null
-                ? ` per ${line.durationDays} days`
+                ? m.checkout_per_days({ days: line.durationDays })
                 : ''}
             </p>
           </div>
           <p className="shrink-0 font-medium tabular-nums">
-            {formatIdr(line.amountIdr)}
+            {formatMoney(line.amount, currency)}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {isSubscription ? (
+          {renews && line.durationDays !== null ? (
+            <span className="text-xs text-[var(--muted)]">
+              {m.checkout_renews_every({ days: line.durationDays })}
+            </span>
+          ) : isSubscription ? (
             <div className="flex items-center gap-3">
               <div
                 className="inline-flex items-center rounded-md border border-[var(--line)]"
                 role="group"
-                aria-label={`Periods of ${line.product.name}`}
+                aria-label={m.checkout_periods_of({ name: line.product.name })}
               >
                 <Button
                   type="button"
@@ -429,7 +444,7 @@ function CheckoutLineRow({
                   size="icon-sm"
                   disabled={busy || line.quantity <= 1}
                   onClick={() => onQuantity(line.quantity - 1)}
-                  aria-label="One period less"
+                  aria-label={m.checkout_one_less()}
                 >
                   <Minus className="size-3.5" aria-hidden />
                 </Button>
@@ -445,7 +460,7 @@ function CheckoutLineRow({
                   size="icon-sm"
                   disabled={busy || line.quantity >= line.maxQuantity}
                   onClick={() => onQuantity(line.quantity + 1)}
-                  aria-label="One period more"
+                  aria-label={m.checkout_one_more()}
                 >
                   <Plus className="size-3.5" aria-hidden />
                 </Button>
@@ -454,7 +469,7 @@ function CheckoutLineRow({
             </div>
           ) : (
             <span className="text-xs text-[var(--muted)]">
-              Quantity 1 · yours to keep
+              {m.checkout_quantity_one()}
             </span>
           )}
           <Button
@@ -466,14 +481,15 @@ function CheckoutLineRow({
             className="text-[var(--muted)]"
           >
             <Trash2 className="size-3.5" aria-hidden />
-            Remove
+            {m.common_remove()}
           </Button>
         </div>
 
         {isSubscription && hasVariants ? (
           <VariantChoices
             line={line}
-            subscribed={subscribed}
+            currency={currency}
+            subscribed={renews ? false : subscribed}
             busy={busy}
             onChange={onChange}
           />
@@ -532,11 +548,13 @@ function ChoiceGroup<T extends string>({
  */
 function VariantChoices({
   line,
+  currency,
   subscribed,
   busy,
   onChange,
 }: {
   line: CheckoutLine
+  currency: Currency
   subscribed: boolean
   busy: boolean
   onChange: (patch: LinePatch) => void
@@ -552,7 +570,7 @@ function VariantChoices({
           htmlFor={`variant-${id}`}
           className="block text-xs text-[var(--muted)]"
         >
-          Variant
+          {m.checkout_variant()}
         </label>
         <Select
           value={line.variant?.id}
@@ -560,12 +578,12 @@ function VariantChoices({
           onValueChange={(variantId) => onChange({ variantId })}
         >
           <SelectTrigger id={`variant-${id}`} className="w-full bg-white">
-            <SelectValue placeholder="Choose a variant" />
+            <SelectValue placeholder={m.checkout_choose_variant()} />
           </SelectTrigger>
           <SelectContent>
             {line.variants.map((option) => (
               <SelectItem key={option.id} value={option.id}>
-                {option.name} · {formatIdr(option.unitPriceIdr)}
+                {option.name} · {formatMoney(option.unitPrice, currency)}
                 {option.durationDays ? ` / ${option.durationDays} days` : ''}
               </SelectItem>
             ))}
@@ -577,31 +595,32 @@ function VariantChoices({
         <>
           <ChoiceGroup
             name={`placement-${id}`}
-            legend="When it starts"
+            legend={m.checkout_when_starts()}
             value={placement}
             disabled={busy}
             options={[
-              { value: 'after', label: 'After my current time' },
-              { value: 'now', label: 'Switch now' },
+              { value: 'after', label: m.checkout_after_current() },
+              { value: 'now', label: m.checkout_switch_now() },
             ]}
             onChange={(next) => onChange({ placement: next })}
           />
           {placement === 'now' && line.switch ? (
             <p className="text-xs text-[var(--muted)]">
-              Your time left is worth {formatIdr(line.switch.creditIdr)}, which
-              adds {line.switch.bonusDays} days. It would run until{' '}
-              {formatDateTime(line.switch.endsAt)}. Worked out again when you
-              pay.
+              {m.checkout_switch_info({
+                credit: formatMoney(line.switch.creditIdr, currency),
+                bonus: line.switch.bonusDays,
+                date: formatDateTime(line.switch.endsAt),
+              })}
             </p>
           ) : null}
           <ChoiceGroup
             name={`apply-${id}`}
-            legend="When the variant changes"
+            legend={m.checkout_when_changes()}
             value={applyVariant}
             disabled={busy}
             options={[
-              { value: 'auto', label: 'Restart my service automatically' },
-              { value: 'manual', label: "I'll restart it myself" },
+              { value: 'auto', label: m.checkout_auto_restart() },
+              { value: 'manual', label: m.checkout_manual_restart() },
             ]}
             onChange={(next) => onChange({ applyVariant: next })}
           />

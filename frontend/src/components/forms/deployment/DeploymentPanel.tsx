@@ -75,6 +75,7 @@ import { formatDateTime } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 import { useTourStage } from '#/lib/tours'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const POLL_MS = 3000
 /** While the service runs, its status is refreshed this often. */
@@ -107,7 +108,7 @@ function StepIcon({ status }: { status: RunStep['status'] }) {
       <span
         className={`${base} border-[var(--accent)] bg-[var(--accent)] text-white`}
       >
-        <Check className="size-3.5" aria-label="Done" />
+        <Check className="size-3.5" aria-label={m.step_done()} />
       </span>
     )
   }
@@ -116,14 +117,17 @@ function StepIcon({ status }: { status: RunStep['status'] }) {
       <span
         className={`${base} border-[var(--destructive)] bg-[var(--destructive)] text-white`}
       >
-        <X className="size-3.5" aria-label="Failed" />
+        <X className="size-3.5" aria-label={m.step_failed()} />
       </span>
     )
   }
   if (status === 'running') {
     return (
       <span className={`${base} border-[var(--ink)] bg-white`}>
-        <LoaderCircle className="size-3.5 animate-spin" aria-label="Working" />
+        <LoaderCircle
+          className="size-3.5 animate-spin"
+          aria-label={m.step_working()}
+        />
       </span>
     )
   }
@@ -131,7 +135,7 @@ function StepIcon({ status }: { status: RunStep['status'] }) {
     <span className={`${base} border-[var(--line)] bg-white`}>
       <Circle
         className="size-2 fill-[var(--line)] text-[var(--line)]"
-        aria-label="Waiting"
+        aria-label={m.step_waiting()}
       />
     </span>
   )
@@ -171,9 +175,7 @@ function Stepper({ run, admin }: { run: DeploymentRun; admin: boolean }) {
             ) : null}
             {step.status === 'failed' ? (
               <p className="mt-1 text-sm break-words text-[var(--destructive)]">
-                {admin && step.error
-                  ? step.error
-                  : 'Something went wrong here. Our team has been notified and will look into it.'}
+                {admin && step.error ? step.error : m.step_error()}
               </p>
             ) : null}
           </div>
@@ -257,7 +259,7 @@ export default function DeploymentPanel({
         if (!response.success || !response.data) {
           if (!quiet) {
             setFailed(true)
-            toast.error(response.message || 'Failed to load')
+            toast.error(response.message || m.panel_load_failed())
           }
           return
         }
@@ -266,7 +268,7 @@ export default function DeploymentPanel({
       } catch {
         if (!quiet) {
           setFailed(true)
-          toast.error('Unable to reach the server')
+          toast.error(m.common_error_network_short())
         }
       } finally {
         if (!quiet) setLoading(false)
@@ -312,13 +314,13 @@ export default function DeploymentPanel({
         body: JSON.stringify({ values }),
       })
       if (!response.success || !response.data) {
-        toast.error(response.message || 'Failed to save')
+        toast.error(response.message || m.panel_save_failed())
         return false
       }
       accept(response.data, false)
       return true
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
       return false
     } finally {
       setSaving(false)
@@ -330,8 +332,8 @@ export default function DeploymentPanel({
     if (await saveValues()) {
       toast.success(
         deployment?.state === 'notDeployed'
-          ? 'Saved'
-          : 'Saved. Redeploy to apply the changes',
+          ? m.panel_saved()
+          : m.panel_saved_redeploy(),
       )
     }
   }
@@ -348,13 +350,13 @@ export default function DeploymentPanel({
         body: JSON.stringify({ action }),
       })
       if (!response.success || !response.data) {
-        toast.error(response.message || 'Could not start')
+        toast.error(response.message || m.panel_start_failed())
         await load(true, true)
         return
       }
       accept(response.data, true)
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setStarting(null)
     }
@@ -369,13 +371,13 @@ export default function DeploymentPanel({
         { method: 'POST' },
       )
       if (!response.success || !response.data) {
-        toast.error(response.message || 'Could not run it')
+        toast.error(response.message || m.panel_run_failed())
         await load(true, true)
         return
       }
       accept(response.data, true)
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setStartingCommand(null)
     }
@@ -385,20 +387,20 @@ export default function DeploymentPanel({
     return (
       <div className={`flex items-center gap-2 ${hintClassName}`}>
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading…
+        {m.panel_loading()}
       </div>
     )
   }
   if (failed || !deployment) {
     return (
       <div className={`${cardClassName} px-4 py-8 text-center`}>
-        <p className={`mb-3 ${hintClassName}`}>This could not be loaded.</p>
+        <p className={`mb-3 ${hintClassName}`}>{m.panel_not_loaded()}</p>
         <Button
           type="button"
           variant="outline"
           onClick={() => void load(false, false)}
         >
-          Retry
+          {m.common_retry()}
         </Button>
       </div>
     )
@@ -477,8 +479,8 @@ export default function DeploymentPanel({
     const typed = missing.filter((key) => (values[key] ?? '').trim())
     toast.error(
       typed.length === missing.length
-        ? `Save ${missing.join(', ')} first`
-        : `Fill in ${missing.join(', ')} first`,
+        ? m.panel_save_first({ keys: missing.join(', ') })
+        : m.panel_fill_first({ keys: missing.join(', ') }),
     )
     focusSetting(missing.find((key) => !typed.includes(key)) ?? missing[0])
   }
@@ -494,9 +496,9 @@ export default function DeploymentPanel({
   async function copy(host: string) {
     try {
       await navigator.clipboard.writeText(`https://${host}`)
-      toast.success('Address copied')
+      toast.success(m.panel_copied())
     } catch {
-      toast.error('Could not copy the address')
+      toast.error(m.panel_copy_failed())
     }
   }
 
@@ -552,7 +554,7 @@ export default function DeploymentPanel({
                   className="text-[var(--destructive)] disabled:opacity-100"
                 >
                   <CalendarX aria-hidden />
-                  Expired
+                  {m.panel_expired()}
                 </Button>
               ) : null}
               {extendable ? (
@@ -566,7 +568,7 @@ export default function DeploymentPanel({
                     className="no-underline"
                   >
                     <CalendarPlus aria-hidden />
-                    Extend
+                    {m.panel_extend()}
                   </Link>
                 </Button>
               ) : null}
@@ -593,7 +595,7 @@ export default function DeploymentPanel({
                     rel="noreferrer"
                     className="no-underline"
                   >
-                    Open
+                    {m.panel_open()}
                     <ExternalLink aria-hidden />
                   </a>
                 </Button>
@@ -635,14 +637,14 @@ export default function DeploymentPanel({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Copy the address ${host}`}
+                    aria-label={m.panel_copy_address({ host })}
                     onClick={() => void copy(host)}
                   >
                     <Copy aria-hidden />
                   </Button>
                   {!live ? (
                     <span className={`ml-auto text-xs ${hintClassName}`}>
-                      Offline while the service is not running
+                      {m.panel_offline()}
                     </span>
                   ) : null}
                 </li>
@@ -654,7 +656,7 @@ export default function DeploymentPanel({
             data-tour="uptime"
             className="grid grid-cols-2 gap-px border-t border-[var(--line)] bg-[var(--line)] sm:grid-cols-4"
           >
-            <Stat label="Status">
+            <Stat label={m.panel_stat_status()}>
               <span className="inline-flex items-center gap-2">
                 {check ? (
                   <span
@@ -665,10 +667,10 @@ export default function DeploymentPanel({
                 {check ? CHECK_STATE_LABELS[check] : STATE_LABELS[state]}
               </span>
             </Stat>
-            <Stat label="Uptime, last 24 hours">
+            <Stat label={m.panel_stat_uptime()}>
               {uptimes.length > 0 ? formatUptime(Math.min(...uptimes)) : '—'}
             </Stat>
-            <Stat label="Response time">
+            <Stat label={m.panel_stat_response()}>
               {responses.length > 0
                 ? `${Math.round(
                     responses.reduce((sum, value) => sum + value, 0) /
@@ -676,7 +678,7 @@ export default function DeploymentPanel({
                   )} ms`
                 : '—'}
             </Stat>
-            <Stat label="Running for">
+            <Stat label={m.panel_stat_running_for()}>
               {deployment.runningSince
                 ? formatSince(deployment.runningSince)
                 : '—'}
@@ -693,9 +695,11 @@ export default function DeploymentPanel({
               ) : null}
               <BeatBar status={status} />
               <div className="flex justify-between text-xs text-[var(--muted)]">
-                <span>{formatSince(status.beats[0].at)} ago</span>
-                <span>Checked every 5 minutes</span>
-                <span>Now</span>
+                <span>
+                  {m.panel_ago({ time: formatSince(status.beats[0].at) })}
+                </span>
+                <span>{m.panel_checked()}</span>
+                <span>{m.panel_now()}</span>
               </div>
             </div>
           ))}
@@ -727,9 +731,7 @@ export default function DeploymentPanel({
 
       {show('overview') && !deployment.entitled ? (
         <p className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm">
-          {admin
-            ? 'This subscription is not active, so only turning off is possible.'
-            : 'Your subscription has expired. Extend it to deploy or turn the service on again. Your data is kept.'}
+          {admin ? m.panel_inactive_admin() : m.panel_inactive()}
         </p>
       ) : null}
 
@@ -737,17 +739,17 @@ export default function DeploymentPanel({
         <section className={`${cardClassName} p-5`} aria-live="polite">
           <h3 className="mb-4 text-sm font-medium">
             {featured.status === 'running'
-              ? `${runTitle(featured)} in progress`
-              : `${runTitle(featured)} did not finish`}
+              ? m.panel_run_in_progress({ title: runTitle(featured) })
+              : m.panel_run_unfinished({ title: runTitle(featured) })}
             <span className={`ml-2 font-normal ${hintClassName}`}>
               {formatDateTime(featured.startedAt)}
-              {featured.automatic ? ' · automatic' : ''}
+              {featured.automatic ? m.panel_automatic() : ''}
             </span>
           </h3>
           <Stepper run={featured} admin={admin} />
           {featured.status === 'running' ? (
             <p className={`mt-4 text-xs ${hintClassName}`}>
-              This page updates by itself. You can leave and come back.
+              {m.panel_auto_updates()}
             </p>
           ) : null}
         </section>
@@ -757,14 +759,14 @@ export default function DeploymentPanel({
         <section className="space-y-3" data-tour="settings">
           <div>
             <h3 className="text-sm font-medium">
-              {admin ? 'Customer values' : 'Settings'}
+              {admin ? m.panel_settings_admin() : m.panel_settings()}
             </h3>
             <p className={`text-xs ${hintClassName}`}>
               {admin
-                ? 'What the customer fills in once before the first deploy. Changes apply on the next redeploy.'
+                ? m.panel_settings_admin_hint()
                 : state === 'notDeployed'
-                  ? 'Fill these in before you deploy.'
-                  : 'Changes apply the next time you redeploy.'}
+                  ? m.panel_settings_first_hint()
+                  : m.panel_settings_hint()}
             </p>
           </div>
 
@@ -788,8 +790,8 @@ export default function DeploymentPanel({
               <div className="min-w-0 space-y-1">
                 <p className="font-medium">
                   {unfilled.length === 1
-                    ? '1 setting is needed before you can turn it on'
-                    : `${unfilled.length} settings are needed before you can turn it on`}
+                    ? m.panel_needed_one()
+                    : m.panel_needed_other({ count: unfilled.length })}
                 </p>
                 <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                   {unfilled.map((key) => (
@@ -804,10 +806,12 @@ export default function DeploymentPanel({
                   ))}
                 </p>
                 <p className={`text-xs ${hintClassName}`}>
-                  Marked with{' '}
-                  <span className="text-[var(--destructive)]">*</span> below.
-                  Once saved, {unfilled.length === 1 ? 'it' : 'they'} cannot be
-                  changed.
+                  {m.panel_marked_with()}{' '}
+                  <span className="text-[var(--destructive)]">*</span>{' '}
+                  {m.panel_marked_below()}{' '}
+                  {unfilled.length === 1
+                    ? m.panel_once_saved_one()
+                    : m.panel_once_saved_other()}
                 </p>
               </div>
             </div>
@@ -833,7 +837,9 @@ export default function DeploymentPanel({
                               >
                                 *
                               </span>
-                              <span className="sr-only"> (required)</span>
+                              <span className="sr-only">
+                                {m.panel_required_sr()}
+                              </span>
                             </>
                           ) : null}
                         </span>
@@ -842,8 +848,8 @@ export default function DeploymentPanel({
                             className={`text-xs font-normal ${hintClassName}`}
                           >
                             {variable.secret
-                              ? 'set once by the customer, then hidden'
-                              : 'set once by the customer'}
+                              ? m.panel_set_once_hidden()
+                              : m.panel_set_once()}
                           </span>
                         ) : null}
                       </Label>
@@ -870,16 +876,16 @@ export default function DeploymentPanel({
                       />
                       {showMissing && unfilled.includes(variable.key) ? (
                         <p className="text-xs text-[var(--destructive)]">
-                          Fill this in to turn it on.{' '}
+                          {m.panel_fill_to_on()}{' '}
                           {variable.secret
-                            ? 'It can be set only once and is hidden after saving.'
-                            : 'It can be set only once.'}
+                            ? m.panel_once_hidden()
+                            : m.panel_once()}
                         </p>
                       ) : variable.setOnce && !admin ? (
                         <p className={`text-xs ${hintClassName}`}>
                           {variable.secret
-                            ? 'It can be set only once and is hidden after saving, so keep a copy.'
-                            : 'It can be set only once.'}
+                            ? m.panel_once_hidden_keep()
+                            : m.panel_once()}
                         </p>
                       ) : null}
                     </div>
@@ -891,7 +897,7 @@ export default function DeploymentPanel({
                       <span aria-hidden className="text-[var(--destructive)]">
                         *
                       </span>{' '}
-                      Required
+                      {m.panel_required()}
                     </span>
                   ) : null}
                   <Button
@@ -900,11 +906,11 @@ export default function DeploymentPanel({
                     size="sm"
                     disabled={!dirty || saving}
                   >
-                    {saving ? 'Saving…' : 'Save settings'}
+                    {saving ? m.panel_saving() : m.panel_save_settings()}
                   </Button>
                   {dirty ? (
                     <span className={`text-xs ${hintClassName}`}>
-                      Not saved yet
+                      {m.panel_not_saved()}
                     </span>
                   ) : null}
                 </div>
@@ -927,18 +933,20 @@ export default function DeploymentPanel({
                       {variable.key}
                       {admin && variable.visibility === 'hidden' ? (
                         <span className="ml-1.5 font-sans text-xs">
-                          (hidden)
+                          {m.panel_hidden()}
                         </span>
                       ) : null}
                     </dt>
                     <dd className="font-mono text-[13px] break-all">
                       {variable.secret && variable.filled && !admin ? (
                         <span className="font-sans text-[var(--muted)]">
-                          Set · hidden
+                          {m.panel_set_hidden()}
                         </span>
                       ) : (
                         variable.value || (
-                          <span className="text-[var(--muted)]">empty</span>
+                          <span className="text-[var(--muted)]">
+                            {m.panel_empty()}
+                          </span>
                         )
                       )}
                     </dd>
@@ -958,7 +966,7 @@ export default function DeploymentPanel({
 
       {show('overview') && secondary.length > 0 ? (
         <section className="space-y-3" data-tour="power">
-          <h3 className="text-sm font-medium">Manage</h3>
+          <h3 className="text-sm font-medium">{m.panel_manage()}</h3>
           <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
             {secondary.map((action) => {
               const Icon = ACTION_ICONS[action]
@@ -1006,7 +1014,7 @@ export default function DeploymentPanel({
       {show('overview') && deployment.commands.length > 0 ? (
         <section className="space-y-3">
           <div>
-            <h3 className="text-sm font-medium">Commands</h3>
+            <h3 className="text-sm font-medium">{m.panel_commands()}</h3>
             {deployment.commandsBlocked ? (
               <p className={`text-xs ${hintClassName}`}>
                 {deployment.commandsBlocked}.
@@ -1034,7 +1042,7 @@ export default function DeploymentPanel({
                   ) : (
                     <Play aria-hidden />
                   )}
-                  Run
+                  {m.panel_run()}
                 </Button>
               </li>
             ))}
@@ -1162,7 +1170,9 @@ export default function DeploymentPanel({
       ) : null}
 
       {admin && section === 'activity' && history.length === 0 ? (
-        <p className={`${cardClassName} px-5 py-8 text-center ${hintClassName}`}>
+        <p
+          className={`${cardClassName} px-5 py-8 text-center ${hintClassName}`}
+        >
           {featured
             ? 'Only the run on the Overview so far.'
             : 'Nothing has run yet.'}
@@ -1171,7 +1181,7 @@ export default function DeploymentPanel({
 
       {show('activity') && history.length > 0 ? (
         <section className="space-y-3">
-          <h3 className="text-sm font-medium">Activity</h3>
+          <h3 className="text-sm font-medium">{m.panel_activity()}</h3>
           <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
             {history.map((run) => (
               <li key={run.id} className="px-5 py-3">
@@ -1196,11 +1206,11 @@ export default function DeploymentPanel({
                     }
                   >
                     {run.status === 'failed'
-                      ? 'Did not finish'
+                      ? m.panel_run_status_failed()
                       : run.status === 'running'
-                        ? 'In progress'
-                        : 'Finished'}
-                    {run.automatic ? ' · automatic' : ''}
+                        ? m.panel_run_status_running()
+                        : m.panel_run_status_done()}
+                    {run.automatic ? m.panel_automatic() : ''}
                   </span>
                   <span className="ml-auto text-xs text-[var(--muted)]">
                     {formatDateTime(run.startedAt)}
@@ -1211,7 +1221,7 @@ export default function DeploymentPanel({
                     <summary
                       className={`cursor-pointer text-xs ${hintClassName}`}
                     >
-                      Steps
+                      {m.panel_steps()}
                     </summary>
                     <div className="mt-3 pl-1">
                       <Stepper run={run} admin={admin} />
@@ -1247,19 +1257,19 @@ export default function DeploymentPanel({
               <DialogTitle>
                 {confirmErase === 'wipe'
                   ? `Delete ${deployment.product.name} data?`
-                  : `Erase ${deployment.product.name} data?`}
+                  : m.panel_erase_title({ name: deployment.product.name })}
               </DialogTitle>
               <DialogDescription>
                 {confirmErase === 'wipe'
                   ? `Everything ${deployment.internal?.username ?? 'this customer'} stored in this service is erased for good, and the service is removed from Dokploy. The customer's values and your environment and compose overrides go back to the product's. This cannot be undone.`
-                  : 'Everything stored in this service is erased for good and the service is removed, including the values you set once. Turn it on again to start afresh. This cannot be undone.'}
+                  : m.panel_erase_copy()}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-1.5">
               <Label htmlFor={`erase-${productId}`}>
-                Type{' '}
+                {m.panel_type_confirm_1()}{' '}
                 <span className="font-medium">{deployment.product.name}</span>{' '}
-                to confirm
+                {m.panel_type_confirm_2()}
               </Label>
               <Input
                 id={`erase-${productId}`}
@@ -1276,14 +1286,14 @@ export default function DeploymentPanel({
                 variant="outline"
                 onClick={() => setConfirmErase(null)}
               >
-                Cancel
+                {m.panel_cancel()}
               </Button>
               <Button
                 type="submit"
                 variant="destructive"
                 disabled={eraseName.trim() !== deployment.product.name}
               >
-                Erase data
+                {m.panel_erase()}
               </Button>
             </DialogFooter>
           </form>
@@ -1298,10 +1308,11 @@ export default function DeploymentPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Run "{confirmCommand?.label}"?</DialogTitle>
+            <DialogTitle>
+              {m.panel_run_title({ label: confirmCommand?.label ?? '' })}
+            </DialogTitle>
             <DialogDescription>
-              It runs in {deployment.product.name} now. This page shows when it
-              has finished.
+              {m.panel_run_copy({ name: deployment.product.name })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1318,7 +1329,7 @@ export default function DeploymentPanel({
                 if (confirmCommand) void runCommand(confirmCommand)
               }}
             >
-              Run
+              {m.panel_run()}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1327,11 +1338,10 @@ export default function DeploymentPanel({
       <Dialog open={confirmOff} onOpenChange={setConfirmOff}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Turn off {deployment.product.name}?</DialogTitle>
-            <DialogDescription>
-              The service stops and its address goes offline. Your data is kept,
-              and you can turn it back on later.
-            </DialogDescription>
+            <DialogTitle>
+              {m.panel_off_title({ name: deployment.product.name })}
+            </DialogTitle>
+            <DialogDescription>{m.panel_off_copy()}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -1339,14 +1349,14 @@ export default function DeploymentPanel({
               variant="outline"
               onClick={() => setConfirmOff(false)}
             >
-              Cancel
+              {m.panel_cancel()}
             </Button>
             <Button
               type="button"
               variant="destructive"
               onClick={() => void start('turnOff')}
             >
-              Turn off
+              {m.panel_off()}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1380,13 +1390,14 @@ function VariantNotice({
     return (
       <div className="flex flex-wrap items-center gap-3 border-t border-[var(--line)] bg-amber-50 px-5 py-3 text-sm text-amber-900">
         <p className="min-w-0 flex-1">
-          {admin ? 'The subscription' : 'Your subscription'} is now on{' '}
-          <strong className="font-medium">{variant.current.name}</strong>, but
-          the service still runs{' '}
-          {variant.deployed ? variant.deployed.name : 'the old variant'}.{' '}
+          {admin ? m.panel_variant_subject_admin() : m.panel_variant_subject()}{' '}
+          {m.panel_variant_is_now_on()}{' '}
+          <strong className="font-medium">{variant.current.name}</strong>
+          {m.panel_variant_but()}{' '}
+          {variant.deployed ? variant.deployed.name : m.panel_variant_old()}.{' '}
           {variant.applyVariant === 'auto'
-            ? 'It restarts on the new variant within a few minutes.'
-            : 'Restart it when you are ready to switch.'}
+            ? m.panel_variant_auto()
+            : m.panel_variant_manual()}
         </p>
         {canApply ? (
           <Button type="button" size="sm" disabled={locked} onClick={onApply}>
@@ -1395,7 +1406,7 @@ function VariantNotice({
             ) : (
               <RefreshCw aria-hidden />
             )}
-            Apply now
+            {m.panel_apply_now()}
           </Button>
         ) : null}
       </div>
@@ -1405,8 +1416,10 @@ function VariantNotice({
   if (variant.next) {
     return (
       <p className={`border-t border-[var(--line)] px-5 py-3 ${hintClassName}`}>
-        Switches to {variant.next.name} on{' '}
-        {formatDateTime(variant.next.startsAt)}.
+        {m.panel_switches_to({
+          name: variant.next.name,
+          date: formatDateTime(variant.next.startsAt),
+        })}
       </p>
     )
   }

@@ -2,7 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { apiFetch } from '#/lib/api'
 import type { PricingProduct } from '#/lib/product'
 import { SERVICES } from '#/lib/services'
-import { absoluteUrl } from '#/lib/seo'
+import { absoluteUrl, languageAlternates } from '#/lib/seo'
+import { locales, localizeHref } from '#/paraglide/runtime'
 
 type Entry = { path: string; priority: string; changefreq: string }
 
@@ -39,6 +40,30 @@ async function productPages(): Promise<Entry[]> {
   }
 }
 
+/**
+ * One <url> per language version of a page, each listing all versions as
+ * alternates. A page with a single URL (login, register) gets one entry.
+ */
+function urlEntries(entry: Entry): string[] {
+  const alternates = languageAlternates(entry.path)
+  const tail = `<changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority>`
+  if (alternates.length === 0) {
+    return [
+      `  <url><loc>${escapeXml(absoluteUrl(entry.path))}</loc>${tail}</url>`,
+    ]
+  }
+  const links = alternates
+    .map(
+      (link) =>
+        `<xhtml:link rel="alternate" hreflang="${link.hrefLang}" href="${escapeXml(link.href)}"/>`,
+    )
+    .join('')
+  return locales.map(
+    (locale) =>
+      `  <url><loc>${escapeXml(absoluteUrl(localizeHref(entry.path, { locale })))}</loc>${links}${tail}</url>`,
+  )
+}
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -53,11 +78,8 @@ export const Route = createFileRoute('/sitemap.xml')({
         const entries = [...STATIC_PAGES, ...(await productPages())]
         const body = [
           '<?xml version="1.0" encoding="UTF-8"?>',
-          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-          ...entries.map(
-            (entry) =>
-              `  <url><loc>${escapeXml(absoluteUrl(entry.path))}</loc><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
-          ),
+          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+          ...entries.flatMap(urlEntries),
           '</urlset>',
           '',
         ].join('\n')

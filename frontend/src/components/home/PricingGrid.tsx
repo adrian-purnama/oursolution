@@ -10,10 +10,11 @@ import ProductImage from '#/components/forms/product/ProductImage'
 import { markdownToPlainText } from '#/components/Markdown'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
-import { formatDays } from '#/lib/product'
+import { formatDays, shopPriceText } from '#/lib/product'
 import type { PricingProduct } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 type State =
   | { status: 'loading' }
@@ -27,13 +28,13 @@ const gridClassName =
 const GROUPS = [
   {
     kind: 'subscription',
-    title: 'Hosting',
-    hint: 'Buy again to extend.',
+    title: () => m.pricing_group_hosting(),
+    hint: () => m.pricing_group_hosting_hint(),
   },
   {
     kind: 'oneTime',
-    title: 'One-time purchases',
-    hint: 'Pay once, keep it.',
+    title: () => m.pricing_group_onetime(),
+    hint: () => m.pricing_group_onetime_hint(),
   },
 ] as const
 
@@ -78,7 +79,7 @@ export default function PricingGrid({
     return (
       <div className={`flex items-center gap-2 ${hintClassName}`}>
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading products…
+        {m.pricing_loading()}
       </div>
     )
   }
@@ -86,9 +87,9 @@ export default function PricingGrid({
   if (state.status === 'error') {
     return (
       <div className={`${cardClassName} px-4 py-8 text-center`}>
-        <p className={`mb-3 ${hintClassName}`}>Pricing could not be loaded.</p>
+        <p className={`mb-3 ${hintClassName}`}>{m.pricing_error()}</p>
         <Button type="button" variant="outline" onClick={() => void load()}>
-          Retry
+          {m.pricing_retry()}
         </Button>
       </div>
     )
@@ -106,9 +107,9 @@ export default function PricingGrid({
           aria-hidden
         />
         <p className="text-sm font-medium text-[var(--ink)]">
-          No products published yet
+          {m.pricing_empty_title()}
         </p>
-        <p className={`mt-1 ${hintClassName}`}>Check back soon.</p>
+        <p className={`mt-1 ${hintClassName}`}>{m.pricing_empty_hint()}</p>
       </div>
     )
   }
@@ -131,12 +132,12 @@ export default function PricingGrid({
           <section key={group.kind}>
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] pb-2.5">
               <h2 className="text-base font-semibold text-[var(--ink)]">
-                {group.title}
+                {group.title()}
                 <span className="ml-2 font-normal text-[var(--muted)] tabular-nums">
                   {items.length}
                 </span>
               </h2>
-              <p className={hintClassName}>{group.hint}</p>
+              <p className={hintClassName}>{group.hint()}</p>
             </div>
             <ul className={gridClassName}>{items.map(card)}</ul>
           </section>
@@ -193,12 +194,14 @@ function ProductCard({ product }: { product: PricingProduct }) {
 
         <div className="mt-2 mb-3 flex flex-wrap sm:mt-3 items-baseline gap-x-1.5">
           <p className="font-display text-base leading-tight sm:text-lg text-[var(--ink)]">
-            {product.pricingText || 'Contact us'}
+            {shopPriceText(product)}
           </p>
           <p className="text-xs text-[var(--muted)]">
             {product.durationDays
-              ? `per ${formatDays(product.durationDays)}`
-              : 'one-time'}
+              ? m.pricing_per_period({
+                  period: formatDays(product.durationDays),
+                })
+              : m.pricing_one_time()}
           </p>
         </div>
 
@@ -209,7 +212,7 @@ function ProductCard({ product }: { product: PricingProduct }) {
             className="min-w-0 flex-1"
           />
           <Button asChild variant="ghost" size="sm" className="flex-none">
-            <Link {...page}>Details</Link>
+            <Link {...page}>{m.pricing_details()}</Link>
           </Button>
         </div>
       </div>

@@ -3,7 +3,6 @@ import type {
   AdminUserDetailOutDto,
   AdminUserOutDto,
 } from "../../dto/adminUser.dto";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import {
   parseCreateAdminUserDto,
   parseEmailSearchQuery,
@@ -13,6 +12,7 @@ import type { ContactDetails } from "../../models/appconfig/appconfig.interface"
 import { parseContactDetails } from "../../validation/contact";
 import { parseRouteId } from "../../validation/parseParam";
 import { AdminService } from "./admin.service";
+import { fail, ok, refuse } from "../../utils/respond";
 
 type AppConfigPayload = {
   appName: string;
@@ -29,18 +29,9 @@ export class AdminController {
     try {
       const data = this.adminService.getAppConfig();
 
-      return res.status(200).json({
-        success: true,
-        message: "App config retrieved",
-        data,
-      } satisfies ApiResponseDto<AppConfigPayload>);
+      return ok<AppConfigPayload>(res, "App config retrieved", data);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to get app config",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to get app config");
     }
   };
 
@@ -56,33 +47,21 @@ export class AdminController {
 
       if ("appName" in body) {
         if (typeof body.appName !== "string" || !body.appName.trim()) {
-          return res.status(400).json({
-            success: false,
-            message: "appName must be a non-empty string",
-            data: null,
-          } satisfies ApiResponseDto);
+          return refuse(res, 400, "appName must be a non-empty string");
         }
         patch.appName = body.appName.trim();
       }
 
       if ("openLogin" in body) {
         if (typeof body.openLogin !== "boolean") {
-          return res.status(400).json({
-            success: false,
-            message: "openLogin must be a boolean",
-            data: null,
-          } satisfies ApiResponseDto);
+          return refuse(res, 400, "openLogin must be a boolean");
         }
         patch.openLogin = body.openLogin;
       }
 
       if ("openRegister" in body) {
         if (typeof body.openRegister !== "boolean") {
-          return res.status(400).json({
-            success: false,
-            message: "openRegister must be a boolean",
-            data: null,
-          } satisfies ApiResponseDto);
+          return refuse(res, 400, "openRegister must be a boolean");
         }
         patch.openRegister = body.openRegister;
       }
@@ -91,12 +70,7 @@ export class AdminController {
         try {
           patch.contact = parseContactDetails(body.contact);
         } catch (error) {
-          return res.status(400).json({
-            success: false,
-            message:
-              error instanceof Error ? error.message : "Invalid contact details",
-            data: null,
-          } satisfies ApiResponseDto);
+          return fail(res, error, "Invalid contact details");
         }
       }
 
@@ -106,40 +80,21 @@ export class AdminController {
         patch.openLogin === undefined &&
         patch.openRegister === undefined
       ) {
-        return res.status(400).json({
-          success: false,
-          message: "No valid fields to update",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "No valid fields to update");
       }
 
       const data = await this.adminService.updateAppConfig(patch);
 
-      return res.status(200).json({
-        success: true,
-        message: "App config updated",
-        data,
-      } satisfies ApiResponseDto<AppConfigPayload>);
+      return ok<AppConfigPayload>(res, "App config updated", data);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to update app config",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to update app config");
     }
   };
 
   updateAppLogo = async (req: Request, res: Response) => {
     try {
       if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: "file required",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "file required");
       }
 
       const result = await this.adminService.updateAppLogo({
@@ -148,21 +103,12 @@ export class AdminController {
         contentType: req.file.mimetype,
       });
 
-      return res.status(200).json({
-        success: true,
-        message: "App logo updated",
-        data: {
-          id: result.id.toString(),
-          url: result.url,
-        },
-      } satisfies ApiResponseDto<{ id: string; url: string }>);
+      return ok<{ id: string; url: string }>(res, "App logo updated", {
+        id: result.id.toString(),
+        url: result.url,
+      });
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to update app logo",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to update app logo");
     }
   };
 
@@ -170,17 +116,9 @@ export class AdminController {
     try {
       const id = parseRouteId(req.params.id);
       const data = await this.adminService.getUserDetail(id);
-      return res.status(200).json({
-        success: true,
-        message: "User retrieved",
-        data,
-      } satisfies ApiResponseDto<AdminUserDetailOutDto>);
+      return ok<AdminUserDetailOutDto>(res, "User retrieved", data);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Failed to get user",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to get user");
     }
   };
 
@@ -188,18 +126,9 @@ export class AdminController {
     try {
       const query = parseEmailSearchQuery(req.query.email);
       const data = await this.adminService.searchUsersByEmail(query);
-      return res.status(200).json({
-        success: true,
-        message: "Users retrieved",
-        data,
-      } satisfies ApiResponseDto<AdminUserOutDto[]>);
+      return ok<AdminUserOutDto[]>(res, "Users retrieved", data);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to search users",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to search users");
     }
   };
 
@@ -207,18 +136,9 @@ export class AdminController {
     try {
       const input = parseCreateAdminUserDto(req.body);
       const data = await this.adminService.createUser(input);
-      return res.status(201).json({
-        success: true,
-        message: "User created",
-        data,
-      } satisfies ApiResponseDto<AdminUserOutDto>);
+      return ok<AdminUserOutDto>(res, "User created", data, 201);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to create user",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to create user");
     }
   };
 
@@ -227,18 +147,9 @@ export class AdminController {
       const id = parseRouteId(req.params.id);
       const patch = parseUpdateAdminUserDto(req.body);
       const data = await this.adminService.updateUser(id, patch);
-      return res.status(200).json({
-        success: true,
-        message: "User updated",
-        data,
-      } satisfies ApiResponseDto<AdminUserOutDto>);
+      return ok<AdminUserOutDto>(res, "User updated", data);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to update user",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to update user");
     }
   };
 }

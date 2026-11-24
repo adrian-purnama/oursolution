@@ -3,12 +3,16 @@
  * answers whether the money is in, still on its way, or refused; later it can
  * be asked how a payment stands.
  */
+import type { PaymentCurrency } from "../../models/payment/payment.interface";
 
 export type ChargeLine = {
   id: string;
   name: string;
-  unitPriceIdr: number;
+  /** In the request's currency (whole rupiah, or US cents). */
+  unitPrice: number;
   quantity: number;
+  /** The provider's own price for the line (Paddle), or null. */
+  providerPriceId: string | null;
 };
 
 export type ChargeRequest = {
@@ -16,7 +20,9 @@ export type ChargeRequest = {
   invoiceNumber: string;
   userId: string;
   customerEmail: string;
-  amountIdr: number;
+  currency: PaymentCurrency;
+  /** In `currency`. */
+  amount: number;
   lines: ChargeLine[];
   expiresAt: Date;
   /** Where the provider sends the user back after paying. */
@@ -31,8 +37,8 @@ export type ChargeResult =
       status: "pending";
       reference: string | null;
       redirectUrl: string;
-      /** Lets the page show the provider's payment form inline (Snap). */
-      token: string | null;
+      /** Midtrans Snap's token, to show its payment form inline; null otherwise. */
+      snapToken: string | null;
     }
   | { status: "failed"; reason: string };
 
@@ -52,7 +58,7 @@ export type ProviderStatus = {
   /** The provider's raw status, e.g. "settlement". */
   raw: string;
   /** Amount the provider saw, when it says. */
-  amountIdr: number | null;
+  amount: number | null;
   reference: string | null;
   paymentType: string | null;
 };
@@ -66,13 +72,16 @@ export interface PaymentProvider {
    * yet (e.g. the user has not picked a way to pay). Throws when it cannot
    * tell right now.
    */
-  fetchStatus(paymentId: string): Promise<ProviderStatus | null>;
+  fetchStatus(
+    paymentId: string,
+    reference: string | null,
+  ): Promise<ProviderStatus | null>;
   /**
    * Stop a pending payment from being paid (e.g. close its virtual
    * account). Optional; nothing to do when the user never picked a way to
    * pay. Throws when the provider refuses.
    */
-  expire?(paymentId: string): Promise<void>;
+  expire?(paymentId: string, reference: string | null): Promise<void>;
 }
 
 /**

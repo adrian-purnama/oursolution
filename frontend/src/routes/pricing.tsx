@@ -2,13 +2,13 @@ import { createFileRoute } from '@tanstack/react-router'
 import PricingGrid from '#/components/home/PricingGrid'
 import PricingHero from '#/components/home/PricingHero'
 import { seo } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/pricing')({
   head: () =>
     seo({
-      title: 'Hosting plans and pricing',
-      description:
-        'Our Solution Hosting plans: apps like n8n set up, backed up, monitored and updated for you, plus ready-made workflows you buy once.',
+      title: m.seo_pricing_title(),
+      description: m.seo_pricing_description(),
       path: '/pricing',
       keywords: [
         'managed hosting pricing',

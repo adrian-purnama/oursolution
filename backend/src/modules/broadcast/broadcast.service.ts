@@ -26,6 +26,7 @@ import {
   absoluteLink,
   notificationService,
 } from "../notification/notification.service";
+import { UserError } from "../../utils/userError";
 
 const SOURCE = "modules/broadcast/broadcast.service.ts";
 /** Most recipients one email may go to. */
@@ -66,7 +67,7 @@ export function audienceLabel(
   return `${name} · deployment ${list}`;
 }
 
-export class BroadcastError extends Error {}
+export class BroadcastError extends UserError {}
 
 function toOut(doc: HydratedDocument<BroadcastInterface>): BroadcastOutDto {
   return {
@@ -97,7 +98,9 @@ function toStored(audience: BroadcastAudienceInDto): BroadcastAudience {
         ? audience.userIds.map((id) => new Types.ObjectId(id))
         : [],
     productId:
-      audience.type === "product" ? new Types.ObjectId(audience.productId) : null,
+      audience.type === "product"
+        ? new Types.ObjectId(audience.productId)
+        : null,
     match: audience.type === "product" ? audience.match : null,
     states:
       audience.type === "product" && audience.match === "deployment"

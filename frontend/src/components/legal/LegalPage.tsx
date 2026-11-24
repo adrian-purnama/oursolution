@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
+import { m } from '#/paraglide/messages'
 
 export type LegalSection = { id: string; title: string; body: ReactNode }
 
@@ -25,11 +26,11 @@ export default function LegalPage({
       </p>
       <h1 className="font-display mb-3 text-4xl sm:text-5xl">{title}</h1>
       <p className="mb-10 text-sm text-[var(--muted)]">
-        Last updated {updated}
+        {m.legal_last_updated({ date: updated })}
       </p>
 
       <div className="grid gap-12 lg:grid-cols-[14rem_1fr]">
-        <nav aria-label="On this page" className="hidden lg:block">
+        <nav aria-label={m.legal_on_this_page()} className="hidden lg:block">
           <ol className="sticky top-24 space-y-2 text-sm">
             {sections.map((section, index) => (
               <li key={section.id}>
@@ -59,9 +60,9 @@ export default function LegalPage({
             </section>
           ))}
           <p className="border-t border-[var(--line)] pt-6 text-sm text-[var(--muted)]">
-            Questions about this page? Reach us through the{' '}
+            {m.legal_questions()}{' '}
             <Link to="/contact" className="text-[var(--ink)] underline">
-              contact page
+              {m.legal_contact_page()}
             </Link>
             .
           </p>

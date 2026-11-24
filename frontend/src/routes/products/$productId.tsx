@@ -3,6 +3,7 @@ import ProductDetail from '#/components/forms/product/ProductDetail'
 import { apiFetch, toAbsoluteMediaUrl } from '#/lib/api'
 import type { PricingProduct } from '#/lib/product'
 import { absoluteUrl, jsonLd, seo } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 /** Fetched for the page's title and share preview; the page loads its own copy. */
 async function loadProductMeta(
@@ -38,10 +39,15 @@ export const Route = createFileRoute('/products/$productId')({
   head: ({ params, loaderData }) => {
     const product = loaderData?.product
     const path = `/products/${encodeURIComponent(params.productId)}`
-    if (!product) return seo({ title: 'Product', path, noindex: true })
+    if (!product) return seo({ title: m.seo_product(), path, noindex: true })
     const description =
       toMetaDescription(product.description) ||
-      `${product.name} from Our Solution. ${product.pricingText}`.trim()
+      m
+        .seo_product_fallback({
+          name: product.name,
+          pricing: product.pricingText,
+        })
+        .trim()
     const image = toAbsoluteMediaUrl(product.imageUrl) ?? undefined
     return {
       ...seo({

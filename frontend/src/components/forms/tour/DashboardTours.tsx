@@ -6,6 +6,7 @@ import { fireConfetti } from '#/components/tour/confetti'
 import type { Deployment } from '#/lib/deployment'
 import { useTourStage } from '#/lib/tours'
 import type { TourId } from '#/lib/tours'
+import { m } from '#/paraglide/messages'
 
 /**
  * The header's account menu; on small screens the profile link at the
@@ -29,21 +30,19 @@ function welcomeSteps(hasServices: boolean): TourStep[] {
   return [
     {
       target: '[data-tour="shop"]',
-      title: 'The shop',
-      body: hasServices
-        ? 'Find new services here, or extend the ones you have.'
-        : "You don't have any services yet. Find them in the shop, where you can also extend them later.",
+      title: m.tour_shop_title(),
+      body: hasServices ? m.tour_shop_body_has() : m.tour_shop_body_none(),
     },
     {
       target: '[data-tour="tickets"]',
-      title: 'Need help?',
-      body: 'If something goes wrong, open a ticket here and we will get back to you.',
+      title: m.tour_help_title(),
+      body: m.tour_help_body(),
     },
     {
       target: PROFILE_TARGETS,
       onEnter: openMobileMenu,
-      title: 'Your profile',
-      body: "Reset your password here, or link your Google account if you haven't yet.",
+      title: m.tour_profile_title(),
+      body: m.tour_profile_body(),
     },
   ]
 }
@@ -103,7 +102,7 @@ export default function DashboardTours({
   if (running === 'welcome') {
     return (
       <Tour
-        label="Welcome tour"
+        label={m.tour_welcome_label()}
         steps={welcomeSteps((deployments?.length ?? 0) > 0)}
         onEnd={() => {
           setWelcome('done')
@@ -122,20 +121,20 @@ export default function DashboardTours({
 
   return (
     <Tour
-      label="Your first service"
+      label={m.tour_first_label()}
       steps={[
         {
-          title: 'Yay, this is your first service!',
-          body: `${first.product.name} is yours. Let's take a quick look at how to get it running.`,
-          nextLabel: "Let's go",
+          title: m.tour_first_title(),
+          body: m.tour_first_body({ name: first.product.name }),
+          nextLabel: m.tour_first_next(),
           onShow: () => fireConfetti(),
         },
         {
           target: '[data-tour="service"]',
-          title: 'Open your service',
-          body: 'Press it to open its control panel, where you set it up and turn it on.',
+          title: m.tour_open_title(),
+          body: m.tour_open_body(),
           interactive: true,
-          nextLabel: 'Open it',
+          nextLabel: m.tour_open_next(),
           onNext: openPanel,
           // From here the control panel takes over, wherever it is opened.
           onShow: () => {

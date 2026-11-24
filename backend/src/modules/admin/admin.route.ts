@@ -110,6 +110,8 @@ router.delete("/users/:id/purchases/:purchaseId", purchaseController.revoke);
 
 router.get("/users/:id/payments", paymentController.listForUser);
 router.post("/users/:id/payments", paymentController.createForUser);
+router.get("/users/:id/billing-region", paymentController.getUserRegion);
+router.put("/users/:id/billing-region", paymentController.setUserRegion);
 router.get("/payments", paymentController.listAll);
 router.get("/payments/:paymentId", paymentController.getAny);
 router.get("/payments/:paymentId/invoice.pdf", paymentController.invoiceAny);

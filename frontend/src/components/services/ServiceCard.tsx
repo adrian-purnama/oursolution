@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight, Check } from 'lucide-react'
 import ServiceLogo from '#/components/services/ServiceLogo'
 import type { Service } from '#/lib/services'
+import { m } from '#/paraglide/messages'
 
 /** One service as a card; the whole card opens that service's page. */
 export default function ServiceCard({
@@ -42,7 +43,7 @@ export default function ServiceCard({
       </ul>
 
       <span className="mt-auto inline-flex items-center gap-2 text-sm font-medium">
-        Learn more
+        {m.service_learn_more()}
         <ArrowRight
           className="size-4 transition-transform duration-300 group-hover:translate-x-1"
           aria-hidden

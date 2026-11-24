@@ -13,6 +13,7 @@ import {
   hintClassName,
   inputClassNameCompact,
 } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 interface LoginResponse {
   email: string
@@ -33,7 +34,7 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
     event.preventDefault()
 
     if (!email.trim() || !password) {
-      toast.error('Email and password are required')
+      toast.error(m.auth_signin_required())
       return
     }
 
@@ -46,17 +47,17 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
       })
 
       if (!response.success || !response.data?.jwt) {
-        toast.error(response.message || 'Login failed')
+        toast.error(response.message || m.auth_signin_failed())
         return
       }
 
       await login(response.data.jwt)
-      toast.success(response.message || 'Logged in successfully')
+      toast.success(response.message || m.auth_signin_success())
       const next = safeRedirect(redirect)
       if (next) router.history.push(next)
       else await navigate({ to: '/dashboard' })
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
     } finally {
       setLoading(false)
     }
@@ -64,10 +65,12 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
 
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`}>
-      <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">Sign in</h1>
+      <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">
+        {m.auth_signin_title()}
+      </h1>
       {redirect?.startsWith('/checkout') ? (
         <p className={`-mt-3 mb-6 ${hintClassName}`}>
-          Sign in to continue to checkout.
+          {m.auth_signin_checkout_hint()}
         </p>
       ) : null}
 
@@ -77,7 +80,7 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
             htmlFor="login-email"
             className="mb-1 block text-sm text-[var(--ink)]"
           >
-            Email
+            {m.common_email()}
           </label>
           <input
             id="login-email"
@@ -95,13 +98,13 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
               htmlFor="login-password"
               className="block text-sm text-[var(--ink)]"
             >
-              Password
+              {m.common_password()}
             </label>
             <Link
               to="/forgot-password"
               className={`${hintClassName} underline hover:text-[var(--ink)]`}
             >
-              Forgot password?
+              {m.auth_forgot_link()}
             </Link>
           </div>
           <PasswordInput
@@ -118,7 +121,7 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
             checked={rememberMe}
             onChange={(event) => setRememberMe(event.target.checked)}
           />
-          Remember me
+          {m.auth_remember_me()}
         </label>
 
         <button
@@ -126,30 +129,30 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
           disabled={loading}
           className={buttonClassNameFull}
         >
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? m.auth_signing_in() : m.auth_signin_title()}
         </button>
       </form>
 
       <div className={`my-5 flex items-center gap-3 text-xs ${hintClassName}`}>
         <span className="h-px flex-1 bg-[var(--line)]" />
-        or
+        {m.common_or()}
         <span className="h-px flex-1 bg-[var(--line)]" />
       </div>
       <GoogleButton
-        label="Continue with Google"
+        label={m.common_continue_google()}
         mode="signin"
         rememberMe={rememberMe}
         redirect={redirect}
       />
 
       <p className={`mt-6 ${hintClassName}`}>
-        Don&apos;t have an account?{' '}
+        {m.auth_no_account()}{' '}
         <Link
           to="/register"
           search={redirect ? { redirect } : {}}
           className="text-[var(--ink)] underline"
         >
-          Register
+          {m.auth_register_link()}
         </Link>
       </p>
     </div>

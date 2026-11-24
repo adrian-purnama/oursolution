@@ -28,6 +28,7 @@ import ProductVariantsField, {
   settingsToCheck,
   toVariantDrafts,
   toVariantsBody,
+  usdProblem,
   variantLabel,
   variantProblems,
 } from '#/components/forms/admin/ProductVariantsField'
@@ -108,6 +109,10 @@ function toDraft(product: Product): Draft {
   }
 }
 
+/** What the USD price does, under every USD field. */
+const USD_HINT =
+  'USD prices are billed by Paddle, with tax added where required. Subscriptions renew automatically every period. Empty: sold only in Indonesia.'
+
 /** Everything that is missing or odd, for every tab. */
 function problemsOf(draft: Draft): Problem[] {
   const problems: Problem[] = []
@@ -141,6 +146,14 @@ function problemsOf(draft: Draft): Problem[] {
         tab: 'pricing',
         severity: 'error',
         message: 'The price must be a whole number of rupiah, 0 or more',
+      })
+    }
+    const usd = usdProblem(draft.variants[0].priceUsd)
+    if (usd) {
+      problems.push({
+        tab: 'pricing',
+        severity: 'error',
+        message: usd.charAt(0).toUpperCase() + usd.slice(1),
       })
     }
   }
@@ -422,6 +435,7 @@ export default function ProductEditorForm({
         description: pricing.description,
         notices,
         priceIdr: pricing.priceIdr,
+        priceUsdCents: pricing.priceUsdCents,
         ...(isSubscription
           ? {
               ...pricing,
@@ -652,11 +666,12 @@ export default function ProductEditorForm({
                     Price per variant
                   </legend>
                   <div
-                    className={`hidden gap-3 px-3 text-xs sm:grid sm:grid-cols-[minmax(0,1fr)_9rem_7rem] ${hintClassName}`}
+                    className={`hidden gap-3 px-3 text-xs sm:grid sm:grid-cols-[minmax(0,1fr)_9rem_7rem_7rem] ${hintClassName}`}
                     aria-hidden
                   >
                     <span>Variant</span>
                     <span>Price charged (IDR)</span>
+                    <span>Outside ID (USD)</span>
                     <span>Days per checkout</span>
                   </div>
                   {variants.map((variant, index) => {
@@ -681,7 +696,7 @@ export default function ProductEditorForm({
                     return (
                       <div
                         key={variant.key}
-                        className="grid grid-cols-2 items-center gap-3 rounded-md border border-[var(--line)] bg-white px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_9rem_7rem]"
+                        className="grid grid-cols-2 items-center gap-3 rounded-md border border-[var(--line)] bg-white px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_9rem_7rem_7rem]"
                       >
                         <div className="col-span-2 min-w-0 sm:col-span-1">
                           <p className="flex items-center gap-1.5 truncate text-sm font-medium">
@@ -707,6 +722,21 @@ export default function ProductEditorForm({
                           }
                         />
                         <Input
+                          aria-label={`${label}: price outside Indonesia (USD)`}
+                          type="number"
+                          inputMode="decimal"
+                          min={0.5}
+                          step={0.01}
+                          placeholder="Not sold"
+                          value={variant.priceUsd}
+                          aria-invalid={errorAbout('USD')}
+                          onChange={(event) =>
+                            setVariant(variant.key, {
+                              priceUsd: event.target.value,
+                            })
+                          }
+                        />
+                        <Input
                           aria-label={`${label}: days per checkout`}
                           type="number"
                           inputMode="numeric"
@@ -720,7 +750,7 @@ export default function ProductEditorForm({
                             })
                           }
                         />
-                        <div className="col-span-2 space-y-1 sm:col-span-3">
+                        <div className="col-span-2 space-y-1 sm:col-span-4">
                           <Input
                             aria-label={`${label}: pricing text`}
                             value={variant.pricingText}
@@ -745,6 +775,7 @@ export default function ProductEditorForm({
                       </div>
                     )
                   })}
+                  <p className={`text-xs ${hintClassName}`}>{USD_HINT}</p>
                   <p className={`text-xs ${hintClassName}`}>
                     Name variants and add more on the{' '}
                     <button
@@ -772,6 +803,30 @@ export default function ProductEditorForm({
                         setVariant(base.key, { priceIdr: event.target.value })
                       }
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="product-price-usd">
+                      Price outside Indonesia (USD)
+                    </Label>
+                    <Input
+                      id="product-price-usd"
+                      type="number"
+                      inputMode="decimal"
+                      min={0.5}
+                      step={0.01}
+                      placeholder="Not sold outside Indonesia"
+                      value={base.priceUsd}
+                      aria-invalid={Boolean(usdProblem(base.priceUsd))}
+                      onChange={(event) =>
+                        setVariant(base.key, { priceUsd: event.target.value })
+                      }
+                    />
+                    <p className={`text-xs ${hintClassName}`}>
+                      {base.paddlePriceId
+                        ? `On Paddle as ${base.paddlePriceId}. `
+                        : ''}
+                      {USD_HINT}
+                    </p>
                   </div>
                   {isSubscription ? (
                     <div className="space-y-1.5">

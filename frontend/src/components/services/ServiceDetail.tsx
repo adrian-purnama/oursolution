@@ -6,6 +6,7 @@ import ServiceIcon from '#/components/services/ServiceIcon'
 import ServiceLogo from '#/components/services/ServiceLogo'
 import { SERVICES } from '#/lib/services'
 import type { Service } from '#/lib/services'
+import { m } from '#/paraglide/messages'
 
 /** /services/<slug>: what one service is, what you get, and how it works. */
 export default function ServiceDetail({ service }: { service: Service }) {
@@ -24,7 +25,7 @@ export default function ServiceDetail({ service }: { service: Service }) {
             className="mb-12 inline-flex items-center gap-1.5 text-sm text-[var(--muted)] no-underline transition hover:text-[var(--ink)]"
           >
             <ArrowLeft className="size-4" aria-hidden />
-            All services
+            {m.service_all_services()}
           </Link>
 
           <div className="max-w-3xl">
@@ -47,9 +48,9 @@ export default function ServiceDetail({ service }: { service: Service }) {
 
       <section className="border-b border-[var(--line)] bg-[var(--surface)]">
         <div className="mx-auto max-w-6xl px-6 py-16 sm:py-24">
-          <p className="eyebrow mb-3">What you get</p>
+          <p className="eyebrow mb-3">{m.service_what_you_get()}</p>
           <h2 className="font-display mb-12 max-w-2xl text-3xl sm:text-4xl">
-            Everything included in {service.name}.
+            {m.service_everything_included({ name: service.name })}
           </h2>
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {service.features.map(({ icon: FeatureIcon, title, body }) => (
@@ -73,12 +74,14 @@ export default function ServiceDetail({ service }: { service: Service }) {
       <section className="bg-[var(--navy)] text-white">
         <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 sm:py-24 lg:grid-cols-[1fr_1.5fr] lg:gap-20">
           <div>
-            <p className="eyebrow mb-3 !text-white/50">How it works</p>
+            <p className="eyebrow mb-3 !text-white/50">
+              {m.service_how_it_works()}
+            </p>
             <h2 className="font-display mb-4 text-3xl sm:text-4xl">
-              {service.steps.length} steps, from start to running.
+              {m.service_steps_title({ count: service.steps.length })}
             </h2>
             <p className="max-w-sm leading-relaxed text-white/60">
-              You always know which step you are on and what comes next.
+              {m.service_steps_copy()}
             </p>
           </div>
           <ol>
@@ -113,16 +116,16 @@ export default function ServiceDetail({ service }: { service: Service }) {
               <div className="mx-auto max-w-6xl px-6 py-16 sm:py-24">
                 <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <p className="eyebrow mb-3">From the shop</p>
+                    <p className="eyebrow mb-3">{m.service_from_shop()}</p>
                     <h2 className="font-display text-3xl sm:text-4xl">
-                      Popular plans
+                      {m.service_popular_plans()}
                     </h2>
                   </div>
                   <Link
                     to="/pricing"
                     className="inline-flex items-center gap-1.5 text-sm font-medium no-underline hover:underline"
                   >
-                    See everything in the shop
+                    {m.service_see_shop()}
                     <ArrowRight className="size-4" aria-hidden />
                   </Link>
                 </div>
@@ -137,14 +140,14 @@ export default function ServiceDetail({ service }: { service: Service }) {
         <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
           <div className="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <h2 className="font-display max-w-xl text-3xl sm:text-4xl">
-              Ready to go ahead?
+              {m.service_ready()}
             </h2>
             <div className="flex flex-wrap gap-3">
               <ServiceAction action={service.primary} />
             </div>
           </div>
 
-          <p className="eyebrow mb-4">Our other services</p>
+          <p className="eyebrow mb-4">{m.service_other()}</p>
           <ul className="grid gap-4 sm:grid-cols-2">
             {others.map((other) => (
               <li key={other.slug}>

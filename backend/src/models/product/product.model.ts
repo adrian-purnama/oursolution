@@ -82,6 +82,8 @@ const variantSchema = new Schema<ProductVariant>(
     pricingText: { type: String, default: "" },
     description: { type: String, default: "" },
     priceIdr: { type: Number, required: true, min: 0 },
+    priceUsdCents: { type: Number, default: null, min: 0 },
+    paddlePriceId: { type: String, default: null },
     durationDays: { type: Number, required: true, min: 1 },
     deployment: { type: variantDeploymentSchema, default: null },
     // Legacy: read only while `deployment` is null.
@@ -128,6 +130,19 @@ const productSchema = new Schema<ProductInterface>(
       type: Number,
       required: true,
       min: 0,
+    },
+    priceUsdCents: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    paddlePriceId: {
+      type: String,
+      default: null,
+    },
+    paddleProductId: {
+      type: String,
+      default: null,
     },
     durationDays: {
       type: Number,

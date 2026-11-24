@@ -4,6 +4,7 @@ import { ChevronDown, Info, TriangleAlert } from 'lucide-react'
 import Markdown from '#/components/Markdown'
 import type { ProductNotice } from '#/lib/product'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /**
  * Wraps a card and attaches a small "Notices" tab to it, listing every
@@ -62,7 +63,7 @@ export default function ProductNotices({
   const list = (
     <ul
       id={drawerId}
-      aria-label="Notices"
+      aria-label={m.notices_label()}
       className={cn(
         'divide-y divide-[var(--line)] border border-[var(--line)] bg-[var(--surface)]',
         top
@@ -85,10 +86,10 @@ export default function ProductNotices({
             <div className="min-w-0 flex-1">
               {warning ? (
                 <span className="mb-0.5 block text-xs font-medium text-amber-700">
-                  Heads up
+                  {m.notices_heads_up()}
                 </span>
               ) : (
-                <span className="sr-only">Note: </span>
+                <span className="sr-only">{m.notices_note()}</span>
               )}
               <Markdown className="prose-p:my-0 prose-ul:my-1">
                 {notice.text}
@@ -114,14 +115,14 @@ export default function ProductNotices({
       )}
     >
       <Info className="size-3.5" aria-hidden />
-      Notices
+      {m.notices_label()}
       <span className="rounded-full bg-[var(--line)] px-1.5 text-[10px] leading-4 font-medium text-[var(--ink)]">
         {notices.length}
       </span>
       {warnings.length > 0 ? (
         <span
           className="size-1.5 rounded-full bg-amber-500"
-          aria-label={`${warnings.length} to read before buying`}
+          aria-label={m.notices_warn_aria({ count: warnings.length })}
         />
       ) : null}
       <ChevronDown

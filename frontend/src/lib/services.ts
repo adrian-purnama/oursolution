@@ -11,11 +11,11 @@ import {
   ScrollText,
   Server,
   ShieldCheck,
-  Smartphone,
   Workflow,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ANSWR_URL, BRAND_NAME, CONTACT_URL } from '#/lib/config'
+import { m } from '#/paraglide/messages'
 
 export type ServiceSlug = 'software' | 'hosting' | 'answr'
 
@@ -49,207 +49,212 @@ export type Service = {
   secondary?: Action
 }
 
-/** The three things we offer. The whole public site reads from this. */
+/**
+ * The three things we offer. The whole public site reads from this. Text
+ * fields are getters so they follow the current language each time they are read.
+ */
 export const SERVICES: Service[] = [
   {
     slug: 'software',
-    name: 'Software solutions',
-    tagline: 'Custom software, built around how you work.',
-    summary:
-      'You have a process to fix. We plan, design and build the web or mobile app for it, then stay on after launch.',
+    get name() {
+      return m.svc_software_name()
+    },
+    get tagline() {
+      return m.svc_software_tagline()
+    },
+    get summary() {
+      return m.svc_software_summary()
+    },
     icon: Code2,
     logo: '/oursolution-mark.png',
     fullLogo: '/oursolution-logo.png',
-    points: [
-      'A plan and an estimate before any code',
-      'Working releases you can try each week',
-      'We stay on after launch',
-    ],
-    intro:
-      'Dashboards, portals, mobile apps and integrations, built by one team that also hosts and maintains them. Nothing falls between an agency, a freelancer and a server nobody owns.',
-    features: [
-      {
-        icon: Code2,
-        title: 'Custom web apps',
-        body: 'Dashboards, portals and internal tools built around how you work.',
-      },
-      // {
-      //   icon: Smartphone,
-      //   title: 'Mobile apps',
-      //   body: 'Apps for your customers or your field team, on iOS and Android.',
-      // },
-      {
-        icon: Workflow,
-        title: 'Process digitalization',
-        body: 'Replace paper, spreadsheets and chat threads with clear workflows.',
-      },
-      {
-        icon: Plug,
-        title: 'Integrations and APIs',
-        body: 'Connect payments, messaging and the systems you already use.',
-      },
-      {
-        icon: Cloud,
-        title: 'Cloud and DevOps',
-        body: 'Hosting, CI/CD, backups and monitoring, set up properly.',
-      },
-      {
-        icon: LifeBuoy,
-        title: 'Maintenance and support',
-        body: 'Updates, fixes and new features after launch.',
-      },
-    ],
-    steps: [
-      {
-        title: 'Discovery',
-        body: 'We learn your goals, your users and the process you want to fix.',
-      },
-      {
-        title: 'Design',
-        body: 'Flows, screens and architecture you approve before we build.',
-      },
-      {
-        title: 'Build',
-        body: 'Short iterations with working releases you can try each week.',
-      },
-      {
-        title: 'Test',
-        body: 'Functional, security and performance checks before go-live.',
-      },
-      {
-        title: 'Launch',
-        body: 'Deployment, data migration and training for your team.',
-      },
-      {
-        title: 'Support',
-        body: 'Hosting, monitoring, maintenance and the next round of improvements.',
-      },
-    ],
-    primary: { label: 'Start a project', href: CONTACT_URL },
+    get points() {
+      return [
+        m.svc_software_point_1(),
+        m.svc_software_point_2(),
+        m.svc_software_point_3(),
+      ]
+    },
+    get intro() {
+      return m.svc_software_intro()
+    },
+    get features() {
+      return [
+        {
+          icon: Code2,
+          title: m.svc_software_f1_title(),
+          body: m.svc_software_f1_body(),
+        },
+        {
+          icon: Workflow,
+          title: m.svc_software_f2_title(),
+          body: m.svc_software_f2_body(),
+        },
+        {
+          icon: Plug,
+          title: m.svc_software_f3_title(),
+          body: m.svc_software_f3_body(),
+        },
+        {
+          icon: Cloud,
+          title: m.svc_software_f4_title(),
+          body: m.svc_software_f4_body(),
+        },
+        {
+          icon: LifeBuoy,
+          title: m.svc_software_f5_title(),
+          body: m.svc_software_f5_body(),
+        },
+      ]
+    },
+    get steps() {
+      return [
+        { title: m.svc_software_s1_title(), body: m.svc_software_s1_body() },
+        { title: m.svc_software_s2_title(), body: m.svc_software_s2_body() },
+        { title: m.svc_software_s3_title(), body: m.svc_software_s3_body() },
+        { title: m.svc_software_s4_title(), body: m.svc_software_s4_body() },
+        { title: m.svc_software_s5_title(), body: m.svc_software_s5_body() },
+        { title: m.svc_software_s6_title(), body: m.svc_software_s6_body() },
+      ]
+    },
+    get primary() {
+      return { label: m.svc_software_primary(), href: CONTACT_URL }
+    },
   },
   {
     slug: 'hosting',
-    name: 'Hosting solutions',
-    tagline: 'Ready-made tools, hosted and looked after for you.',
-    summary:
-      'You need a tool, not a project. Pick a ready-made app like n8n and we host, monitor and update it for you.',
+    get name() {
+      return m.svc_hosting_name()
+    },
+    get tagline() {
+      return m.svc_hosting_tagline()
+    },
+    get summary() {
+      return m.svc_hosting_summary()
+    },
     icon: Server,
     logo: '/oursolution-hosting-mark.png',
     fullLogo: '/oursolution-hosting-logo.png',
-    points: [
-      'Ready-made apps like n8n, hosted for you',
-      'We run the servers, backups and updates',
-      'Extend or stop a subscription anytime',
-    ],
-    intro:
-      'The same infrastructure we run client projects on, sold as simple plans in our shop. You use the tool, we keep it up.',
-    features: [
-      {
-        icon: Server,
-        title: 'Ready-made apps',
-        body: 'Tools like n8n, set up for you, plus workflows to start from.',
-      },
-      {
-        icon: DatabaseBackup,
-        title: 'Backups',
-        body: 'Your data is backed up for you, without anything to configure.',
-      },
-      {
-        icon: Activity,
-        title: 'Monitoring',
-        body: 'We watch your instance so problems are caught on our side.',
-      },
-      {
-        icon: RefreshCw,
-        title: 'Managed updates',
-        body: 'We apply updates, so you are not left on an old version.',
-      },
-      {
-        icon: LayoutDashboard,
-        title: 'One dashboard',
-        body: 'Everything you run with us, and its status, in one place.',
-      },
-      {
-        icon: ShieldCheck,
-        title: 'No lock-in',
-        body: 'Subscriptions run by the period. Extend or stop anytime.',
-      },
-    ],
-    steps: [
-      {
-        title: 'Pick a plan',
-        body: 'Choose the app and the period you want in the shop.',
-      },
-      {
-        title: 'Check out',
-        body: 'Create an account and pay. No call or contract needed.',
-      },
-      {
-        title: 'We set it up',
-        body: 'Your instance is deployed on our servers, ready to use.',
-      },
-      {
-        title: 'You use it, we run it',
-        body: 'Follow it from your dashboard and extend whenever you like.',
-      },
-    ],
-    primary: { label: 'Browse hosting plans', to: '/pricing' },
-    secondary: { label: 'Ask us a question', href: CONTACT_URL },
+    get points() {
+      return [
+        m.svc_hosting_point_1(),
+        m.svc_hosting_point_2(),
+        m.svc_hosting_point_3(),
+      ]
+    },
+    get intro() {
+      return m.svc_hosting_intro()
+    },
+    get features() {
+      return [
+        {
+          icon: Server,
+          title: m.svc_hosting_f1_title(),
+          body: m.svc_hosting_f1_body(),
+        },
+        {
+          icon: DatabaseBackup,
+          title: m.svc_hosting_f2_title(),
+          body: m.svc_hosting_f2_body(),
+        },
+        {
+          icon: Activity,
+          title: m.svc_hosting_f3_title(),
+          body: m.svc_hosting_f3_body(),
+        },
+        {
+          icon: RefreshCw,
+          title: m.svc_hosting_f4_title(),
+          body: m.svc_hosting_f4_body(),
+        },
+        {
+          icon: LayoutDashboard,
+          title: m.svc_hosting_f5_title(),
+          body: m.svc_hosting_f5_body(),
+        },
+        {
+          icon: ShieldCheck,
+          title: m.svc_hosting_f6_title(),
+          body: m.svc_hosting_f6_body(),
+        },
+      ]
+    },
+    get steps() {
+      return [
+        { title: m.svc_hosting_s1_title(), body: m.svc_hosting_s1_body() },
+        { title: m.svc_hosting_s2_title(), body: m.svc_hosting_s2_body() },
+        { title: m.svc_hosting_s3_title(), body: m.svc_hosting_s3_body() },
+        { title: m.svc_hosting_s4_title(), body: m.svc_hosting_s4_body() },
+      ]
+    },
+    get primary() {
+      return { label: m.svc_hosting_primary(), to: '/pricing' as const }
+    },
+    get secondary() {
+      return { label: m.svc_hosting_secondary(), href: CONTACT_URL }
+    },
   },
   {
     slug: 'answr',
-    name: 'answr.id',
-    tagline: 'An AI chatbot for your website.',
-    summary:
-      'An AI assistant you embed on your site with one script tag. It answers visitors from your own knowledge.',
+    get name() {
+      return m.svc_answr_name()
+    },
+    get tagline() {
+      return m.svc_answr_tagline()
+    },
+    get summary() {
+      return m.svc_answr_summary()
+    },
     icon: MessageCircle,
     logo: '/answr-full.png',
     wordmark: '',
-    points: [
-      'Answers from your own knowledge',
-      'Added to your site with one script tag',
-      `Built and run by ${BRAND_NAME}`,
-    ],
-    intro:
-      'answr is our own product: a chatbot that answers your visitors using the knowledge you give it, so common questions get an answer at any hour.',
-    features: [
-      {
-        icon: ScrollText,
-        title: 'Your own knowledge',
-        body: 'It answers from the information you provide, not from guesswork.',
-      },
-      {
-        icon: Code2,
-        title: 'One script tag',
-        body: 'Paste one line into your site and the assistant appears.',
-      },
-      {
-        icon: MessageCircle,
-        title: 'Always available',
-        body: 'Visitors get an answer straight away, day or night.',
-      },
-      {
-        icon: Server,
-        title: `Run by ${BRAND_NAME}`,
-        body: 'Built and hosted by the same team behind everything else here.',
-      },
-    ],
-    steps: [
-      {
-        title: 'Add your knowledge',
-        body: 'Give answr the information your visitors usually ask about.',
-      },
-      {
-        title: 'Embed it',
-        body: 'Paste the script tag into your website.',
-      },
-      {
-        title: 'Visitors get answers',
-        body: 'The assistant replies on your site using your knowledge.',
-      },
-    ],
-    primary: { label: 'Visit answr.id', href: ANSWR_URL, external: true },
-    secondary: { label: 'Talk to us about it', href: CONTACT_URL },
+    get points() {
+      return [
+        m.svc_answr_point_1(),
+        m.svc_answr_point_2(),
+        m.svc_answr_point_3({ brand: BRAND_NAME }),
+      ]
+    },
+    get intro() {
+      return m.svc_answr_intro()
+    },
+    get features() {
+      return [
+        {
+          icon: ScrollText,
+          title: m.svc_answr_f1_title(),
+          body: m.svc_answr_f1_body(),
+        },
+        {
+          icon: Code2,
+          title: m.svc_answr_f2_title(),
+          body: m.svc_answr_f2_body(),
+        },
+        {
+          icon: MessageCircle,
+          title: m.svc_answr_f3_title(),
+          body: m.svc_answr_f3_body(),
+        },
+        {
+          icon: Server,
+          title: m.svc_answr_f4_title({ brand: BRAND_NAME }),
+          body: m.svc_answr_f4_body(),
+        },
+      ]
+    },
+    get steps() {
+      return [
+        { title: m.svc_answr_s1_title(), body: m.svc_answr_s1_body() },
+        { title: m.svc_answr_s2_title(), body: m.svc_answr_s2_body() },
+        { title: m.svc_answr_s3_title(), body: m.svc_answr_s3_body() },
+      ]
+    },
+    get primary() {
+      return { label: m.svc_answr_primary(), href: ANSWR_URL, external: true }
+    },
+    get secondary() {
+      return { label: m.svc_answr_secondary(), href: CONTACT_URL }
+    },
   },
 ]
 

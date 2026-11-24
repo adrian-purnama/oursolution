@@ -1,9 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import InvoiceDetail from '#/components/forms/billing/InvoiceDetail'
 import { privatePage } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authenticated/billing/$paymentId')({
-  head: () => privatePage('Invoice'),
+  head: () => privatePage(m.seo_invoice()),
   component: InvoicePage,
 })
 

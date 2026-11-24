@@ -20,14 +20,15 @@ import {
   notificationStreams,
   type NotificationStreamHub,
 } from "./notification.stream";
+import { UserError } from "../../utils/userError";
 
 const SOURCE = "modules/notification/notification.service.ts";
 /** How many missed notifications a reconnecting stream gets at most. */
 export const REPLAY_LIMIT = 100;
 
-export class NotificationNotFoundError extends Error {
+export class NotificationNotFoundError extends UserError {
   constructor() {
-    super("Notification not found");
+    super("Notification not found", 404);
   }
 }
 

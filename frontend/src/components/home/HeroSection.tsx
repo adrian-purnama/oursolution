@@ -6,13 +6,15 @@ import HeroVisual from '#/components/home/HeroVisual'
 import { Button } from '#/components/ui/button'
 import { BRAND_NAME, CONTACT_URL } from '#/lib/config'
 import { MOTION_OK, gsap, useGSAP } from '#/lib/gsap'
+import { m } from '#/paraglide/messages'
+import { localizeHref } from '#/paraglide/runtime'
 
 const lineMask = 'block overflow-hidden pb-[0.12em] -mb-[0.12em]'
 
-const ASSURANCES = [
-  'Software solutions',
-  'Hosting solutions',
-  'answr.id chatbot',
+const assurances = () => [
+  m.home_hero_assure_software(),
+  m.home_hero_assure_hosting(),
+  m.home_hero_assure_chatbot(),
 ]
 
 /**
@@ -80,12 +82,12 @@ export default function HeroSection() {
         <h1 className="font-display mb-6 max-w-4xl text-[clamp(2.5rem,6.6vw,5.25rem)] leading-[1.02]">
           <span data-build="title1" className={lineMask}>
             <span data-hero-line className="block">
-              We build your software.
+              {m.home_hero_title_1()}
             </span>
           </span>
           <span data-build="title2" className={lineMask}>
             <span data-hero-line className="block text-[var(--accent)]">
-              Then we keep it running.
+              {m.home_hero_title_2()}
             </span>
           </span>
         </h1>
@@ -95,9 +97,7 @@ export default function HeroSection() {
           data-hero-fade
           className="mb-9 max-w-2xl text-lg leading-relaxed text-[var(--muted)]"
         >
-          {BRAND_NAME} is a software studio with its own hosting. We design and
-          ship the system your business needs, run ready-made tools on servers
-          we manage, and make answr, an AI chatbot for your website.
+          {m.home_hero_copy({ brand: BRAND_NAME })}
         </p>
 
         <div
@@ -106,8 +106,8 @@ export default function HeroSection() {
           className="flex flex-wrap justify-center gap-3"
         >
           <Button asChild size="lg" className="rounded-full px-6">
-            <a href={CONTACT_URL} className="no-underline">
-              Start a project
+            <a href={localizeHref(CONTACT_URL)} className="no-underline">
+              {m.home_hero_cta_primary()}
               <ArrowRight aria-hidden />
             </a>
           </Button>
@@ -118,7 +118,7 @@ export default function HeroSection() {
             className="rounded-full bg-white px-6"
           >
             <Link to="/services" className="no-underline">
-              See our services
+              {m.home_hero_cta_secondary()}
             </Link>
           </Button>
         </div>
@@ -128,7 +128,7 @@ export default function HeroSection() {
           data-hero-fade
           className="mt-9 flex flex-col items-center gap-x-7 gap-y-2 text-sm text-[var(--muted)] sm:flex-row"
         >
-          {ASSURANCES.map((item) => (
+          {assurances().map((item) => (
             <li key={item} className="inline-flex items-center gap-2">
               <Check className="size-4 text-[var(--accent)]" aria-hidden />
               {item}

@@ -110,14 +110,15 @@ export async function migrateLegacyPayments(): Promise<void> {
               kind:
                 product?.kind ??
                 (doc.durationDays ? "subscription" : "oneTime"),
-              unitPriceIdr: amount,
+              unitPrice: amount,
               quantity: 1,
               durationDays: doc.durationDays ?? null,
-              amountIdr: amount,
+              amount,
               periodIds: doc.periodId ? [doc.periodId] : [],
               purchaseId: doc.purchaseId ?? null,
             },
           ],
+          amount,
           expiresAt: createdAt,
           paidAt: doc.status === "paid" ? createdAt : null,
           grantedAt: doc.status === "paid" ? createdAt : null,
@@ -131,6 +132,7 @@ export async function migrateLegacyPayments(): Promise<void> {
           reviewNote: null,
         },
         $unset: {
+          amountIdr: "",
           productId: "",
           durationDays: "",
           periodId: "",
@@ -143,5 +145,55 @@ export async function migrateLegacyPayments(): Promise<void> {
     `Gave ${legacy.length} older payment(s) an invoice`,
     logSource,
     "migrateLegacyPayments",
+  );
+}
+
+/**
+ * Invoice amounts were stored as `amountIdr` / `unitPriceIdr` before USD
+ * invoices existed; they are now `amount` / `unitPrice`, in the invoice's
+ * currency. Rename what is still stored the old way. Safe to run again.
+ */
+export async function migrateAmountFieldNames(): Promise<void> {
+  const topLevel = await PaymentModel.collection.updateMany(
+    { amountIdr: { $exists: true } },
+    { $rename: { amountIdr: "amount" } },
+  );
+  const lines = await PaymentModel.collection.updateMany(
+    {
+      $or: [
+        { "items.amountIdr": { $exists: true } },
+        { "items.unitPriceIdr": { $exists: true } },
+      ],
+    },
+    [
+      {
+        $set: {
+          items: {
+            $map: {
+              input: "$items",
+              as: "item",
+              in: {
+                $mergeObjects: [
+                  "$$item",
+                  {
+                    amount: { $ifNull: ["$$item.amount", "$$item.amountIdr"] },
+                    unitPrice: {
+                      $ifNull: ["$$item.unitPrice", "$$item.unitPriceIdr"],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      { $unset: ["items.amountIdr", "items.unitPriceIdr"] },
+    ],
+  );
+  if (topLevel.modifiedCount + lines.modifiedCount === 0) return;
+  logger.info(
+    `Renamed amount fields on ${topLevel.modifiedCount} payment(s) and the lines of ${lines.modifiedCount}`,
+    logSource,
+    "migrateAmountFieldNames",
   );
 }

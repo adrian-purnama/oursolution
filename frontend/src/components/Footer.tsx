@@ -4,6 +4,8 @@ import { CONTACT_URL } from '#/lib/config'
 import { SHOW_HOME_STATE } from '#/lib/home'
 import { SERVICES } from '#/lib/services'
 import type { ServiceSlug } from '#/lib/services'
+import { m } from '#/paraglide/messages'
+import { localizeHref } from '#/paraglide/runtime'
 
 type FooterLink =
   | {
@@ -21,30 +23,31 @@ type FooterLink =
   | { label: string; slug: ServiceSlug }
   | { label: string; href: string }
 
-const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
+/** Built per render so the labels follow the current language. */
+const footerColumns = (): { title: string; links: FooterLink[] }[] => [
   {
-    title: 'Services',
+    title: m.footer_services(),
     links: SERVICES.map((service) => ({
       label: service.name,
       slug: service.slug,
     })),
   },
   {
-    title: 'Company',
+    title: m.footer_company(),
     links: [
-      { label: 'Home', to: '/' },
-      { label: 'All services', to: '/services' },
-      { label: 'Shop', to: '/pricing' },
-      { label: 'Contact', to: '/contact' },
-      { label: 'Privacy policy', to: '/privacy' },
-      { label: 'Terms of service', to: '/terms' },
+      { label: m.nav_home(), to: '/' },
+      { label: m.nav_all_services(), to: '/services' },
+      { label: m.nav_shop(), to: '/pricing' },
+      { label: m.nav_contact(), to: '/contact' },
+      { label: m.nav_privacy(), to: '/privacy' },
+      { label: m.nav_terms(), to: '/terms' },
     ],
   },
   {
-    title: 'Account',
+    title: m.footer_account(),
     links: [
-      { label: 'Sign up', to: '/register' },
-      { label: 'Log in', to: '/login' },
+      { label: m.nav_sign_up(), to: '/register' },
+      { label: m.nav_log_in(), to: '/login' },
     ],
   },
 ]
@@ -67,17 +70,16 @@ export default function Footer() {
               {appName}
             </p>
             <p className="mb-5 max-w-xs text-sm leading-relaxed text-[var(--muted)]">
-              Software solutions, hosting solutions and the answr.id chatbot,
-              from one team.
+              {m.footer_blurb()}
             </p>
             <a
-              href={CONTACT_URL}
+              href={localizeHref(CONTACT_URL)}
               className="text-sm font-medium text-[var(--ink)] underline decoration-[var(--line)] underline-offset-4 transition hover:decoration-[var(--ink)]"
             >
-              Start a project
+              {m.footer_start_project()}
             </a>
           </div>
-          {FOOTER_COLUMNS.map((column) => (
+          {footerColumns().map((column) => (
             <div key={column.title}>
               <p className="mb-4 text-sm font-semibold">{column.title}</p>
               <ul className="space-y-2">
@@ -112,10 +114,10 @@ export default function Footer() {
         </div>
         <div className="flex flex-col gap-2 border-t border-[var(--line)] pt-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-[var(--muted)]">
-            &copy; {year} {appName}. All rights reserved.
+            {m.footer_rights({ year, name: appName })}
           </p>
           <p className="font-mono text-xs text-[var(--muted)]">
-            Build · Run · Support
+            {m.footer_motto()}
           </p>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 export type TourStep = {
   /**
@@ -335,7 +336,7 @@ export default function Tour({
               </h2>
               <button
                 type="button"
-                aria-label="Skip the tour"
+                aria-label={m.tour_skip_aria()}
                 className="-mt-1 -mr-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--muted)] transition hover:bg-[var(--surface)] hover:text-[var(--ink)]"
                 onClick={() => end('skipped')}
               >
@@ -347,7 +348,10 @@ export default function Tour({
             </div>
             <div className="mt-4 flex items-center gap-2">
               <span className="mr-auto text-xs text-[var(--muted)] tabular-nums">
-                {shownIndex + 1} of {steps.length}
+                {m.tour_step_of({
+                  index: shownIndex + 1,
+                  total: steps.length,
+                })}
               </span>
               <Button
                 type="button"
@@ -355,7 +359,7 @@ export default function Tour({
                 size="sm"
                 onClick={() => end('skipped')}
               >
-                Skip
+                {m.tour_skip()}
               </Button>
               <Button
                 ref={primary}
@@ -367,7 +371,7 @@ export default function Tour({
                   next()
                 }}
               >
-                {shown.nextLabel ?? (lastShown ? 'Done' : 'Next')}
+                {shown.nextLabel ?? (lastShown ? m.tour_done() : m.tour_next())}
               </Button>
             </div>
           </div>

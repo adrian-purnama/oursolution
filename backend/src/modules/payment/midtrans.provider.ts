@@ -78,7 +78,7 @@ export function midtransStatus(n: MidtransNotification): ProviderStatus {
   return {
     state,
     raw,
-    amountIdr: amount !== null && Number.isFinite(amount) ? amount : null,
+    amount: amount !== null && Number.isFinite(amount) ? amount : null,
     reference: str(n.transaction_id),
     paymentType: str(n.payment_type),
   };
@@ -149,12 +149,12 @@ export class MidtransProvider implements PaymentProvider {
     const payload = {
       transaction_details: {
         order_id: request.paymentId,
-        gross_amount: request.amountIdr,
+        gross_amount: request.amount,
       },
       customer_details: { email: request.customerEmail },
       item_details: request.lines.map((line) => ({
         id: line.id.slice(0, 50),
-        price: line.unitPriceIdr,
+        price: line.unitPrice,
         quantity: line.quantity,
         name: itemName(line.name),
       })),
@@ -206,7 +206,7 @@ export class MidtransProvider implements PaymentProvider {
       status: "pending",
       reference: null,
       redirectUrl,
-      token: str(data.token),
+      snapToken: str(data.token),
     };
   }
 

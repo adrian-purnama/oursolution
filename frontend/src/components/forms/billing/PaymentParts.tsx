@@ -7,9 +7,14 @@ import {
   TableHeader,
   TableRow,
 } from '#/components/ui/table'
-import { PAYMENT_STATUS_LABELS, formatDateTime, formatIdr } from '#/lib/billing'
+import {
+  PAYMENT_STATUS_LABELS,
+  formatDateTime,
+  formatMoney,
+} from '#/lib/billing'
 import type { Payment, PaymentStatus } from '#/lib/billing'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 const STATUS_CLASSES: Record<PaymentStatus, string> = {
   paid: 'bg-emerald-50 text-emerald-700',
@@ -67,14 +72,18 @@ export function PaymentTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Invoice</TableHead>
-            {showCustomer ? <TableHead>Customer</TableHead> : null}
-            <TableHead>Products</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>{m.payment_col_invoice()}</TableHead>
+            {showCustomer ? (
+              <TableHead>{m.payment_col_customer()}</TableHead>
+            ) : null}
+            <TableHead>{m.payment_col_products()}</TableHead>
+            <TableHead className="text-right">
+              {m.payment_col_total()}
+            </TableHead>
+            <TableHead>{m.payment_col_status()}</TableHead>
             {actions ? (
               <TableHead>
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{m.payment_col_actions()}</span>
               </TableHead>
             ) : null}
           </TableRow>
@@ -86,36 +95,38 @@ export function PaymentTable({
               className={onOpen ? 'cursor-pointer' : undefined}
               onClick={onOpen ? () => onOpen(payment) : undefined}
             >
-              <TableCell className="align-top">
+              <TableCell className="align-middle">
                 <p className="font-medium">{payment.invoiceNumber}</p>
                 <p className="text-xs text-[var(--muted)]">
                   {formatDateTime(payment.createdAt)}
                 </p>
               </TableCell>
               {showCustomer ? (
-                <TableCell className="max-w-[14rem] align-top">
+                <TableCell className="max-w-[14rem] align-middle">
                   <p className="truncate" title={payment.user?.email}>
                     {payment.user?.email ?? '—'}
                   </p>
                 </TableCell>
               ) : null}
-              <TableCell className="max-w-[18rem] align-top">
+              <TableCell className="max-w-[18rem] align-middle">
                 <p className="truncate" title={itemsSummary(payment)}>
                   {itemsSummary(payment)}
                 </p>
                 {payment.needsReview ? (
-                  <p className="text-xs text-red-600">Needs review</p>
+                  <p className="text-xs text-red-600">
+                    {m.payment_needs_review()}
+                  </p>
                 ) : null}
               </TableCell>
-              <TableCell className="text-right align-top tabular-nums">
-                {formatIdr(payment.amountIdr)}
+              <TableCell className="text-right align-middle tabular-nums">
+                {formatMoney(payment.amount, payment.currency)}
               </TableCell>
-              <TableCell className="align-top">
+              <TableCell className="align-middle">
                 <PaymentStatusBadge status={payment.status} />
               </TableCell>
               {actions ? (
                 <TableCell
-                  className="text-right align-top"
+                  className="text-right align-middle"
                   onClick={(event) => event.stopPropagation()}
                 >
                   {actions(payment)}

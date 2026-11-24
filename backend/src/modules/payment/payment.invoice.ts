@@ -1,9 +1,13 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { findPublicFile, openPublicDownload } from "../../buckets/publicBucket";
 import { env } from "../../environment/env";
 import { UserModel } from "../../models/user/user.model";
 import { appConfigService } from "../appConfig/appConfig.service";
 import { mailer } from "../mail/mail.service";
 import { notificationService } from "../notification/notification.service";
-import { buildInvoicePdf, formatIdr } from "./invoice.pdf";
+import { buildInvoicePdf } from "./invoice.pdf";
+import { formatMoney } from "./money";
 import { mongoPaymentStore, type PaymentRecord } from "./payment.service";
 
 function siteUrl(): string {
@@ -29,6 +33,33 @@ function itemDetail(item: PaymentRecord["items"][number]): string {
   return [kind, item.description].filter(Boolean).join("\n");
 }
 
+const FALLBACK_LOGO = path.join(__dirname, "../../../assets/email-logo.png");
+
+/** The logo the admin uploaded (PNG/JPEG only), else the bundled email logo. */
+async function loadLogo(): Promise<Buffer | null> {
+  const id = appConfigService.appLogo;
+  if (id) {
+    try {
+      const file = await findPublicFile(id);
+      const type = String(file?.metadata?.contentType ?? "");
+      if (file && /^image\/(png|jpe?g)$/i.test(type)) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of openPublicDownload(id)) {
+          chunks.push(chunk as Buffer);
+        }
+        return Buffer.concat(chunks);
+      }
+    } catch {
+      // Fall through to the bundled logo.
+    }
+  }
+  try {
+    return await readFile(FALLBACK_LOGO);
+  } catch {
+    return null;
+  }
+}
+
 export async function invoicePdfFor(
   payment: PaymentRecord,
 ): Promise<{ buffer: Buffer; filename: string }> {
@@ -36,7 +67,9 @@ export async function invoicePdfFor(
     .select("email")
     .lean()
     .exec();
+  const logo = await loadLogo();
   const buffer = await buildInvoicePdf({
+    logo,
     brand: appConfigService.appName,
     siteUrl: siteUrl(),
     supportEmail: env.mailFrom,
@@ -51,10 +84,11 @@ export async function invoicePdfFor(
       name: item.name,
       detail: itemDetail(item),
       quantity: item.quantity,
-      unitPriceIdr: item.unitPriceIdr,
-      amountIdr: item.amountIdr,
+      unitPrice: item.unitPrice,
+      amount: item.amount,
     })),
-    amountIdr: payment.amountIdr,
+    amount: payment.amount,
+    currency: payment.currency ?? "IDR",
     payUrl: payment.status === "pending" ? invoicePageUrl(payment.id) : null,
   });
   return { buffer, filename: `${payment.invoiceNumber}.pdf` };
@@ -64,7 +98,7 @@ function emailItems(payment: PaymentRecord) {
   return payment.items.map((item) => ({
     name: item.name,
     quantity: item.quantity,
-    amount: formatIdr(item.amountIdr),
+    amount: formatMoney(item.amount, payment.currency ?? "IDR"),
   }));
 }
 
@@ -75,7 +109,7 @@ function emailItems(payment: PaymentRecord) {
 export async function notifyInvoiceIssued(paymentId: string): Promise<void> {
   const payment = await mongoPaymentStore.get(paymentId);
   if (!payment || payment.status !== "pending") return;
-  const total = formatIdr(payment.amountIdr);
+  const total = formatMoney(payment.amount, payment.currency ?? "IDR");
   const dueAt = payment.expiresAt.toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
@@ -83,7 +117,7 @@ export async function notifyInvoiceIssued(paymentId: string): Promise<void> {
   });
   await notificationService.send(
     {
-      userId: payment.userId,
+      userId: payment.userId.toString(),
       title: `Invoice ${payment.invoiceNumber} is ready`,
       body: `${total} is due by ${dueAt}.`,
       link: `/billing/${payment.id}`,
@@ -112,10 +146,10 @@ export async function notifyInvoiceIssued(paymentId: string): Promise<void> {
 export async function notifyPaymentReceived(paymentId: string): Promise<void> {
   const payment = await mongoPaymentStore.get(paymentId);
   if (!payment) return;
-  const total = formatIdr(payment.amountIdr);
+  const total = formatMoney(payment.amount, payment.currency ?? "IDR");
   await notificationService.send(
     {
-      userId: payment.userId,
+      userId: payment.userId.toString(),
       title: "Payment received",
       body: `Invoice ${payment.invoiceNumber} (${total}) is paid. Anything you bought is now active.`,
       link: `/billing/${payment.id}`,

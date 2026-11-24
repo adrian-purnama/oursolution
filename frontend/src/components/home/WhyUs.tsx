@@ -1,18 +1,10 @@
 import { BRAND_NAME } from '#/lib/config'
+import { m } from '#/paraglide/messages'
 
-const REASONS = [
-  {
-    title: 'One team, start to finish',
-    body: 'The people who build your system are the people who host and maintain it. Nothing gets lost in a handover.',
-  },
-  {
-    title: 'Clear before you commit',
-    body: 'Projects start with a plan and an estimate. Hosting plans show their price up front in the shop.',
-  },
-  {
-    title: 'We stay on',
-    body: 'Monitoring, backups, updates and the next round of improvements are part of the job, not an afterthought.',
-  },
+const reasons = () => [
+  { title: m.home_why_1_title(), body: m.home_why_1_body() },
+  { title: m.home_why_2_title(), body: m.home_why_2_body() },
+  { title: m.home_why_3_title(), body: m.home_why_3_body() },
 ]
 
 /** Three short reasons to pick us, between the services and the final CTA. */
@@ -21,14 +13,16 @@ export default function WhyUs() {
     <section className="border-b border-[var(--line)] bg-white">
       <div className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
         <div data-reveal className="mb-12 max-w-2xl lg:mb-16">
-          <p className="eyebrow mb-3">Why {BRAND_NAME}</p>
+          <p className="eyebrow mb-3">
+            {m.home_why_eyebrow({ brand: BRAND_NAME })}
+          </p>
           <h2 className="font-display text-3xl text-[var(--ink)] sm:text-5xl">
-            Built by us, run by us.
+            {m.home_why_title()}
           </h2>
         </div>
 
         <ol className="grid gap-10 md:grid-cols-3 md:gap-8">
-          {REASONS.map((reason, index) => (
+          {reasons().map((reason, index) => (
             <li
               key={reason.title}
               data-reveal

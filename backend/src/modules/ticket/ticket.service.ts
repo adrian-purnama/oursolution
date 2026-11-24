@@ -40,6 +40,7 @@ import {
   type SendNotificationOptions,
 } from "../notification/notification.service";
 import { buildSummaryPrompt, sanitizeSummary } from "./ticket.summary";
+import { UserError } from "../../utils/userError";
 
 const SOURCE = "modules/ticket/ticket.service.ts";
 
@@ -71,13 +72,13 @@ export const TICKET_ERROR_CODES = {
 } as const;
 
 /** A refusal with an HTTP status and a code the page can act on. */
-export class TicketError extends Error {
+export class TicketError extends UserError {
   constructor(
     message: string,
-    readonly status: 400 | 403 | 404 | 409 | 429,
+    override readonly status: 400 | 403 | 404 | 409 | 429,
     readonly code: string,
   ) {
-    super(message);
+    super(message, status);
   }
 }
 
@@ -797,9 +798,7 @@ export class TicketService {
     return TicketMessageModel.create(fields);
   }
 
-  private async emailsOf(
-    ids: Types.ObjectId[],
-  ): Promise<Map<string, string>> {
+  private async emailsOf(ids: Types.ObjectId[]): Promise<Map<string, string>> {
     const users = await UserModel.find({ _id: { $in: ids } })
       .select("email")
       .exec();
@@ -865,23 +864,21 @@ export class TicketService {
             summary: ticket.summary ?? null,
           }
         : null,
-      messages: messages.map(
-        (message): TicketMessageOutDto => ({
-          id: String(message._id),
-          kind: message.kind,
-          senderRole: message.senderRole,
-          ...(emails
-            ? { senderEmail: emails.get(message.senderId.toString()) }
-            : {}),
-          body: message.body,
-          imageUrl: message.attachment
-            ? signedImageUrl(String(message._id))
-            : null,
-          fromStatus: message.fromStatus,
-          toStatus: message.toStatus,
-          createdAt: (message.createdAt ?? new Date()).toISOString(),
-        }),
-      ),
+      messages: messages.map((message): TicketMessageOutDto => ({
+        id: String(message._id),
+        kind: message.kind,
+        senderRole: message.senderRole,
+        ...(emails
+          ? { senderEmail: emails.get(message.senderId.toString()) }
+          : {}),
+        body: message.body,
+        imageUrl: message.attachment
+          ? signedImageUrl(String(message._id))
+          : null,
+        fromStatus: message.fromStatus,
+        toStatus: message.toStatus,
+        createdAt: (message.createdAt ?? new Date()).toISOString(),
+      })),
     };
   }
 }

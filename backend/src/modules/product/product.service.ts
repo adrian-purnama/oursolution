@@ -29,18 +29,21 @@ import { env } from "../../environment/env";
 import { normalizeImage } from "../../utils/image";
 import { DeploymentModel } from "../../models/deployment/deployment.model";
 import { RedeemCodeModel } from "../../models/redeemCode/redeemCode.model";
+import type { BillingRegion } from "../../models/user/user.interface";
+import { syncToPaddle } from "../payment/paddle.catalog";
 import {
   fitVariants,
   removedVariantIds,
   variantsOf,
   type VariantHost,
 } from "./product.variants";
+import { UserError } from "../../utils/userError";
 
 export type ProductDoc = HydratedDocument<ProductInterface>;
 
-export class ProductNotFoundError extends Error {
+export class ProductNotFoundError extends UserError {
   constructor() {
-    super("Product not found");
+    super("Product not found", 404);
   }
 }
 
@@ -79,8 +82,49 @@ export function reorderImageIds(current: string[], ids: string[]): string[] {
   return ids;
 }
 
-/** The public shape: no internal price, deployment or access link. */
-export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
+/**
+ * The public shape: no deployment or access link, and only the prices of
+ * the visitor's region. Indonesia sees rupiah and the admin's pricing
+ * texts; everyone else sees US dollars (their pricing texts are rupiah, so
+ * they are left empty) and only what Paddle can charge.
+ */
+export function toPricingProductOut(
+  product: ProductDoc,
+  region: BillingRegion = "ID",
+): PricingProductOutDto {
+  const intl = region === "INTL";
+  const isSubscription = product.kind === "subscription";
+  const variants = isSubscription
+    ? variantsOf(product).flatMap((variant) => {
+        const price = intl
+          ? variant.paddlePriceId
+            ? variant.priceUsdCents
+            : null
+          : variant.priceIdr;
+        if (price === null) return [];
+        return [
+          {
+            id: variant.id,
+            name: variant.name,
+            specs: variant.specs,
+            pricingText: intl ? "" : variant.pricingText,
+            description: variant.description,
+            price,
+            durationDays: variant.durationDays,
+          },
+        ];
+      })
+    : [];
+  const ownPrice = intl
+    ? product.paddlePriceId
+      ? (product.priceUsdCents ?? null)
+      : null
+    : product.priceIdr;
+  const prices = isSubscription
+    ? variants.map((variant) => variant.price)
+    : ownPrice === null
+      ? []
+      : [ownPrice];
   return {
     id: product.id,
     name: product.name,
@@ -88,32 +132,13 @@ export function toPricingProductOut(product: ProductDoc): PricingProductOutDto {
     color: product.color,
     imageUrl: coverUrl(product),
     images: imagesOf(product),
-    pricingText: product.pricingText,
+    pricingText: intl ? "" : product.pricingText,
     description: product.description,
     notices: noticesOf(product),
     durationDays: product.durationDays,
-    variants:
-      product.kind === "subscription"
-        ? variantsOf(product).map(
-            ({
-              id,
-              name,
-              specs,
-              pricingText,
-              description,
-              priceIdr,
-              durationDays,
-            }) => ({
-              id,
-              name,
-              specs,
-              pricingText,
-              description,
-              priceIdr,
-              durationDays,
-            }),
-          )
-        : [],
+    currency: intl ? "USD" : "IDR",
+    price: prices.length > 0 ? Math.min(...prices) : null,
+    variants,
   };
 }
 
@@ -154,6 +179,8 @@ function variantListOf(product: ProductDoc): ProductVariant[] {
       pricingText,
       description,
       priceIdr,
+      priceUsdCents,
+      paddlePriceId,
       durationDays,
       deployment,
       composeFile,
@@ -164,6 +191,8 @@ function variantListOf(product: ProductDoc): ProductVariant[] {
       pricingText: pricingText ?? "",
       description: description ?? "",
       priceIdr,
+      priceUsdCents: priceUsdCents ?? null,
+      paddlePriceId: paddlePriceId ?? null,
       durationDays,
       deployment: deployment
         ? {
@@ -188,6 +217,9 @@ export function toProductOut(product: ProductDoc): ProductOutDto {
     description: product.description,
     notices: noticesOf(product),
     priceIdr: product.priceIdr,
+    priceUsdCents: product.priceUsdCents ?? null,
+    paddlePriceId: product.paddlePriceId ?? null,
+    paddleProductId: product.paddleProductId ?? null,
     durationDays: product.durationDays,
     deployment: product.deployment
       ? {
@@ -331,25 +363,34 @@ export class ProductService {
     return products.map(toProductOut);
   }
 
-  async listPricing(): Promise<PricingProductOutDto[]> {
+  /** The shop in a region: products it cannot be sold in are left out. */
+  async listPricing(
+    region: BillingRegion = "ID",
+  ): Promise<PricingProductOutDto[]> {
     const products = await ProductModel.find({
       showOnPricingPage: true,
       deletedAt: null,
     })
       .sort({ priceIdr: 1, name: 1 })
       .exec();
-    return products.map(toPricingProductOut);
+    return products
+      .map((product) => toPricingProductOut(product, region))
+      .filter((product) => product.price !== null)
+      .sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
   }
 
   /** Public: one product, only while it is published and not deleted. */
-  async getPricing(id: string): Promise<PricingProductOutDto> {
+  async getPricing(
+    id: string,
+    region: BillingRegion = "ID",
+  ): Promise<PricingProductOutDto> {
     const product = await ProductModel.findOne({
       _id: id,
       showOnPricingPage: true,
       deletedAt: null,
     }).exec();
     if (!product) throw new ProductNotFoundError();
-    return toPricingProductOut(product);
+    return toPricingProductOut(product, region);
   }
 
   async get(id: string): Promise<ProductDoc> {
@@ -366,29 +407,48 @@ export class ProductService {
   }
 
   async create(input: CreateProductDto): Promise<ProductOutDto> {
-    const variants = fitVariants(input, env.deployDomain ?? undefined);
+    const variants = fitVariants(
+      { ...input, paddlePriceId: null },
+      env.deployDomain ?? undefined,
+    );
+    let product: ProductDoc;
     try {
-      return toProductOut(await ProductModel.create({ ...input, variants }));
+      product = await ProductModel.create({
+        ...input,
+        variants,
+        paddlePriceId: null,
+        paddleProductId: null,
+      });
     } catch (error) {
       rethrowDuplicate(error);
     }
+    await syncToPaddle(product);
+    return toProductOut(product);
   }
 
   async update(id: string, patch: UpdateProductDto): Promise<ProductOutDto> {
     const product = await this.get(id);
     const before = variantListOf(product);
     product.set(patch);
+    // The form sends variants without their Paddle price: keep the synced one.
+    const synced = new Map(before.map((v) => [v.id, v.paddlePriceId]));
+    const variants = variantListOf(product).map((variant) => ({
+      ...variant,
+      paddlePriceId: synced.get(variant.id) ?? null,
+    }));
     const host: VariantHost = {
       kind: product.kind,
       name: product.name,
       priceIdr: product.priceIdr,
+      priceUsdCents: product.priceUsdCents ?? null,
+      paddlePriceId: product.paddlePriceId ?? null,
       durationDays: product.durationDays,
       pricingText: product.pricingText,
       description: product.description,
       deployment: product.deployment,
       variantName: product.variantName ?? "",
       variantSpecs: product.variantSpecs ?? "",
-      variants: variantListOf(product),
+      variants,
     };
     // Checked on every save: a new compose file for the product must still
     // mount what its variants mount.
@@ -402,6 +462,7 @@ export class ProductService {
     } catch (error) {
       rethrowDuplicate(error);
     }
+    await syncToPaddle(product);
     return toProductOut(product);
   }
 

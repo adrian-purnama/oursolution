@@ -6,11 +6,14 @@ import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import type { ProductNotice } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** Shown in place of a service's notices while the tour is open. */
 export const EXAMPLE_NOTICE: ProductNotice = {
   tone: 'info',
-  text: '**Example notice.** Notes about this service, like planned maintenance or setup tips, show up here.',
+  get text() {
+    return m.tour_example_notice()
+  },
 }
 
 /** Stands in for the settings of a service that has none, during the tour. */
@@ -19,11 +22,11 @@ export function ExampleSettings() {
     <section className="space-y-3" data-tour="settings">
       <div>
         <h3 className="text-sm font-medium">
-          Settings
+          {m.tour_settings_title()}
           <ExampleTag />
         </h3>
         <p className={`text-xs ${hintClassName}`}>
-          This service has no settings. Services that do list them here.
+          {m.tour_example_settings_empty()}
         </p>
       </div>
       <div
@@ -47,7 +50,7 @@ export function ExampleSettings() {
             placeholder="you@example.com"
             className="bg-white font-mono text-[13px] md:text-[13px]"
           />
-          <p className={`text-xs ${hintClassName}`}>It can be set only once.</p>
+          <p className={`text-xs ${hintClassName}`}>{m.panel_once()}</p>
         </div>
       </div>
     </section>
@@ -58,14 +61,22 @@ export function ExampleSettings() {
 function ExampleTag() {
   return (
     <span className="ml-2 rounded-full bg-[var(--surface)] px-2 py-0.5 text-xs font-normal text-[var(--muted)] ring-1 ring-[var(--line)]">
-      Example
+      {m.tour_example_tag()}
     </span>
   )
 }
 
-const EXAMPLE_POWER = [
-  { label: 'Restart', hint: 'Turns it off and on again.', Icon: RotateCw },
-  { label: 'Turn off', hint: 'Stops it. Your data is kept.', Icon: Power },
+const examplePower = () => [
+  {
+    label: m.tour_example_restart(),
+    hint: m.tour_example_restart_hint(),
+    Icon: RotateCw,
+  },
+  {
+    label: m.tour_example_off(),
+    hint: m.tour_example_off_hint(),
+    Icon: Power,
+  },
 ]
 
 /** Stands in for the power controls before the service is deployed. */
@@ -73,11 +84,11 @@ export function ExamplePowerControls() {
   return (
     <section className="space-y-3" data-tour="power">
       <h3 className="text-sm font-medium">
-        Manage
+        {m.panel_manage()}
         <ExampleTag />
       </h3>
       <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
-        {EXAMPLE_POWER.map(({ label, hint, Icon }) => (
+        {examplePower().map(({ label, hint, Icon }) => (
           <li
             key={label}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5"
@@ -97,40 +108,40 @@ export function ExamplePowerControls() {
   )
 }
 
-const STEPS: TourStep[] = [
+const steps = (): TourStep[] => [
   {
     target: '[data-tour="notices"]',
-    title: 'Notices',
-    body: 'Read these first. They hold anything you should know about this service, like maintenance or setup tips.',
+    title: m.tour_notices_title(),
+    body: m.tour_notices_body(),
   },
   {
     target: '[data-tour="settings"]',
-    title: 'Settings',
-    body: 'Some settings must be filled in before the service can be turned on. Ones marked * can be set only once.',
+    title: m.tour_settings_title(),
+    body: m.tour_settings_body(),
   },
   {
     target: ['[data-tour="turn-on"]', '[data-tour="actions"]'],
-    title: 'Turn it on',
-    body: 'Once the settings are saved, press this to deploy and turn the service on.',
+    title: m.tour_on_title(),
+    body: m.tour_on_body(),
   },
   {
     target: '[data-tour="uptime"]',
-    title: 'Uptime',
-    body: "The service is checked every 5 minutes, so you always know your app's status.",
+    title: m.tour_uptime_title(),
+    body: m.tour_uptime_body(),
   },
   {
     target: '[data-tour="power"]',
-    title: 'Power controls',
-    body: 'Once it is running, turn the service off, back on, or restart it from here.',
+    title: m.tour_power_title(),
+    body: m.tour_power_body(),
   },
   {
-    title: 'One last thing',
-    body: 'After the service shows as deployed, it can take up to 15 minutes before its address works. If it still is not reachable after that, open a ticket.',
-    nextLabel: 'Got it',
+    title: m.tour_last_title(),
+    body: m.tour_last_body(),
+    nextLabel: m.tour_last_next(),
   },
 ]
 
 /** The control panel part of the first-service tour. */
 export default function PanelTour({ onEnd }: { onEnd: () => void }) {
-  return <Tour label="Control panel tour" steps={STEPS} onEnd={onEnd} />
+  return <Tour label={m.tour_panel_label()} steps={steps()} onEnd={onEnd} />
 }

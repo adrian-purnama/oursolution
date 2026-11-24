@@ -3,9 +3,10 @@ import { Link } from '@tanstack/react-router'
 import { Clock } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { apiFetch } from '#/lib/api'
-import { formatDateTime, formatIdr } from '#/lib/billing'
+import { formatDateTime, formatMoney } from '#/lib/billing'
 import type { PaymentList } from '#/lib/billing'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /**
  * A reminder of invoices that can still be paid. Shows nothing when there
@@ -43,13 +44,20 @@ export default function UnpaidNotice({ className }: { className?: string }) {
         <div className="min-w-0">
           <p className="text-sm font-medium text-[var(--ink)]">
             {more
-              ? `You have ${list.total} unpaid invoices`
-              : `Invoice ${first.invoiceNumber} is waiting for payment`}
+              ? m.unpaid_many({ count: list.total })
+              : m.unpaid_one({ number: first.invoiceNumber })}
           </p>
           <p className="text-xs text-[var(--muted)]">
             {more
-              ? `The next one, ${first.invoiceNumber} (${formatIdr(first.amountIdr)}), expires ${formatDateTime(first.expiresAt)}.`
-              : `${formatIdr(first.amountIdr)} · pay before ${formatDateTime(first.expiresAt)}`}
+              ? m.unpaid_next({
+                  number: first.invoiceNumber,
+                  amount: formatMoney(first.amount, first.currency),
+                  date: formatDateTime(first.expiresAt),
+                })
+              : m.unpaid_pay_before({
+                  amount: formatMoney(first.amount, first.currency),
+                  date: formatDateTime(first.expiresAt),
+                })}
           </p>
         </div>
       </div>
@@ -57,13 +65,13 @@ export default function UnpaidNotice({ className }: { className?: string }) {
         {more ? (
           <Button asChild variant="ghost" size="sm">
             <Link to="/profile" search={{ tab: 'billing' }}>
-              See all
+              {m.unpaid_see_all()}
             </Link>
           </Button>
         ) : null}
         <Button asChild size="sm">
           <Link to="/billing/$paymentId" params={{ paymentId: first.id }}>
-            Pay now
+            {m.unpaid_pay_now()}
           </Link>
         </Button>
       </div>

@@ -9,6 +9,7 @@ import {
   hintClassName,
   inputClassNameCompact,
 } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 export default function ForgotPasswordForm() {
   const [email, setEmail] = useState('')
@@ -19,7 +20,7 @@ export default function ForgotPasswordForm() {
     event.preventDefault()
 
     if (!email.trim()) {
-      toast.error('Email is required')
+      toast.error(m.auth_forgot_email_required())
       return
     }
 
@@ -32,14 +33,14 @@ export default function ForgotPasswordForm() {
       })
 
       if (!response.success) {
-        toast.error(response.message || 'Failed to send reset link')
+        toast.error(response.message || m.auth_forgot_failed())
         return
       }
 
       setSent(true)
-      toast.success(response.message || 'Reset link sent')
+      toast.success(response.message || m.auth_forgot_sent_toast())
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
     } finally {
       setLoading(false)
     }
@@ -48,13 +49,12 @@ export default function ForgotPasswordForm() {
   return (
     <div className={`${cardClassName} w-full p-6 sm:p-8`}>
       <h1 className="mb-6 text-2xl font-medium text-[var(--ink)]">
-        Forgot password
+        {m.auth_forgot_title()}
       </h1>
 
       {sent ? (
         <p className={`leading-relaxed ${hintClassName}`}>
-          If an account exists for that email, we sent a reset link. Check your
-          inbox and follow the link to choose a new password.
+          {m.auth_forgot_sent()}
         </p>
       ) : (
         <form className="w-full space-y-4" onSubmit={handleSubmit}>
@@ -63,7 +63,7 @@ export default function ForgotPasswordForm() {
               htmlFor="forgot-email"
               className="mb-1 block text-sm text-[var(--ink)]"
             >
-              Email
+              {m.common_email()}
             </label>
             <input
               id="forgot-email"
@@ -80,14 +80,14 @@ export default function ForgotPasswordForm() {
             disabled={loading}
             className={buttonClassNameFull}
           >
-            {loading ? 'Sending…' : 'Send reset link'}
+            {loading ? m.auth_forgot_sending() : m.auth_forgot_send()}
           </button>
         </form>
       )}
 
       <p className={`mt-6 ${hintClassName}`}>
         <Link to="/login" className="text-[var(--ink)] underline">
-          Back to sign in
+          {m.common_back_to_signin()}
         </Link>
       </p>
     </div>

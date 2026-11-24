@@ -20,6 +20,7 @@ import {
   type ProviderStatus,
 } from "./payment.provider";
 import {
+  type BillingProfiles,
   CheckoutError,
   PaymentService,
   type PaymentRecord,
@@ -54,11 +55,11 @@ const oneTime = {
   deletedAt: null,
 };
 
-function paid(amountIdr: number | null): ProviderStatus {
+function paid(amount: number | null): ProviderStatus {
   return {
     state: "paid",
     raw: "settlement",
-    amountIdr,
+    amount,
     reference: "tx1",
     paymentType: "qris",
   };
@@ -74,7 +75,7 @@ function pendingProvider(charges: ChargeRequest[] = []): PaymentProvider {
         status: "pending",
         reference: null,
         redirectUrl: "https://pay.example/1",
-        token: "snap-token-1",
+        snapToken: "snap-token-1",
       };
     },
     async fetchStatus() {
@@ -92,6 +93,9 @@ function setup(
     subscribed?: boolean;
     /** The variant of the user's last period of the product. */
     latestVariant?: string;
+    /** Bills outside Indonesia. */
+    paddle?: PaymentProvider | null;
+    billing?: BillingProfiles;
   } = {},
 ) {
   const payments = new Map<string, PaymentRecord>();
@@ -167,10 +171,20 @@ function setup(
       const found = purchases.find((p) => p.productId === productId);
       return found ? { id: found.id, paymentId: found.paymentId } : null;
     },
+    async findByReference(provider, reference) {
+      const found = [...payments.values()].find(
+        (p) => p.provider === provider && p.reference === reference,
+      );
+      return found
+        ? { ...found, items: found.items.map((i) => ({ ...i })) }
+        : null;
+    },
   };
 
   const service = new PaymentService({
     provider: opts.provider === undefined ? pendingProvider() : opts.provider,
+    paddle: opts.paddle ?? null,
+    billing: opts.billing,
     // Only the fields checkout reads; the real one is a Mongoose document.
     products: {
       get: (async (id: string) => {
@@ -277,8 +291,8 @@ describe("checkout rules", () => {
   it("totals lines and numbers invoices", () => {
     assert.equal(
       totalAmount([
-        { unitPriceIdr: 99_000, quantity: 3 },
-        { unitPriceIdr: 150_000, quantity: 1 },
+        { unitPrice: 99_000, quantity: 3 },
+        { unitPrice: 150_000, quantity: 1 },
       ]),
       447_000,
     );
@@ -328,10 +342,7 @@ describe("Midtrans", () => {
       midtransStatus({ transaction_status: "refund" }).state,
       "refunded",
     );
-    assert.equal(
-      midtransStatus({ gross_amount: "447000.00" }).amountIdr,
-      447_000,
-    );
+    assert.equal(midtransStatus({ gross_amount: "447000.00" }).amount, 447_000);
   });
 
   it("accepts only notifications signed with the server key", () => {
@@ -371,15 +382,15 @@ describe("PaymentService.checkout", () => {
     assert.equal(out.snapToken, "snap-token-1");
     assert.match(out.invoiceNumber, /^INV-\d{4}-000001$/);
     const payment = payments.get(out.paymentId)!;
-    assert.equal(payment.amountIdr, 3 * 99_000 + 150_000);
+    assert.equal(payment.amount, 3 * 99_000 + 150_000);
     assert.deepEqual(
-      payment.items.map((i) => [i.name, i.quantity, i.amountIdr]),
+      payment.items.map((i) => [i.name, i.quantity, i.amount]),
       [
         ["n8n hosting", 3, 297_000],
         ["Lead scraper workflow", 1, 150_000],
       ],
     );
-    assert.equal(charges[0]?.amountIdr, 447_000);
+    assert.equal(charges[0]?.amount, 447_000);
     assert.equal(charges[0]?.lines[0]?.quantity, 3);
     assert.equal(periods.length, 0);
     assert.equal(purchases.length, 0);
@@ -393,7 +404,7 @@ describe("PaymentService.checkout", () => {
     });
     const payment = payments.get(out.paymentId)!;
     assert.equal(payment.items[0]?.quantity, 1);
-    assert.equal(payment.amountIdr, 150_000);
+    assert.equal(payment.amount, 150_000);
   });
 
   it("is paid and granted at once by the allow-all provider", async () => {
@@ -697,16 +708,16 @@ describe("PaymentService.issueForUser", () => {
     assert.equal(out.status, "pending");
     const payment = payments.get(out.paymentId)!;
     assert.equal(payment.source, "admin");
-    assert.equal(payment.amountIdr, 5_150_000);
+    assert.equal(payment.amount, 5_150_000);
     assert.equal(payment.items[0].kind, "custom");
     assert.equal(payment.items[0].productId, null);
     assert.equal(payment.items[0].description, "Landing page and CMS");
-    assert.equal(payment.items[1].unitPriceIdr, 50_000);
+    assert.equal(payment.items[1].unitPrice, 50_000);
     assert.equal(
       payment.expiresAt.getTime(),
       now.getTime() + 14 * 24 * 60 * 60_000,
     );
-    assert.equal(charges[0].amountIdr, 5_150_000);
+    assert.equal(charges[0].amount, 5_150_000);
     assert.equal(charges[0].lines[0].id, "custom-1");
   });
 
@@ -725,7 +736,7 @@ describe("PaymentService.issueForUser", () => {
       dueDays: 7,
       notify: false,
     });
-    assert.equal(payments.get(out.paymentId)!.amountIdr, 150_000);
+    assert.equal(payments.get(out.paymentId)!.amount, 150_000);
   });
 
   it("grants the products but nothing for custom lines once paid", async () => {
@@ -807,13 +818,13 @@ describe("PaymentService with variants", () => {
       { productId: SUB, quantity: 2, variantId: "big", applyVariant: "manual" },
     ]);
     const [line] = quote.lines;
-    assert.equal(line.unitPriceIdr, 180_000);
+    assert.equal(line.unitPrice, 180_000);
     assert.equal(line.durationDays, 15);
-    assert.equal(line.amountIdr, 360_000);
+    assert.equal(line.amount, 360_000);
     assert.deepEqual(line.variant, { id: "big", name: "4 cores / 4 GB" });
     assert.equal(line.applyVariant, "manual");
     assert.deepEqual(
-      line.variants.map((v) => [v.id, v.unitPriceIdr]),
+      line.variants.map((v) => [v.id, v.unitPrice]),
       [
         ["default", 99_000],
         ["big", 180_000],
@@ -827,7 +838,7 @@ describe("PaymentService with variants", () => {
       await service.quote(USER, [{ productId: SUB, quantity: 1 }])
     ).lines;
     assert.equal(line.variant?.id, "default");
-    assert.equal(line.unitPriceIdr, 99_000);
+    assert.equal(line.unitPrice, 99_000);
     assert.equal(line.applyVariant, "auto");
   });
 
@@ -837,7 +848,7 @@ describe("PaymentService with variants", () => {
       await service.quote(USER, [{ productId: SUB, quantity: 1 }])
     ).lines;
     assert.equal(line.variant?.id, "big");
-    assert.equal(line.unitPriceIdr, 180_000);
+    assert.equal(line.unitPrice, 180_000);
   });
 
   it("flags a variant the product no longer has", async () => {
@@ -961,7 +972,7 @@ describe("PaymentService with variants", () => {
       notify: false,
     });
     const [item] = payments.get(out.paymentId)!.items;
-    assert.equal(item.unitPriceIdr, 180_000);
+    assert.equal(item.unitPrice, 180_000);
     assert.equal(item.durationDays, 15);
     assert.equal(item.variantId, "big");
     await assert.rejects(
@@ -982,5 +993,193 @@ describe("PaymentService with variants", () => {
         }),
       CheckoutError,
     );
+  });
+});
+
+/** Billed outside Indonesia; records whether the region got locked. */
+function intlBilling(
+  opts: { renews?: boolean; locked?: string[] } = {},
+): BillingProfiles {
+  return {
+    regionOf: async () => ({ region: "INTL", locked: false }),
+    lockRegion: async (userId, region) => {
+      opts.locked?.push(`${userId}:${region}`);
+    },
+    renewsAutomatically: async () => opts.renews ?? false,
+  };
+}
+
+/** A Paddle-like provider that leaves the transaction open. */
+function paddleLike(charges: ChargeRequest[] = []): PaymentProvider {
+  return {
+    name: "paddle",
+    async charge(request) {
+      charges.push(request);
+      return {
+        status: "pending",
+        reference: "txn_1",
+        redirectUrl: "https://pay.paddle.example/txn_1",
+        snapToken: null,
+      };
+    },
+    async fetchStatus() {
+      return null;
+    },
+  };
+}
+
+const usdProducts = {
+  [SUB]: { ...subscription, priceUsdCents: 900, paddlePriceId: "pri_sub" },
+  [ONE]: { ...oneTime, priceUsdCents: 2500, paddlePriceId: "pri_one" },
+};
+
+describe("checkout outside Indonesia", () => {
+  it("prices in US cents, one period per subscription", async () => {
+    const { service } = setup({
+      products: usdProducts,
+      paddle: paddleLike(),
+      billing: intlBilling(),
+    });
+    const quote = await service.quote(USER, basket.items);
+    assert.equal(quote.currency, "USD");
+    assert.equal(quote.region, "INTL");
+    assert.deepEqual(
+      quote.lines.map((l) => [l.unitPrice, l.quantity, l.maxQuantity]),
+      [
+        [900, 1, 1],
+        [2500, 1, 1],
+      ],
+    );
+    assert.equal(quote.total, 3400);
+    assert.equal(quote.canCheckout, true);
+  });
+
+  it("is billed in Indonesia while Paddle is not set up", async () => {
+    const { service } = setup({
+      products: usdProducts,
+      billing: intlBilling(),
+    });
+    const quote = await service.quote(USER, basket.items);
+    assert.equal(quote.currency, "IDR");
+    assert.equal(quote.lines[0].unitPrice, 99_000);
+  });
+
+  it("refuses a product without a USD price", async () => {
+    const { service } = setup({ paddle: paddleLike(), billing: intlBilling() });
+    const quote = await service.quote(USER, basket.items);
+    assert.equal(quote.canCheckout, false);
+    assert.equal(quote.lines[0].problem, "Not available outside Indonesia yet");
+  });
+
+  it("refuses switching now and a product Paddle already renews", async () => {
+    const now = setup({
+      products: usdProducts,
+      paddle: paddleLike(),
+      billing: intlBilling(),
+    });
+    const switching = await now.service.quote(USER, [
+      { productId: SUB, quantity: 1, placement: "now" },
+    ]);
+    assert.match(switching.lines[0].problem ?? "", /automatic renewal/);
+
+    const renewing = setup({
+      products: usdProducts,
+      paddle: paddleLike(),
+      billing: intlBilling({ renews: true }),
+    });
+    const again = await renewing.service.quote(USER, [
+      { productId: SUB, quantity: 1 },
+    ]);
+    assert.match(again.lines[0].problem ?? "", /renews automatically/);
+  });
+
+  it("charges Paddle's prices in USD and locks the region", async () => {
+    const charges: ChargeRequest[] = [];
+    const locked: string[] = [];
+    const { service, payments } = setup({
+      products: usdProducts,
+      paddle: paddleLike(charges),
+      billing: intlBilling({ locked }),
+    });
+    const out = await service.checkout(USER, basket);
+    assert.equal(out.provider, "paddle");
+    assert.equal(out.paddleTransactionId, "txn_1");
+    assert.equal(out.snapToken, null);
+    assert.equal(charges[0].currency, "USD");
+    assert.equal(charges[0].amount, 3400);
+    assert.deepEqual(
+      charges[0].lines.map((l) => l.providerPriceId),
+      ["pri_sub", "pri_one"],
+    );
+    const payment = payments.get(out.paymentId)!;
+    assert.equal(payment.currency, "USD");
+    assert.equal(payment.reference, "txn_1");
+    assert.deepEqual(locked, [`${USER}:INTL`]);
+  });
+
+  it("records a renewal once and grants one more period", async () => {
+    const { service, payments, periods, granted } = setup({
+      products: usdProducts,
+      paddle: paddleLike(),
+      billing: intlBilling(),
+    });
+    const renewal = {
+      userId: USER,
+      subscriptionRef: "sub_1",
+      reference: "txn_2",
+      currency: "USD" as const,
+      paymentType: "card",
+      items: [
+        {
+          productId: SUB,
+          variantId: null,
+          applyVariant: "auto" as const,
+          name: "n8n hosting",
+          durationDays: 30,
+          providerPriceId: "pri_sub",
+          unitPrice: 900,
+          quantity: 1,
+        },
+      ],
+    };
+    const first = await service.recordRenewal(renewal);
+    const second = await service.recordRenewal(renewal);
+    assert.equal(first, second);
+    assert.equal(payments.size, 1);
+    const payment = payments.get(first)!;
+    assert.equal(payment.source, "renewal");
+    assert.equal(payment.status, "paid");
+    assert.equal(payment.amount, 900);
+    assert.ok(payment.grantedAt);
+    assert.equal(periods.length, 1);
+    assert.deepEqual(granted, [first]);
+  });
+
+  it("records a plan-change charge once as a paid invoice that grants nothing", async () => {
+    const { service, payments, periods, granted } = setup({
+      products: usdProducts,
+      paddle: paddleLike(),
+      billing: intlBilling(),
+    });
+    const charge = {
+      userId: USER,
+      subscriptionRef: "sub_1",
+      reference: "txn_3",
+      currency: "USD" as const,
+      paymentType: "card",
+      name: "Plan change: n8n hosting (Pro)",
+      description: null,
+      amount: 1000,
+    };
+    const first = await service.recordCharge(charge);
+    const second = await service.recordCharge(charge);
+    assert.equal(first, second);
+    assert.equal(payments.size, 1);
+    const payment = payments.get(first)!;
+    assert.equal(payment.status, "paid");
+    assert.equal(payment.amount, 1000);
+    assert.equal(payment.items[0].kind, "custom");
+    assert.equal(periods.length, 0);
+    assert.deepEqual(granted, []);
   });
 });

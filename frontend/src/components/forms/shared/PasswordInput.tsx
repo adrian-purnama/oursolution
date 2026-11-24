@@ -2,6 +2,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { inputClassNameCompact } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 interface PasswordInputProps {
   id: string
@@ -35,7 +36,7 @@ export default function PasswordInput({
       />
       <button
         type="button"
-        aria-label={visible ? 'Hide password' : 'Show password'}
+        aria-label={visible ? m.pw_hide() : m.pw_show()}
         onClick={() => setVisible((current) => !current)}
         className="absolute top-1/2 right-3 -translate-y-1/2 text-[var(--muted)] transition hover:text-[var(--ink)]"
       >

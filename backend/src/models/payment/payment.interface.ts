@@ -35,9 +35,20 @@ export type PaymentItemKind = ProductKind | "custom";
 export const CHECKOUT_PLACEMENTS = ["after", "now"] as const;
 export type CheckoutPlacement = (typeof CHECKOUT_PLACEMENTS)[number];
 
-/** Who made the invoice: the user at checkout, or an admin for them. */
-export const PAYMENT_SOURCES = ["checkout", "admin"] as const;
+/**
+ * Who made the invoice: the user at checkout, an admin for them, or the
+ * provider renewing a subscription by itself (Paddle).
+ */
+export const PAYMENT_SOURCES = ["checkout", "admin", "renewal"] as const;
 export type PaymentSource = (typeof PAYMENT_SOURCES)[number];
+
+/**
+ * What an invoice is charged in. Every amount on it (`amount`,
+ * `unitPrice`, ...) is in this currency's smallest unit used here: whole
+ * rupiah for IDR, cents for USD.
+ */
+export const PAYMENT_CURRENCIES = ["IDR", "USD"] as const;
+export type PaymentCurrency = (typeof PAYMENT_CURRENCIES)[number];
 
 /** One line on an invoice, priced as it was when the invoice was made. */
 export interface PaymentItem {
@@ -47,7 +58,7 @@ export interface PaymentItem {
   /** Extra detail shown under the name; custom lines mostly. */
   description: string | null;
   kind: PaymentItemKind;
-  unitPriceIdr: number;
+  unitPrice: number;
   /** Always 1 for a one-time product; periods to add for a subscription. */
   quantity: number;
   /** Subscription only: days one period adds. */
@@ -61,7 +72,9 @@ export interface PaymentItem {
   applyVariant: VariantApplyMode | null;
   /** Subscription only: when its time starts; null (older lines) is after. */
   placement: CheckoutPlacement | null;
-  amountIdr: number;
+  amount: number;
+  /** The provider's own price for this line (a Paddle price id), or null. */
+  providerPriceId?: string | null;
   /** What was granted once paid. */
   periodIds: Types.ObjectId[];
   purchaseId: Types.ObjectId | null;
@@ -76,14 +89,18 @@ export interface PaymentInterface {
   /** e.g. "INV-2026-000042". Unique. */
   invoiceNumber: string;
   items: PaymentItem[];
-  /** Total of the items, in whole rupiah. */
-  amountIdr: number;
+  /** Total of the items, in `currency` (see PAYMENT_CURRENCIES). */
+  amount: number;
+  /** Missing on invoices made before other currencies: IDR. */
+  currency?: PaymentCurrency;
   status: PaymentStatus;
   source: PaymentSource;
   /** Which provider handled it, e.g. "midtrans", "allow-all", "free". */
   provider: string;
   /** The provider's transaction id, once it has one. */
   reference: string | null;
+  /** The Paddle subscription this payment started or renewed, if any. */
+  subscriptionRef?: string | null;
   /** Where the user pays, while pending. */
   redirectUrl: string | null;
   /** Snap token, to show the payment form inside our page. */

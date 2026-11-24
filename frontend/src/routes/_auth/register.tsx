@@ -2,13 +2,13 @@ import { createFileRoute } from '@tanstack/react-router'
 import RegisterForm from '#/components/forms/auth/RegisterForm'
 import { validateAuthSearch } from '#/lib/redirect'
 import { seo } from '#/lib/seo'
+import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_auth/register')({
   head: () =>
     seo({
-      title: 'Create an account',
-      description:
-        'Create an Our Solution account to buy hosting plans and workflows, and track your services in one dashboard.',
+      title: m.seo_register_title(),
+      description: m.seo_register_description(),
       path: '/register',
     }),
   validateSearch: validateAuthSearch,

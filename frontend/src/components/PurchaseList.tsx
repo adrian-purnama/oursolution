@@ -5,12 +5,13 @@ import { Button } from '#/components/ui/button'
 import { formatDateTime } from '#/lib/product'
 import type { Purchase } from '#/lib/product'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { m } from '#/paraglide/messages'
 
 /** One-time products a user owns, each with its access link when it has one. */
 export default function PurchaseList({
   purchases,
   actions,
-  emptyText = 'No purchases yet.',
+  emptyText = m.purchase_empty(),
 }: {
   purchases: Purchase[]
   /** Extra controls per purchase, e.g. an admin "Take back". */
@@ -32,17 +33,17 @@ export default function PurchaseList({
             <ProductBadge product={purchase.product} />
             <p className={`mt-0.5 text-[11px] ${hintClassName}`}>
               {purchase.source === 'admin'
-                ? 'Given'
+                ? m.purchase_given()
                 : purchase.source === 'redeem'
-                  ? 'Redeemed'
-                  : 'Bought'}{' '}
+                  ? m.purchase_redeemed()
+                  : m.purchase_bought()}{' '}
               {formatDateTime(purchase.purchasedAt)}
             </p>
           </div>
           {purchase.accessUrl ? (
             <Button asChild variant="outline" size="sm">
               <a href={purchase.accessUrl} target="_blank" rel="noreferrer">
-                Open
+                {m.purchase_open()}
                 <ExternalLink aria-hidden />
               </a>
             </Button>

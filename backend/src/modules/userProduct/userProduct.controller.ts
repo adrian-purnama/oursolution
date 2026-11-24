@@ -1,27 +1,9 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type { UserPlanOutDto } from "../../dto/userProduct.dto";
 import { parseParam, parseRouteId } from "../../validation/parseParam";
 import { parseAssignProductDto } from "../../validation/product";
-import { PlanScheduleError } from "./userProduct.planner";
 import { userProductService } from "./userProduct.service";
-
-function ok(res: Response, message: string, data: UserPlanOutDto) {
-  return res.status(200).json({
-    success: true,
-    message,
-    data,
-  } satisfies ApiResponseDto<UserPlanOutDto>);
-}
-
-function fail(res: Response, error: unknown, fallback: string) {
-  // A scheduling conflict is a clash with existing data, not a malformed request.
-  return res.status(error instanceof PlanScheduleError ? 409 : 400).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
+import { fail, ok } from "../../utils/respond";
 
 /** A user's plan (their product periods): their own view, and admin actions on anyone's. */
 export class UserProductController {
@@ -58,7 +40,7 @@ export class UserProductController {
         parseAssignProductDto(req.body),
         req.user!.id,
       );
-      return ok(res, "Product started", data);
+      return ok<UserPlanOutDto>(res, "Product started", data);
     } catch (error) {
       return fail(res, error, "Failed to start the product");
     }
@@ -72,7 +54,7 @@ export class UserProductController {
         parseAssignProductDto(req.body),
         req.user!.id,
       );
-      return ok(res, "Product scheduled", data);
+      return ok<UserPlanOutDto>(res, "Product scheduled", data);
     } catch (error) {
       return fail(res, error, "Failed to schedule the product");
     }
@@ -86,7 +68,7 @@ export class UserProductController {
         objectId: true,
       });
       const data = await userProductService.endNow(userId, productId);
-      return ok(res, "Product stopped", data);
+      return ok<UserPlanOutDto>(res, "Product stopped", data);
     } catch (error) {
       return fail(res, error, "Failed to stop the product");
     }
@@ -100,7 +82,7 @@ export class UserProductController {
         objectId: true,
       });
       const data = await userProductService.deletePeriod(userId, periodId);
-      return ok(res, "Period deleted", data);
+      return ok<UserPlanOutDto>(res, "Period deleted", data);
     } catch (error) {
       return fail(res, error, "Failed to delete the period");
     }

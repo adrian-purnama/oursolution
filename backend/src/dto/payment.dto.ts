@@ -1,10 +1,11 @@
+import type { BillingRegion } from "../models/user/user.interface";
 import type {
   CheckoutPlacement,
+  PaymentCurrency,
   PaymentItemKind,
   PaymentSource,
   PaymentStatus,
 } from "../models/payment/payment.interface";
-import type { ProductKind } from "../models/product/product.interface";
 import type { VariantApplyMode } from "../models/userProductPeriod/userProductPeriod.interface";
 import type { ProductSummaryDto } from "./product.dto";
 
@@ -44,7 +45,7 @@ export interface CheckoutVariantOptionOutDto {
   id: string;
   name: string;
   specs: string;
-  unitPriceIdr: number;
+  unitPrice: number;
   durationDays: number | null;
 }
 
@@ -61,12 +62,12 @@ export interface CheckoutQuoteInDto {
 /** One line of a basket or checkout, priced now. */
 export interface CheckoutLineOutDto {
   product: ProductSummaryDto;
-  unitPriceIdr: number;
+  unitPrice: number;
   quantity: number;
   /** 1 for a one-time product. */
   maxQuantity: number;
   durationDays: number | null;
-  amountIdr: number;
+  amount: number;
   /** Subscription only: the variant this line buys; else null. */
   variant: { id: string; name: string } | null;
   /** Subscription only: every variant it could buy, the base first. */
@@ -81,23 +82,58 @@ export interface CheckoutLineOutDto {
   problem: string | null;
 }
 
-/** The basket, or what a checkout would charge. */
+/**
+ * The basket, or what a checkout would charge. Every amount is in
+ * `currency`: whole rupiah for IDR, cents for USD.
+ */
 export interface CheckoutQuoteOutDto {
   lines: CheckoutLineOutDto[];
   /** Total of the lines without a problem. */
-  totalIdr: number;
+  total: number;
   /** True when there are lines and none has a problem. */
   canCheckout: boolean;
+  currency: PaymentCurrency;
+  /** Where the user is billed: decides the currency and the provider. */
+  region: BillingRegion;
+  /** True once the user has checked out: only an admin can change it. */
+  regionLocked: boolean;
 }
 
 export interface CheckoutOutDto {
   paymentId: string;
   invoiceNumber: string;
   status: PaymentStatus;
+  /** "midtrans", "paddle", "free", ... */
+  provider: string;
   /** Where to send the user to pay, for providers that need it. */
   redirectUrl: string | null;
   /** Snap token, to pay inside the page. */
   snapToken: string | null;
+  /** Paddle: the transaction Paddle.js opens to pay inside the page. */
+  paddleTransactionId: string | null;
+}
+
+/** Body of PUT /me/billing-region. */
+export interface BillingRegionInDto {
+  region: BillingRegion;
+}
+
+export interface BillingRegionOutDto {
+  region: BillingRegion;
+  locked: boolean;
+  /** False when Paddle is not set up: everyone is billed in Indonesia. */
+  international: boolean;
+}
+
+/** A subscription Paddle renews for the user. */
+export interface PaddleSubscriptionOutDto {
+  id: string;
+  status: string;
+  products: { productId: string; name: string; imageUrl: string | null }[];
+  nextBilledAt: string | null;
+  cancelsAt: string | null;
+  /** A cheaper plan that starts at the next renewal, if one is scheduled. */
+  pendingChange: { name: string; effectiveAt: string | null } | null;
 }
 
 /** One line of an invoice an admin makes for a user. */
@@ -136,11 +172,11 @@ export interface PaymentItemOutDto {
   name: string;
   description: string | null;
   kind: PaymentItemKind;
-  unitPriceIdr: number;
+  unitPrice: number;
   quantity: number;
   durationDays: number | null;
   variantId: string | null;
-  amountIdr: number;
+  amount: number;
 }
 
 /** A payment and its invoice. */
@@ -149,7 +185,9 @@ export interface PaymentOutDto {
   invoiceNumber: string;
   status: PaymentStatus;
   source: PaymentSource;
-  amountIdr: number;
+  /** Every amount on the invoice is in it: whole rupiah, or US cents. */
+  currency: PaymentCurrency;
+  amount: number;
   items: PaymentItemOutDto[];
   provider: string;
   paymentType: string | null;
@@ -157,6 +195,8 @@ export interface PaymentOutDto {
   redirectUrl: string | null;
   /** Snap token for the inline payment form; same rule as redirectUrl. */
   snapToken: string | null;
+  /** Paddle transaction for Paddle.js; same rule as redirectUrl. */
+  paddleTransactionId: string | null;
   expiresAt: string;
   paidAt: string | null;
   grantedAt: string | null;
@@ -191,4 +231,29 @@ export interface PaymentConfigOutDto {
   provider: string | null;
   /** Midtrans Snap: script URL and public client key, or null. */
   snap: { scriptUrl: string; clientKey: string } | null;
+  /** Paddle.js: public client token and environment, or null. */
+  paddle: { clientToken: string; environment: "sandbox" | "production" } | null;
+}
+
+/** A variant a renewing subscription can move to. */
+export interface UpgradeChoiceOutDto {
+  variantId: string;
+  name: string;
+  /** What it renews at, in US cents. */
+  priceCents: number;
+}
+
+/** What moving to a variant costs now. */
+export interface UpgradePreviewOutDto {
+  variantId: string;
+  name: string;
+  currency: string;
+  /** Charged now, or credited when `credit`, in the lowest unit. */
+  amountCents: number;
+  credit: boolean;
+  /** True for a cheaper plan: nothing is charged now, it starts at `nextBilledAt`. */
+  scheduled: boolean;
+  nextBilledAt: string | null;
+  /** What each renewal costs from now on, in US cents (before tax). */
+  renewalCents: number;
 }

@@ -1,15 +1,36 @@
 import { formatDateTime, formatDays } from '#/lib/product'
 import type { ProductSummary } from '#/lib/product'
+import { m } from '#/paraglide/messages'
 
 export type RedeemActivation = 'onRedeem' | 'date'
 export type RedeemCodeStatus = 'available' | 'redeemed' | 'expired'
 export type RedeemCodeGroup = 'all' | RedeemCodeStatus
 
 export const REDEEM_CODE_GROUPS: { key: RedeemCodeGroup; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'available', label: 'Not redeemed' },
-  { key: 'redeemed', label: 'Redeemed' },
-  { key: 'expired', label: 'Expired' },
+  {
+    key: 'all',
+    get label() {
+      return m.redeem_group_all()
+    },
+  },
+  {
+    key: 'available',
+    get label() {
+      return m.redeem_group_available()
+    },
+  },
+  {
+    key: 'redeemed',
+    get label() {
+      return m.redeem_group_redeemed()
+    },
+  },
+  {
+    key: 'expired',
+    get label() {
+      return m.redeem_group_expired()
+    },
+  },
 ]
 
 export type RedeemCodeUser = { id: string; email: string }
@@ -50,16 +71,16 @@ export type RedeemResult = {
 /** "On redeem" or the set start date. */
 export function redeemStartText(code: RedeemCode): string {
   return code.activation === 'date' && code.activatesAt
-    ? `From ${formatDateTime(code.activatesAt)}`
-    : 'From redeem'
+    ? m.redeem_from_date({ date: formatDateTime(code.activatesAt) })
+    : m.redeem_from_redeem()
 }
 
 /** How long the product lasts once given. */
 export function redeemLengthText(code: RedeemCode): string {
-  if (code.product?.kind === 'oneTime') return 'Owned for good'
+  if (code.product?.kind === 'oneTime') return m.redeem_owned()
   if (code.durationDays !== null) return formatDays(code.durationDays)
-  if (code.endsAt) return `Until ${formatDateTime(code.endsAt)}`
-  return 'No end'
+  if (code.endsAt) return m.redeem_until({ date: formatDateTime(code.endsAt) })
+  return m.redeem_no_end()
 }
 
 /** `XXXX-XXXX-XXXX` as the user types: upper case, dashes added. */

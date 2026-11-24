@@ -3,15 +3,16 @@ import { env } from "../../environment/env";
 import { logger } from "../../logger/logger";
 import type { OtpPurpose } from "../../models/otp/otp.interface";
 import { OtpModel } from "../../models/otp/otp.model";
+import { UserError } from "../../utils/userError";
 
-const logSource = "otp/otp.service.ts";
+const logSource = "modules/otp/otp.service.ts";
 
 /** Wrong guesses allowed per issued code before it is discarded. */
 export const MAX_OTP_ATTEMPTS = 5;
 /** Minimum gap between two codes for the same email and purpose. */
 export const OTP_RESEND_COOLDOWN_MS = 60_000;
 
-export class OtpCooldownError extends Error {
+export class OtpCooldownError extends UserError {
   constructor() {
     super("Please wait a minute before requesting another code");
   }

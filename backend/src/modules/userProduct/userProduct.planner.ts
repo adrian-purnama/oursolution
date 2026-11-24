@@ -1,4 +1,5 @@
 import type { PeriodEndSpec } from "../../dto/userProduct.dto";
+import { UserError } from "../../utils/userError";
 
 /**
  * Pure scheduling rules for one product on one user's plan. Callers pass the
@@ -17,7 +18,11 @@ export type PeriodLike = {
   endsAt: Date | null;
 };
 
-export class PlanScheduleError extends Error {}
+export class PlanScheduleError extends UserError {
+  constructor(message: string) {
+    super(message, 409);
+  }
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

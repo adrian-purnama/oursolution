@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type { ProductSummaryDto } from "../../dto/product.dto";
 import type {
   GoogleConfigOutDto,
@@ -12,6 +11,7 @@ import type { UserRole } from "../../models/user/user.interface";
 import { normalizeEmail } from "../../utils/email";
 import { userProductService } from "../userProduct/userProduct.service";
 import { AuthService } from "./auth.service";
+import { fail, ok, refuse } from "../../utils/respond";
 
 /** The one-time code from Google, or null when missing or implausible. */
 function googleCode(value: unknown): string | null {
@@ -28,36 +28,20 @@ export class AuthController {
       const email = normalizeEmail(req.body?.email);
 
       if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid email",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Invalid email");
       }
 
       const isResetPassword = Boolean(req.body?.isResetPassword);
 
-      const ok = await this.authService.sendOtp({ email, isResetPassword });
+      const sent = await this.authService.sendOtp({ email, isResetPassword });
 
-      if (!ok) {
-        return res.status(500).json({
-          success: false,
-          message: "Failed to send OTP",
-          data: null,
-        } satisfies ApiResponseDto);
+      if (!sent) {
+        return refuse(res, 500, "Failed to send OTP");
       }
 
-      return res.status(200).json({
-        success: true,
-        message: "OTP sent",
-        data: { email },
-      } satisfies ApiResponseDto<{ email: string }>);
+      return ok<{ email: string }>(res, "OTP sent", { email });
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Failed to send OTP",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Failed to send OTP");
     }
   };
 
@@ -69,35 +53,19 @@ export class AuthController {
         typeof req.body?.password === "string" ? req.body.password : "";
 
       if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid email",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Invalid email");
       }
 
       if (!otp || !password) {
-        return res.status(400).json({
-          success: false,
-          message: "OTP and password are required",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "OTP and password are required");
       }
 
       const input: RegisterInDto = { email, otp, password };
       const data = await this.authService.register(input);
 
-      return res.status(201).json({
-        success: true,
-        message: "Registered successfully",
-        data,
-      } satisfies ApiResponseDto<RegisterOutDto>);
+      return ok<RegisterOutDto>(res, "Registered successfully", data, 201);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Register failed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Register failed");
     }
   };
 
@@ -109,76 +77,52 @@ export class AuthController {
       const rememberMe = Boolean(req.body?.rememberMe);
 
       if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid email",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Invalid email");
       }
 
       if (!password) {
-        return res.status(400).json({
-          success: false,
-          message: "Password is required",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Password is required");
       }
 
       const input: LoginInDto = { email, password, rememberMe };
       const data = await this.authService.login(input);
 
-      return res.status(200).json({
-        success: true,
-        message: "Logged in successfully",
-        data,
-      } satisfies ApiResponseDto<LoginOutDto>);
+      return ok<LoginOutDto>(res, "Logged in successfully", data);
     } catch (error) {
-      return res.status(401).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Login failed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Login failed", 401);
     }
   };
 
   validateUser = async (req: Request, res: Response) => {
     const products = await userProductService.getActiveProducts(req.user!.id);
-    return res.status(200).json({
-      success: true,
-      message: "Token is valid",
-      data: {
-        email: req.user!.email,
-        role: req.user!.role,
-        products,
-        googleLinked: Boolean(req.user!.googleId),
-      },
-    } satisfies ApiResponseDto<{
+    return ok<{
       email: string;
       role: UserRole;
       /** Products active right now; empty when none is. */
       products: ProductSummaryDto[];
       /** True when a Google account can sign this user in. */
       googleLinked: boolean;
-    }>);
+    }>(res, "Token is valid", {
+      email: req.user!.email,
+      role: req.user!.role,
+      products,
+      googleLinked: Boolean(req.user!.googleId),
+    });
   };
 
   googleConfig = (_req: Request, res: Response) => {
-    return res.status(200).json({
-      success: true,
-      message: "Google sign-in settings",
-      data: this.authService.googleConfig(),
-    } satisfies ApiResponseDto<GoogleConfigOutDto>);
+    return ok<GoogleConfigOutDto>(
+      res,
+      "Google sign-in settings",
+      this.authService.googleConfig(),
+    );
   };
 
   googleSignIn = async (req: Request, res: Response) => {
     try {
       const code = googleCode(req.body?.code);
       if (!code) {
-        return res.status(400).json({
-          success: false,
-          message: "Google sign-in failed, please try again",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Google sign-in failed, please try again");
       }
 
       const data = await this.authService.googleSignIn({
@@ -186,17 +130,9 @@ export class AuthController {
         rememberMe: Boolean(req.body?.rememberMe),
       });
 
-      return res.status(200).json({
-        success: true,
-        message: "Logged in successfully",
-        data,
-      } satisfies ApiResponseDto<GoogleSignInOutDto>);
+      return ok<GoogleSignInOutDto>(res, "Logged in successfully", data);
     } catch (error) {
-      return res.status(401).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Login failed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Login failed", 401);
     }
   };
 
@@ -204,27 +140,14 @@ export class AuthController {
     try {
       const code = googleCode(req.body?.code);
       if (!code) {
-        return res.status(400).json({
-          success: false,
-          message: "Linking Google failed, please try again",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Linking Google failed, please try again");
       }
 
       await this.authService.linkGoogle(req.user!.id, code);
 
-      return res.status(200).json({
-        success: true,
-        message: "Google account linked",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "Google account linked", null);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Linking Google failed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Linking Google failed");
     }
   };
 
@@ -236,19 +159,11 @@ export class AuthController {
         typeof req.body?.password === "string" ? req.body.password : "";
 
       if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid email",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "Invalid email");
       }
 
       if (!otp || !password) {
-        return res.status(400).json({
-          success: false,
-          message: "OTP and password are required",
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 400, "OTP and password are required");
       }
 
       const data = await this.authService.resetPassword({
@@ -257,18 +172,9 @@ export class AuthController {
         password,
       });
 
-      return res.status(200).json({
-        success: true,
-        message: "Password reset successfully",
-        data,
-      } satisfies ApiResponseDto<ResetPasswordOutDto>);
+      return ok<ResetPasswordOutDto>(res, "Password reset successfully", data);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Password reset failed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return fail(res, error, "Password reset failed");
     }
   };
 }

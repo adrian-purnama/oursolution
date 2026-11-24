@@ -9,6 +9,7 @@ import { addToBasket } from '#/lib/billing'
 import { checkoutPath } from '#/lib/redirect'
 import type { PricingProduct } from '#/lib/product'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /**
  * Whether the signed-in user has this product. For a one-time product
@@ -38,7 +39,7 @@ export function ProductStatusBadge({
       )}
     >
       <Check className="size-3" aria-hidden />
-      {isOwned ? 'Owned' : 'Active'}
+      {isOwned ? m.product_owned() : m.product_active()}
     </span>
   )
 }
@@ -70,12 +71,12 @@ export default function CheckoutButton({
     try {
       const response = await addToBasket(product.id, 1, variantId ?? null)
       if (!response.success) {
-        toast.error(response.message || 'Could not add to the basket')
+        toast.error(response.message || m.product_basket_failed())
         return
       }
-      toast.success(`${product.name} added to your basket`)
+      toast.success(m.product_basket_added({ name: product.name }))
     } catch {
-      toast.error('Unable to reach the server')
+      toast.error(m.common_error_network_short())
     } finally {
       setAdding(false)
     }
@@ -85,14 +86,18 @@ export default function CheckoutButton({
     return (
       <Button asChild variant="outline" size={size} className={className}>
         <Link to="/profile" search={{ tab: 'products' }}>
-          Open in profile
+          {m.product_open_profile()}
         </Link>
       </Button>
     )
   }
 
   const label =
-    product.kind === 'oneTime' ? 'Buy now' : isActive ? 'Extend' : 'Subscribe'
+    product.kind === 'oneTime'
+      ? m.product_buy_now()
+      : isActive
+        ? m.product_extend()
+        : m.product_subscribe()
   /** The main action (buy, subscribe, extend) in the brand blue. */
   const primary = cn(
     'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]',
@@ -131,8 +136,8 @@ export default function CheckoutButton({
         variant="outline"
         disabled={adding}
         onClick={() => void add()}
-        aria-label={`Add ${product.name} to basket`}
-        title="Add to basket"
+        aria-label={m.product_add_basket_aria({ name: product.name })}
+        title={m.product_add_basket()}
       >
         {adding ? (
           <LoaderCircle className="size-4 animate-spin" aria-hidden />

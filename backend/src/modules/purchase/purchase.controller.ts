@@ -1,25 +1,9 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type { PurchaseOutDto } from "../../dto/purchase.dto";
 import { parseParam, parseRouteId } from "../../validation/parseParam";
 import { parseGrantPurchaseInDto } from "../../validation/product";
-import { AlreadyOwnedError, purchaseService } from "./purchase.service";
-
-function ok(res: Response, message: string, data: PurchaseOutDto[]) {
-  return res.status(200).json({
-    success: true,
-    message,
-    data,
-  } satisfies ApiResponseDto<PurchaseOutDto[]>);
-}
-
-function fail(res: Response, error: unknown, fallback: string) {
-  return res.status(error instanceof AlreadyOwnedError ? 409 : 400).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
+import { purchaseService } from "./purchase.service";
+import { fail, ok } from "../../utils/respond";
 
 /** One-time products a user owns: their own list, and admin grants and revokes. */
 export class PurchaseController {
@@ -57,7 +41,7 @@ export class PurchaseController {
         productId,
         req.user!.id,
       );
-      return ok(res, "Product given", data);
+      return ok<PurchaseOutDto[]>(res, "Product given", data);
     } catch (error) {
       return fail(res, error, "Failed to give the product");
     }
@@ -71,7 +55,7 @@ export class PurchaseController {
         objectId: true,
       });
       const data = await purchaseService.revoke(userId, purchaseId);
-      return ok(res, "Product taken back", data);
+      return ok<PurchaseOutDto[]>(res, "Product taken back", data);
     } catch (error) {
       return fail(res, error, "Failed to take the product back");
     }

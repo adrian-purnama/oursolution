@@ -2,6 +2,7 @@ import {
   NOTIFICATION_CHANNELS,
   type NotificationChannels,
 } from "../models/notification/notification.interface";
+import { UserError } from "../utils/userError";
 
 export const TITLE_MAX = 100;
 export const BODY_MAX = 500;
@@ -11,7 +12,7 @@ export const PAGE_LIMIT_DEFAULT = 20;
 export const PAGE_LIMIT_MAX = 50;
 
 /** Thrown for bad input to `notificationService.send`. */
-export class NotificationInputError extends Error {}
+export class NotificationInputError extends UserError {}
 
 /**
  * Control characters (tab and newline aside, null bytes included),

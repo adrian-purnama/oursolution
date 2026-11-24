@@ -102,6 +102,7 @@ import {
   variantPending,
   type ActualContainers,
 } from "./deployment.rules";
+import { UserError } from "../../utils/userError";
 
 type DeploymentDoc = HydratedDocument<DeploymentInterface>;
 type RunDoc = HydratedDocument<DeploymentRunInterface>;
@@ -166,10 +167,18 @@ const MAX_SUFFIX = 9999;
 const SYNC_CONCURRENCY = 4;
 
 /** Thrown when another run holds the deployment. */
-export class DeploymentBusyError extends Error {}
+export class DeploymentBusyError extends UserError {
+  constructor(message: string) {
+    super(message, 409);
+  }
+}
 
 /** Thrown when a customer starts things too often. */
-export class DeploymentLimitError extends Error {}
+export class DeploymentLimitError extends UserError {
+  constructor(message: string) {
+    super(message, 429);
+  }
+}
 
 function isDuplicateKeyError(error: unknown): boolean {
   return (
@@ -562,7 +571,7 @@ export class DeploymentService {
     if (replaced.length > 0 && user) {
       const at = new Date();
       await DeploymentChangeModel.insertMany(
-        replaced.map(({ key, before, after }) => ({
+        replaced.map(({ key, before }) => ({
           deploymentId: deployment._id,
           byUserId: user._id,
           byEmail: `${user.email} (customer)`,

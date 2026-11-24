@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { UserError } from "./userError";
 
 /** Largest photo a ticket message may carry, before processing. */
 export const MAX_TICKET_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -8,7 +9,7 @@ const WEBP_QUALITY = 85;
 
 type Format = "jpeg" | "png" | "webp";
 
-export class TicketImageError extends Error {}
+export class TicketImageError extends UserError {}
 
 /** The format the file's first bytes say it is; null for anything else. */
 export function sniffImage(buffer: Buffer): Format | null {

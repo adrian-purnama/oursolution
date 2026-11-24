@@ -24,13 +24,38 @@ import {
 import { BRAND_NAME } from '#/lib/config'
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '#/lib/gsap'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /** The tabs of the example browser: one per kind of thing we deliver. */
 const SCENES = [
-  { label: 'Dashboard', icon: LayoutDashboard, url: 'orders.yourcompany.com' },
-  { label: 'Website', icon: Globe, url: 'www.yourbrand.com' },
-  { label: 'Hosting', icon: Server, url: 'hosting.yourcompany.com' },
-  { label: 'Chatbot', icon: MessageCircle, url: 'yourshop.com' },
+  {
+    get label() {
+      return m.hv_tab_dashboard()
+    },
+    icon: LayoutDashboard,
+    url: 'orders.yourcompany.com',
+  },
+  {
+    get label() {
+      return m.hv_tab_website()
+    },
+    icon: Globe,
+    url: 'www.yourbrand.com',
+  },
+  {
+    get label() {
+      return m.hv_tab_hosting()
+    },
+    icon: Server,
+    url: 'hosting.yourcompany.com',
+  },
+  {
+    get label() {
+      return m.hv_tab_chatbot()
+    },
+    icon: MessageCircle,
+    url: 'yourshop.com',
+  },
 ]
 
 /** Seconds a scene stays on screen after its own animation has finished. */
@@ -353,7 +378,7 @@ export default function HeroVisual({
     <div
       ref={root}
       role="group"
-      aria-label={`Examples of what ${BRAND_NAME} builds and runs: a dashboard, a website, hosting and a chatbot`}
+      aria-label={m.hv_aria({ brand: BRAND_NAME })}
       className="relative mx-auto max-w-5xl"
       onPointerEnter={(event) => {
         if (event.pointerType === 'mouse') hovered.current = true
@@ -456,7 +481,7 @@ export default function HeroVisual({
           className="size-5 origin-top-left fill-[var(--accent)] text-white drop-shadow-[0_1px_2px_rgba(12,12,11,0.35)]"
         />
         <span className="absolute top-4 left-4 rounded-full rounded-tl-sm bg-[var(--accent)] px-2 py-0.5 text-[11px] font-medium text-white shadow-[0_4px_10px_-4px_rgba(12,12,11,0.4)]">
-          You
+          {m.hv_you()}
         </span>
       </div>
 
@@ -564,28 +589,124 @@ function Sparkline({
 /* ------------------------------------------------------------------ */
 
 const NAV = [
-  { icon: LayoutDashboard, label: 'Overview', active: true },
-  { icon: Package, label: 'Orders', active: false },
-  { icon: Users, label: 'Customers', active: false },
-  { icon: BarChart3, label: 'Reports', active: false },
-  { icon: Settings, label: 'Settings', active: false },
+  {
+    icon: LayoutDashboard,
+    get label() {
+      return m.hv_nav_overview()
+    },
+    active: true,
+  },
+  {
+    icon: Package,
+    get label() {
+      return m.hv_nav_orders()
+    },
+    active: false,
+  },
+  {
+    icon: Users,
+    get label() {
+      return m.hv_nav_customers()
+    },
+    active: false,
+  },
+  {
+    icon: BarChart3,
+    get label() {
+      return m.hv_nav_reports()
+    },
+    active: false,
+  },
+  {
+    icon: Settings,
+    get label() {
+      return m.hv_nav_settings()
+    },
+    active: false,
+  },
 ]
 
 const STATS = [
-  { label: 'Orders today', count: 128, note: '+12 since yesterday' },
-  { label: 'Waiting for approval', count: 9, note: '3 older than a day' },
-  { label: 'Average handling', text: '4m 10s', note: 'Was 26m on paper' },
+  {
+    get label() {
+      return m.hv_stat_orders()
+    },
+    count: 128,
+    get note() {
+      return m.hv_stat_orders_note()
+    },
+  },
+  {
+    get label() {
+      return m.hv_stat_waiting()
+    },
+    count: 9,
+    get note() {
+      return m.hv_stat_waiting_note()
+    },
+  },
+  {
+    get label() {
+      return m.hv_stat_handling()
+    },
+    text: '4m 10s',
+    get note() {
+      return m.hv_stat_handling_note()
+    },
+  },
 ]
 
 /** Bar heights (percent) for the example week. */
 const WEEK = [
-  { day: 'Mon', value: 46 },
-  { day: 'Tue', value: 62 },
-  { day: 'Wed', value: 54 },
-  { day: 'Thu', value: 78 },
-  { day: 'Fri', value: 91 },
-  { day: 'Sat', value: 40 },
-  { day: 'Sun', value: 28 },
+  {
+    day: 'Mon',
+    get label() {
+      return m.hv_day_mon()
+    },
+    value: 46,
+  },
+  {
+    day: 'Tue',
+    get label() {
+      return m.hv_day_tue()
+    },
+    value: 62,
+  },
+  {
+    day: 'Wed',
+    get label() {
+      return m.hv_day_wed()
+    },
+    value: 54,
+  },
+  {
+    day: 'Thu',
+    get label() {
+      return m.hv_day_thu()
+    },
+    value: 78,
+  },
+  {
+    day: 'Fri',
+    get label() {
+      return m.hv_day_fri()
+    },
+    value: 91,
+  },
+  {
+    day: 'Sat',
+    get label() {
+      return m.hv_day_sat()
+    },
+    value: 40,
+  },
+  {
+    day: 'Sun',
+    get label() {
+      return m.hv_day_sun()
+    },
+    value: 28,
+  },
 ]
 
 function DashboardScene() {
@@ -596,7 +717,7 @@ function DashboardScene() {
           <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--ink)] text-[11px] text-white">
             Y
           </span>
-          Your Company
+          {m.hv_company()}
         </p>
         <ul className="space-y-1">
           {NAV.map(({ icon: Icon, label, active }) => (
@@ -618,9 +739,9 @@ function DashboardScene() {
 
       <div className="p-5 sm:p-7">
         <div className="mb-5 flex items-baseline justify-between gap-4">
-          <p className="text-base font-semibold">Orders overview</p>
+          <p className="text-base font-semibold">{m.hv_orders_overview()}</p>
           <p className="font-mono text-[11px] text-[var(--muted)]">
-            Updated just now
+            {m.hv_updated()}
           </p>
         </div>
 
@@ -645,7 +766,7 @@ function DashboardScene() {
 
         <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr] lg:grid-cols-[1.3fr_1fr_0.7fr]">
           <div data-pop className={card}>
-            <p className={cn(cardLabel, 'mb-4')}>Orders this week</p>
+            <p className={cn(cardLabel, 'mb-4')}>{m.hv_orders_week()}</p>
             <div className="flex h-28 items-end gap-2.5">
               {WEEK.map((bar) => (
                 <div
@@ -657,7 +778,7 @@ function DashboardScene() {
                       data-after
                       className="absolute -top-7 left-1/2 -translate-x-1/2 rounded-md bg-[var(--ink)] px-2 py-1 text-[10px] font-medium whitespace-nowrap text-white"
                     >
-                      Friday: 117 orders
+                      {m.hv_friday_orders()}
                     </span>
                   )}
                   <div
@@ -671,7 +792,7 @@ function DashboardScene() {
                     )}
                     style={{ height: `${bar.value}%` }}
                   />
-                  <span className={cn(mono, 'text-center')}>{bar.day}</span>
+                  <span className={cn(mono, 'text-center')}>{bar.label}</span>
                 </div>
               ))}
             </div>
@@ -679,7 +800,7 @@ function DashboardScene() {
 
           <div data-pop className={cn(card, 'hidden sm:block')}>
             <div className="mb-4 flex items-baseline justify-between">
-              <p className={cardLabel}>Revenue, 30 days</p>
+              <p className={cardLabel}>{m.hv_revenue()}</p>
               <p className="text-[11px] font-medium text-[var(--accent)]">
                 +18%
               </p>
@@ -693,7 +814,7 @@ function DashboardScene() {
           </div>
 
           <div data-pop className={cn(card, 'hidden lg:block')}>
-            <p className={cn(cardLabel, 'mb-3')}>Delivered on time</p>
+            <p className={cn(cardLabel, 'mb-3')}>{m.hv_on_time()}</p>
             <div className="relative mx-auto size-24">
               <svg
                 viewBox="0 0 36 36"
@@ -738,9 +859,33 @@ function DashboardScene() {
 /* ------------------------------------------------------------------ */
 
 const PERKS = [
-  { icon: Truck, title: 'Free delivery', text: 'On every weekly box' },
-  { icon: Leaf, title: 'Roasted fresh', text: 'Never older than 5 days' },
-  { icon: RefreshCw, title: 'Pause anytime', text: 'No contract, no fuss' },
+  {
+    icon: Truck,
+    get title() {
+      return m.hv_perk_1_title()
+    },
+    get text() {
+      return m.hv_perk_1_text()
+    },
+  },
+  {
+    icon: Leaf,
+    get title() {
+      return m.hv_perk_2_title()
+    },
+    get text() {
+      return m.hv_perk_2_text()
+    },
+  },
+  {
+    icon: RefreshCw,
+    get title() {
+      return m.hv_perk_3_title()
+    },
+    get text() {
+      return m.hv_perk_3_text()
+    },
+  },
 ]
 
 function WebsiteScene() {
@@ -749,15 +894,15 @@ function WebsiteScene() {
       <div data-pop className="mb-7 flex items-center gap-6 text-[13px]">
         <p className="flex items-center gap-2 font-semibold">
           <span className="size-5 rounded-full bg-[var(--accent)]" />
-          Your Brand
+          {m.hv_brand()}
         </p>
         <p className="ml-auto hidden gap-5 text-[var(--muted)] sm:flex">
-          <span>Menu</span>
-          <span>How it works</span>
-          <span>Reviews</span>
+          <span>{m.hv_menu()}</span>
+          <span>{m.hv_how()}</span>
+          <span>{m.hv_reviews()}</span>
         </p>
         <span className="ml-auto rounded-full border border-[var(--line)] px-3 py-1 text-[12px] font-medium sm:ml-0">
-          Sign in
+          {m.hv_signin()}
         </span>
       </div>
 
@@ -767,27 +912,26 @@ function WebsiteScene() {
             data-pop
             className="mb-3 inline-flex rounded-full bg-[var(--accent)]/10 px-2.5 py-1 text-[11px] font-medium text-[var(--accent)]"
           >
-            New: weekly subscription
+            {m.hv_new()}
           </p>
           <p
             data-pop
             className="font-display mb-3 text-[1.7rem] leading-[1.08] sm:text-[2.1rem]"
           >
-            Fresh coffee at your door, every week.
+            {m.hv_headline()}
           </p>
           <p data-pop className="mb-5 max-w-sm text-[13px] text-[var(--muted)]">
-            Pick your roast once. We grind, pack and deliver it before you run
-            out.
+            {m.hv_sub()}
           </p>
           <div data-pop className="flex flex-wrap gap-2">
             <span
               data-click
               className="rounded-full bg-[var(--accent)] px-4 py-2 text-[13px] font-medium text-white"
             >
-              Start my order
+              {m.hv_start_order()}
             </span>
             <span className="rounded-full border border-[var(--line)] px-4 py-2 text-[13px] font-medium">
-              See the menu
+              {m.hv_see_menu()}
             </span>
           </div>
         </div>
@@ -798,12 +942,12 @@ function WebsiteScene() {
         >
           <div className="absolute top-6 left-6 w-40 rounded-lg border border-[var(--line)] bg-white p-3 shadow-[0_12px_28px_-16px_rgba(12,12,11,0.35)]">
             <div className="mb-2.5 h-16 rounded-md bg-[var(--accent)]/15" />
-            <p className="text-[12px] font-medium">House blend, 250 g</p>
-            <p className={mono}>Medium roast</p>
+            <p className="text-[12px] font-medium">{m.hv_product()}</p>
+            <p className={mono}>{m.hv_roast()}</p>
           </div>
           <div className="absolute top-10 right-5 flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11px] font-medium shadow-[0_8px_20px_-12px_rgba(12,12,11,0.35)]">
             <Star className="size-3 fill-amber-400 text-amber-400" />
-            4.9 from 2,300 reviews
+            {m.hv_rating()}
           </div>
           <div
             data-after
@@ -814,9 +958,9 @@ function WebsiteScene() {
             </span>
             <span>
               <span className="block text-[12px] font-medium">
-                New order received
+                {m.hv_new_order()}
               </span>
-              <span className={mono}>just now</span>
+              <span className={mono}>{m.hv_just_now()}</span>
             </span>
           </div>
         </div>
@@ -852,39 +996,65 @@ function WebsiteScene() {
 const SERVICES = [
   {
     icon: Workflow,
-    name: 'Workflow automation',
+    get name() {
+      return m.hv_svc_workflow()
+    },
     host: 'flows.yourcompany.com',
     load: 34,
   },
   {
     icon: Globe,
-    name: 'Company website',
+    get name() {
+      return m.hv_svc_site()
+    },
     host: 'www.yourcompany.com',
     load: 12,
   },
-  { icon: Database, name: 'Database', host: 'db.yourcompany.com', load: 58 },
+  {
+    icon: Database,
+    get name() {
+      return m.hv_svc_db()
+    },
+    host: 'db.yourcompany.com',
+    load: 58,
+  },
 ]
 
 const BACKUPS = [
-  { when: 'Today, 02:00', size: '1.2 GB' },
-  { when: 'Yesterday, 02:00', size: '1.2 GB' },
-  { when: 'Friday, 02:00', size: '1.1 GB' },
+  {
+    get when() {
+      return m.hv_backup_today()
+    },
+    size: '1.2 GB',
+  },
+  {
+    get when() {
+      return m.hv_backup_yesterday()
+    },
+    size: '1.2 GB',
+  },
+  {
+    get when() {
+      return m.hv_backup_friday()
+    },
+    size: '1.1 GB',
+  },
 ]
 
 function HostingScene() {
   return (
     <div className="h-full p-5 sm:p-7">
       <div className="mb-5 flex items-baseline justify-between gap-4">
-        <p className="text-base font-semibold">Your services</p>
+        <p className="text-base font-semibold">{m.hv_your_services()}</p>
         <p className="mr-auto hidden font-mono text-[11px] text-[var(--muted)] sm:block">
-          3 running · managed by {BRAND_NAME}
+          {m.hv_running({ brand: BRAND_NAME })}
         </p>
         <span className="relative">
           <span
             data-click
             className="inline-block rounded-full bg-[var(--ink)] px-3 py-1.5 text-[12px] font-medium text-white"
           >
-            Deploy update
+            {m.hv_deploy_update()}
           </span>
           <span
             data-after
@@ -893,8 +1063,8 @@ function HostingScene() {
             <span className="inline-flex size-4.5 items-center justify-center rounded-full bg-emerald-500 text-white">
               <Check className="size-3" />
             </span>
-            <span className="text-[12px] font-medium">v2.5 is live</span>
-            <span className={mono}>38s, no downtime</span>
+            <span className="text-[12px] font-medium">{m.hv_live()}</span>
+            <span className={mono}>{m.hv_no_downtime()}</span>
           </span>
         </span>
       </div>
@@ -941,7 +1111,7 @@ function HostingScene() {
 
         <div className="grid content-start gap-3">
           <div data-pop className={card}>
-            <p className={cn(cardLabel, 'mb-2')}>Uptime, last 30 days</p>
+            <p className={cn(cardLabel, 'mb-2')}>{m.hv_uptime30()}</p>
             <p
               data-count={99.98}
               data-decimals={2}
@@ -959,7 +1129,7 @@ function HostingScene() {
           </div>
 
           <div data-pop className={cn(card, 'hidden sm:block')}>
-            <p className={cn(cardLabel, 'mb-3')}>Automatic backups</p>
+            <p className={cn(cardLabel, 'mb-3')}>{m.hv_backups()}</p>
             <ul className="space-y-2.5">
               {BACKUPS.map(({ when, size }) => (
                 <li
@@ -987,16 +1157,23 @@ function HostingScene() {
 /* ------------------------------------------------------------------ */
 
 const CHAT = [
-  { from: 'visitor', text: 'Do you deliver to Surabaya?' },
+  {
+    from: 'visitor',
+    get text() {
+      return m.hv_chat_q1()
+    },
+  },
   {
     from: 'bot',
-    text: 'Yes. It takes 2 to 3 days, and delivery is free on orders over Rp 500k.',
+    get text() {
+      return m.hv_chat_a1()
+    },
   },
 ]
 
 /** The question the cursor types, and what answr says back. */
-const TYPED_QUESTION = 'Can I pay on delivery?'
-const TYPED_REPLY = 'You can. Cash on delivery works everywhere we ship.'
+const typedQuestion = () => m.hv_chat_q2()
+const typedReply = () => m.hv_chat_a2()
 
 const bubble = 'max-w-[85%] rounded-2xl px-3 py-2'
 const visitorBubble = 'self-end rounded-br-sm bg-[var(--accent)] text-white'
@@ -1009,10 +1186,10 @@ function ChatbotScene() {
   return (
     <div className="grid h-full gap-4 p-5 sm:grid-cols-[1fr_19rem] sm:p-7">
       <div className="hidden content-start gap-3 sm:grid">
-        <p className="mb-2 text-base font-semibold">answr on your website</p>
+        <p className="mb-2 text-base font-semibold">{m.hv_answr_title()}</p>
         <div className="grid grid-cols-2 gap-3">
           <div data-pop className={card}>
-            <p className={cn(cardLabel, 'mb-2')}>Answered without staff</p>
+            <p className={cn(cardLabel, 'mb-2')}>{m.hv_answered()}</p>
             <p
               data-count={86}
               data-suffix="%"
@@ -1022,12 +1199,12 @@ function ChatbotScene() {
             </p>
           </div>
           <div data-pop className={card}>
-            <p className={cn(cardLabel, 'mb-2')}>Average reply</p>
-            <p className="font-display text-2xl">2 sec</p>
+            <p className={cn(cardLabel, 'mb-2')}>{m.hv_avg_reply()}</p>
+            <p className="font-display text-2xl">{m.hv_two_sec()}</p>
           </div>
         </div>
         <div data-pop className={card}>
-          <p className={cn(cardLabel, 'mb-4')}>Questions answered per day</p>
+          <p className={cn(cardLabel, 'mb-4')}>{m.hv_per_day()}</p>
           <div className="flex h-24 items-end gap-2">
             {QUESTIONS.map((value, i) => (
               <div
@@ -1056,7 +1233,7 @@ function ChatbotScene() {
             <span className="block text-[13px] font-medium">answr</span>
             <span className={cn(mono, 'flex items-center gap-1.5')}>
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              Online
+              {m.hv_online()}
             </span>
           </span>
         </div>
@@ -1075,7 +1252,7 @@ function ChatbotScene() {
             </li>
           ))}
           <li data-sent className={cn(bubble, visitorBubble)}>
-            {TYPED_QUESTION}
+            {typedQuestion()}
           </li>
           <li
             data-typing
@@ -1090,16 +1267,16 @@ function ChatbotScene() {
             ))}
           </li>
           <li data-reply className={cn(bubble, botBubble)}>
-            {TYPED_REPLY}
+            {typedReply()}
           </li>
         </ul>
 
         <div className="flex items-center gap-2 border-t border-[var(--line)] px-4 py-3">
           <span
-            data-type={TYPED_QUESTION}
+            data-type={typedQuestion()}
             className="flex-1 truncate text-[13px] text-[var(--muted)]"
           >
-            Ask a question
+            {m.hv_ask()}
           </span>
           <span
             data-send

@@ -4,6 +4,8 @@ import { formatDateTime } from '#/lib/product'
 import type { ProductPeriod, UserPlan, UserProductRow } from '#/lib/product'
 import { hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
+import { getLocale } from '#/paraglide/runtime'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_TICK_LABELS = 10
@@ -35,7 +37,7 @@ function ticks({ start, end }: Range): Tick[] {
 
   if (spanDays <= 70) {
     cursor.setDate(cursor.getDate() + ((8 - cursor.getDay()) % 7)) // next Monday
-    const format = new Intl.DateTimeFormat(undefined, {
+    const format = new Intl.DateTimeFormat(getLocale(), {
       day: 'numeric',
       month: 'short',
     })
@@ -45,8 +47,8 @@ function ticks({ start, end }: Range): Tick[] {
   } else if (spanDays <= 3 * 365) {
     cursor.setDate(1)
     cursor.setMonth(cursor.getMonth() + 1)
-    const month = new Intl.DateTimeFormat(undefined, { month: 'short' })
-    const monthYear = new Intl.DateTimeFormat(undefined, {
+    const month = new Intl.DateTimeFormat(getLocale(), { month: 'short' })
+    const monthYear = new Intl.DateTimeFormat(getLocale(), {
       month: 'short',
       year: 'numeric',
     })
@@ -99,7 +101,7 @@ function joins(periods: ProductPeriod[], index: number) {
 }
 
 function describePeriod(period: ProductPeriod): string {
-  const end = period.endsAt ? formatDateTime(period.endsAt) : 'no end'
+  const end = period.endsAt ? formatDateTime(period.endsAt) : m.plan_no_end()
   return `${formatDateTime(period.startsAt)} – ${end}`
 }
 
@@ -108,19 +110,21 @@ function rowStatus(row: UserProductRow, now: number): string {
   if (row.product.kind === 'oneTime') {
     const owned = row.periods.at(0)
     return owned
-      ? `Owned since ${formatDateTime(owned.startsAt)} · never expires`
-      : 'Owned · never expires'
+      ? m.plan_owned_since({ date: formatDateTime(owned.startsAt) })
+      : m.plan_owned()
   }
   const current = row.periods.find((period) => period.isCurrent)
   if (current) {
     return current.endsAt
-      ? `Active until ${formatDateTime(current.endsAt)}`
-      : 'Active, no end date'
+      ? m.plan_active_until({ date: formatDateTime(current.endsAt) })
+      : m.plan_active_no_end()
   }
   const next = row.periods.find((period) => Date.parse(period.startsAt) > now)
-  if (next) return `Starts ${formatDateTime(next.startsAt)}`
+  if (next) return m.plan_starts({ date: formatDateTime(next.startsAt) })
   const last = row.periods.at(-1)
-  return last?.endsAt ? `Ended ${formatDateTime(last.endsAt)}` : 'Inactive'
+  return last?.endsAt
+    ? m.plan_ended({ date: formatDateTime(last.endsAt) })
+    : m.plan_inactive()
 }
 
 /**
@@ -130,7 +134,7 @@ function rowStatus(row: UserProductRow, now: number): string {
 export default function PlanGantt({
   plan,
   rowActions,
-  emptyText = 'No products yet.',
+  emptyText = m.plan_empty(),
 }: {
   plan: UserPlan
   /** Extra controls on a product's row, e.g. an admin "Stop now". */
@@ -253,7 +257,7 @@ export default function PlanGantt({
             className="absolute top-0 -translate-x-1/2"
             style={{ left: `${nowAt}%` }}
           >
-            Today
+            {m.plan_today()}
           </span>
         </div>
       </div>

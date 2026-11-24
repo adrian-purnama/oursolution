@@ -2,10 +2,12 @@ import { Link } from '@tanstack/react-router'
 import LegalPage from '#/components/legal/LegalPage'
 import type { LegalSection } from '#/components/legal/LegalPage'
 import { BRAND_NAME } from '#/lib/config'
+import { m } from '#/paraglide/messages'
+import { getLocale } from '#/paraglide/runtime'
 
 export const TERMS_UPDATED = '16 November 2026'
 
-const SECTIONS: LegalSection[] = [
+const SECTIONS_EN: LegalSection[] = [
   {
     id: 'your-account',
     title: 'Your account',
@@ -163,24 +165,208 @@ const SECTIONS: LegalSection[] = [
   },
 ]
 
+const SECTIONS_ID: LegalSection[] = [
+  {
+    id: 'your-account',
+    title: 'Akun Anda',
+    body: (
+      <ul>
+        <li>
+          Anda harus memberikan alamat email yang valid dan menjaganya tetap
+          mutakhir.
+        </li>
+        <li>
+          Jaga kata sandi Anda. Anda bertanggung jawab atas semua yang terjadi
+          di bawah akun Anda.
+        </li>
+        <li>
+          Anda harus cukup umur untuk membuat perjanjian di tempat Anda tinggal,
+          atau memiliki izin dari orang tua atau wali.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: 'services',
+    title: 'Layanan kami',
+    body: (
+      <p>
+        {BRAND_NAME} menawarkan pekerjaan software khusus, aplikasi bisnis
+        hosting yang dijual sebagai langganan, produk sekali beli, dan chatbot
+        answr.id. Setiap halaman produk menjelaskan apa saja yang termasuk.
+        Proyek software khusus juga dapat diatur dalam perjanjian tertulis
+        terpisah, yang didahulukan jika berbeda dari ketentuan ini.
+      </p>
+    ),
+  },
+  {
+    id: 'payment',
+    title: 'Harga dan pembayaran',
+    body: (
+      <ul>
+        <li>
+          Harga dalam rupiah Indonesia dan ditampilkan sebelum Anda membayar.
+        </li>
+        <li>
+          Langganan dibayar di muka untuk periode tertentu. Langganan tidak
+          diperpanjang otomatis; Anda memperpanjangnya dengan membayar periode
+          berikutnya.
+        </li>
+        <li>
+          Invoice harus dibayar sebelum kedaluwarsa. Produk menjadi milik Anda
+          setelah pembayarannya terkonfirmasi.
+        </li>
+        <li>
+          Pembayaran bersifat final kecuali hukum menentukan lain atau kami
+          menyetujui pengembalian dana secara tertulis.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: 'expiry',
+    title: 'Ketika langganan berakhir',
+    body: (
+      <p>
+        Ketika langganan berakhir, layanan hosting dimatikan dan alamatnya tidak
+        lagi bisa diakses. Data Anda disimpan beberapa waktu agar Anda bisa
+        memperpanjang dan menyalakannya kembali. Jika langganan tetap
+        kedaluwarsa, kami dapat menghapus data layanan tersebut setelah memberi
+        tahu Anda.
+      </p>
+    ),
+  },
+  {
+    id: 'acceptable-use',
+    title: 'Penggunaan yang diperbolehkan',
+    body: (
+      <>
+        <p>Anda setuju untuk tidak menggunakan layanan kami untuk:</p>
+        <ul>
+          <li>
+            melanggar hukum, atau menyimpan atau membagikan konten ilegal;
+          </li>
+          <li>mengirim spam, malware, atau phishing;</li>
+          <li>
+            menyerang, membebani, atau mencoba mengakses sistem apa pun tanpa
+            izin, termasuk sistem kami;
+          </li>
+          <li>melanggar kekayaan intelektual atau privasi orang lain.</li>
+        </ul>
+        <p>
+          Kami dapat menangguhkan layanan yang melanggar aturan ini atau
+          membahayakan pengguna lain, dan akan menjelaskan alasannya jika
+          memungkinkan.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'your-content',
+    title: 'Konten Anda',
+    body: (
+      <p>
+        Anda tetap memiliki data yang Anda masukkan ke layanan yang kami
+        hosting. Anda mengizinkan kami menyimpan, menyalin, dan memprosesnya
+        hanya sebatas yang diperlukan untuk menjalankan layanan bagi Anda. Anda
+        bertanggung jawab memastikan Anda berhak menggunakan data tersebut dan
+        menyimpan salinan sendiri dari hal-hal yang penting.
+      </p>
+    ),
+  },
+  {
+    id: 'availability',
+    title: 'Ketersediaan',
+    body: (
+      <p>
+        Kami berupaya menjaga layanan tetap berjalan dan memantaunya sepanjang
+        waktu, tetapi kami tidak dapat menjanjikan layanan tidak akan pernah
+        terganggu. Pemeliharaan, pembaruan, dan masalah di luar kendali kami
+        dapat menyebabkan downtime.
+      </p>
+    ),
+  },
+  {
+    id: 'liability',
+    title: 'Tanggung jawab',
+    body: (
+      <p>
+        Sejauh diizinkan hukum, layanan kami diberikan &ldquo;apa adanya&rdquo;,
+        dan {BRAND_NAME} tidak bertanggung jawab atas kerugian tidak langsung
+        seperti hilangnya keuntungan atau data. Tanggung jawab total kami atas
+        suatu klaim dibatasi pada jumlah yang Anda bayarkan kepada kami untuk
+        layanan terkait dalam tiga bulan sebelum klaim diajukan.
+      </p>
+    ),
+  },
+  {
+    id: 'ending',
+    title: 'Menutup akun Anda',
+    body: (
+      <p>
+        Anda dapat berhenti menggunakan layanan kami kapan saja. Kami dapat
+        menutup akun yang melanggar ketentuan ini secara serius atau berulang.
+        Bagian-bagian yang sifatnya harus tetap berlaku, seperti pembayaran dan
+        tanggung jawab, tetap berlaku setelahnya.
+      </p>
+    ),
+  },
+  {
+    id: 'law',
+    title: 'Hukum yang berlaku',
+    body: (
+      <p>
+        Ketentuan ini tunduk pada hukum Republik Indonesia. Kami akan terlebih
+        dahulu berusaha menyelesaikan setiap perselisihan dengan Anda secara
+        langsung dan dengan itikad baik.
+      </p>
+    ),
+  },
+  {
+    id: 'changes',
+    title: 'Perubahan pada ketentuan ini',
+    body: (
+      <p>
+        Kami dapat memperbarui ketentuan ini. Jika itu terjadi, kami mengubah
+        tanggal di atas, dan untuk perubahan penting kami memberi tahu Anda
+        sebelumnya. Dengan terus menggunakan layanan kami setelah perubahan,
+        Anda menerima ketentuan yang baru.
+      </p>
+    ),
+  },
+]
+
 export default function TermsOfService() {
+  const isId = getLocale() === 'id'
   return (
     <LegalPage
-      eyebrow="Legal"
-      title="Terms of service"
+      eyebrow={m.legal_eyebrow()}
+      title={m.nav_terms()}
       updated={TERMS_UPDATED}
       intro={
-        <p>
-          These terms apply when you create an account with {BRAND_NAME}, buy
-          one of our products or use a service we host. How we handle personal
-          data is described in our{' '}
-          <Link to="/privacy" className="text-[var(--ink)] underline">
-            privacy policy
-          </Link>
-          .
-        </p>
+        isId ? (
+          <p>
+            Ketentuan ini berlaku saat Anda membuat akun di {BRAND_NAME},
+            membeli produk kami, atau menggunakan layanan yang kami hosting.
+            Cara kami menangani data pribadi dijelaskan dalam{' '}
+            <Link to="/privacy" className="text-[var(--ink)] underline">
+              kebijakan privasi
+            </Link>{' '}
+            kami.
+          </p>
+        ) : (
+          <p>
+            These terms apply when you create an account with {BRAND_NAME}, buy
+            one of our products or use a service we host. How we handle personal
+            data is described in our{' '}
+            <Link to="/privacy" className="text-[var(--ink)] underline">
+              privacy policy
+            </Link>
+            .
+          </p>
+        )
       }
-      sections={SECTIONS}
+      sections={isId ? SECTIONS_ID : SECTIONS_EN}
     />
   )
 }

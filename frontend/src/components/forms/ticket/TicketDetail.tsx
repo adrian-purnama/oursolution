@@ -23,6 +23,7 @@ import {
 import type { Ticket, TicketStatus } from '#/lib/ticket'
 import { cardClassName, hintClassName } from '#/lib/ui-classes'
 import { cn } from '#/lib/utils'
+import { m } from '#/paraglide/messages'
 
 /**
  * One ticket's thread. Customers follow up within their limit; admins
@@ -78,7 +79,7 @@ export default function TicketDetail({
     try {
       const response = await apiUpload<Ticket>(`${base}/messages`, form)
       if (!response.success || !response.data) {
-        toast.error(response.message || 'The message could not be sent')
+        toast.error(response.message || m.ticket_msg_failed())
         // The limit or status may have changed elsewhere: show what is true.
         if (errorCodeOf(response.data)) void load()
         return false
@@ -86,7 +87,7 @@ export default function TicketDetail({
       setTicket(response.data)
       return true
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
       return false
     }
   }
@@ -99,13 +100,15 @@ export default function TicketDetail({
         body: JSON.stringify({ status }),
       })
       if (!response.success || !response.data) {
-        toast.error(response.message || 'The status could not be changed')
+        toast.error(response.message || m.ticket_status_failed())
         return
       }
       setTicket(response.data)
-      toast.success(`Status set to ${TICKET_STATUS_LABELS[status]}`)
+      toast.success(
+        m.ticket_status_set({ status: TICKET_STATUS_LABELS[status] }),
+      )
     } catch {
-      toast.error('Unable to reach the server. Please try again.')
+      toast.error(m.common_error_network())
     } finally {
       setSavingStatus(false)
     }
@@ -115,7 +118,7 @@ export default function TicketDetail({
     return (
       <div className={`flex items-center gap-2 py-8 ${hintClassName}`}>
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        Loading ticket…
+        {m.ticket_loading()}
       </div>
     )
   }
@@ -123,13 +126,11 @@ export default function TicketDetail({
     return (
       <div className={`${cardClassName} px-4 py-8 text-center`}>
         <p className={`mb-3 ${hintClassName}`}>
-          {state === 'missing'
-            ? 'This ticket does not exist.'
-            : 'The ticket could not be loaded.'}
+          {state === 'missing' ? m.ticket_missing() : m.ticket_load_failed()}
         </p>
         {state === 'error' ? (
           <Button type="button" variant="outline" onClick={() => void load()}>
-            Retry
+            {m.common_retry()}
           </Button>
         ) : null}
       </div>
@@ -160,11 +161,19 @@ export default function TicketDetail({
           )}
         </div>
         <p className={hintClassName}>
-          {shortTicketId(ticket.id)} · opened {formatDateTime(ticket.createdAt)}
+          {m.ticket_opened({
+            id: shortTicketId(ticket.id),
+            date: formatDateTime(ticket.createdAt),
+          })}
           {view === 'admin' && ticket.user ? ` · ${ticket.user.email}` : ''}
           {view === 'admin'
-            ? ` · ${ticket.followupCount} of ${MAX_FOLLOWUPS} follow-ups since the last reply${
-                ticket.followupCount >= MAX_FOLLOWUPS ? ', waiting for you' : ''
+            ? `${m.ticket_admin_followups({
+                count: ticket.followupCount,
+                max: MAX_FOLLOWUPS,
+              })}${
+                ticket.followupCount >= MAX_FOLLOWUPS
+                  ? m.ticket_admin_waiting()
+                  : ''
               }`
             : ''}
         </p>
@@ -187,33 +196,36 @@ export default function TicketDetail({
 
       <section className="space-y-4 border-t border-[var(--line)] pt-6">
         {view === 'admin' && closed ? (
-          <Notice icon={Lock} text="This ticket is closed." />
+          <Notice icon={Lock} text={m.ticket_closed_notice()} />
         ) : null}
         {view === 'admin' ? (
           <MessageComposer
-            label="Reply"
-            placeholder="Write your reply to the customer."
-            submitLabel="Send reply"
+            label={m.ticket_reply_label()}
+            placeholder={m.ticket_reply_placeholder()}
+            submitLabel={m.ticket_reply_send()}
             hint={
               closed
-                ? 'The ticket stays closed; reopen it to let the customer write again.'
-                : `Replying gives the customer ${MAX_FOLLOWUPS} follow-ups again.`
+                ? m.ticket_reply_hint_closed()
+                : m.ticket_reply_hint({ max: MAX_FOLLOWUPS })
             }
             onSend={send}
           />
         ) : closed ? (
-          <Notice icon={Lock} text="This ticket is closed." />
+          <Notice icon={Lock} text={m.ticket_closed_notice()} />
         ) : !ticket.canSend ? (
-          <Notice
-            icon={Hourglass}
-            text="Waiting for admin response. You can write again once we reply."
-          />
+          <Notice icon={Hourglass} text={m.ticket_waiting()} />
         ) : (
           <MessageComposer
-            label="Add a follow-up"
-            placeholder="Anything to add?"
-            submitLabel="Send"
-            hint={`${ticket.followupsRemaining} follow-up${ticket.followupsRemaining === 1 ? '' : 's'} remaining until we reply`}
+            label={m.ticket_followup_label()}
+            placeholder={m.ticket_followup_placeholder()}
+            submitLabel={m.ticket_followup_send()}
+            hint={
+              ticket.followupsRemaining === 1
+                ? m.ticket_followup_hint_one()
+                : m.ticket_followup_hint_other({
+                    count: ticket.followupsRemaining,
+                  })
+            }
             onSend={send}
           />
         )}
@@ -250,7 +262,9 @@ function EditableStatus({
       }}
     >
       <SelectPrimitive.Trigger
-        aria-label={`Status: ${TICKET_STATUS_LABELS[status]}. Change status`}
+        aria-label={m.ticket_status_aria({
+          status: TICKET_STATUS_LABELS[status],
+        })}
         className={cn(
           'group inline-flex shrink-0 cursor-pointer items-center rounded-full border px-2.5 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/40 disabled:cursor-wait disabled:opacity-60',
           TICKET_STATUS_CLASSES[status],
