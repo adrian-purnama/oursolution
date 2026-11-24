@@ -473,8 +473,46 @@ export class PaddleService {
       },
       "notification",
     );
-    // A chargeback takes the access back; a refund is looked at by hand.
-    if (action === "chargeback") await this.revokeAccessOf(payment.id);
+    // A chargeback takes the access back and stops the renewals; a refund is
+    // looked at by hand.
+    if (action === "chargeback") {
+      await this.revokeAccessOf(payment.id);
+      await this.cancelSubscriptionOf(payment);
+    }
+  }
+
+  /** End the Paddle subscription a charged-back payment belongs to, at once. */
+  private async cancelSubscriptionOf(payment: PaymentRecord): Promise<void> {
+    if (!this.client) return;
+    const mirror = payment.subscriptionRef
+      ? null
+      : await PaddleSubscriptionModel.findOne({
+          firstPaymentId: new Types.ObjectId(payment.id),
+        })
+          .lean()
+          .exec();
+    const subscriptionId = payment.subscriptionRef ?? mirror?.subscriptionId;
+    if (!subscriptionId) return;
+    try {
+      await this.client.cancelSubscription(subscriptionId, "immediately");
+      logger.warn(
+        `Subscription ${subscriptionId} cancelled after a chargeback on ${payment.invoiceNumber}`,
+        logSource,
+        "cancelSubscriptionOf",
+      );
+    } catch (error) {
+      // Already ended (Paddle may cancel it itself): nothing more to do.
+      // Anything else is retried, because Paddle sends the event again.
+      if (error instanceof PaddleApiError && error.status < 500 && error.status !== 429) {
+        logger.warn(
+          `Could not cancel ${subscriptionId} after a chargeback: ${error.message}`,
+          logSource,
+          "cancelSubscriptionOf",
+        );
+        return;
+      }
+      throw error;
+    }
   }
 
   /**

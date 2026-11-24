@@ -151,14 +151,17 @@ export class PaddleClient {
     return this.request("GET", `/prices/${encodeURIComponent(id)}`);
   }
 
-  /** Stop renewing at the end of the period already paid for. */
-  cancelSubscription(id: string): Promise<{
+  /** Stop renewing: at the end of the period already paid for, or at once. */
+  cancelSubscription(
+    id: string,
+    effectiveFrom: "next_billing_period" | "immediately" = "next_billing_period",
+  ): Promise<{
     scheduled_change: { action: string; effective_at: string } | null;
   }> {
     return this.request(
       "POST",
       `/subscriptions/${encodeURIComponent(id)}/cancel`,
-      { effective_from: "next_billing_period" },
+      { effective_from: effectiveFrom },
     );
   }
 
