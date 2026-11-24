@@ -43,9 +43,9 @@ export const PAYMENT_SOURCES = ["checkout", "admin", "renewal"] as const;
 export type PaymentSource = (typeof PAYMENT_SOURCES)[number];
 
 /**
- * What an invoice is charged in. Every amount on it (`amountIdr`,
- * `unitPriceIdr`, ...) is in this currency's smallest unit used here: whole
- * rupiah for IDR, cents for USD. The field names predate other currencies.
+ * What an invoice is charged in. Every amount on it (`amount`,
+ * `unitPrice`, ...) is in this currency's smallest unit used here: whole
+ * rupiah for IDR, cents for USD.
  */
 export const PAYMENT_CURRENCIES = ["IDR", "USD"] as const;
 export type PaymentCurrency = (typeof PAYMENT_CURRENCIES)[number];
@@ -58,7 +58,7 @@ export interface PaymentItem {
   /** Extra detail shown under the name; custom lines mostly. */
   description: string | null;
   kind: PaymentItemKind;
-  unitPriceIdr: number;
+  unitPrice: number;
   /** Always 1 for a one-time product; periods to add for a subscription. */
   quantity: number;
   /** Subscription only: days one period adds. */
@@ -72,7 +72,7 @@ export interface PaymentItem {
   applyVariant: VariantApplyMode | null;
   /** Subscription only: when its time starts; null (older lines) is after. */
   placement: CheckoutPlacement | null;
-  amountIdr: number;
+  amount: number;
   /** The provider's own price for this line (a Paddle price id), or null. */
   providerPriceId?: string | null;
   /** What was granted once paid. */
@@ -90,7 +90,7 @@ export interface PaymentInterface {
   invoiceNumber: string;
   items: PaymentItem[];
   /** Total of the items, in `currency` (see PAYMENT_CURRENCIES). */
-  amountIdr: number;
+  amount: number;
   /** Missing on invoices made before other currencies: IDR. */
   currency?: PaymentCurrency;
   status: PaymentStatus;

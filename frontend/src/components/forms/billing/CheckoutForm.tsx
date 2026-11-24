@@ -316,14 +316,14 @@ export default function CheckoutForm({
                   : ''}
                 {line.quantity > 1 ? ` × ${line.quantity}` : ''}
               </dt>
-              <dd className="shrink-0 tabular-nums">{money(line.amountIdr)}</dd>
+              <dd className="shrink-0 tabular-nums">{money(line.amount)}</dd>
             </div>
           ))}
         </dl>
         <div className="mt-4 flex items-baseline justify-between border-t border-[var(--line)] pt-4">
           <span className="text-sm font-medium">{m.common_total()}</span>
           <span className="font-display text-2xl tabular-nums">
-            {money(quote.totalIdr)}
+            {money(quote.total)}
           </span>
         </div>
         <Button
@@ -339,7 +339,7 @@ export default function CheckoutForm({
               {m.checkout_starting()}
             </>
           ) : (
-            m.invoice_pay_amount({ amount: money(quote.totalIdr) })
+            m.invoice_pay_amount({ amount: money(quote.total) })
           )}
         </Button>
         <p className="mt-3 text-xs text-[var(--muted)]">
@@ -353,10 +353,7 @@ export default function CheckoutForm({
           <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
             {m.checkout_replace({
               number: openCheckout.invoiceNumber,
-              amount: formatMoney(
-                openCheckout.amountIdr,
-                openCheckout.currency,
-              ),
+              amount: formatMoney(openCheckout.amount, openCheckout.currency),
             })}
           </p>
         ) : null}
@@ -418,14 +415,14 @@ function CheckoutLineRow({
               {line.product.name}
             </Link>
             <p className="mt-0.5 text-sm text-[var(--muted)]">
-              {formatMoney(line.unitPriceIdr, currency)}
+              {formatMoney(line.unitPrice, currency)}
               {line.durationDays !== null
                 ? m.checkout_per_days({ days: line.durationDays })
                 : ''}
             </p>
           </div>
           <p className="shrink-0 font-medium tabular-nums">
-            {formatMoney(line.amountIdr, currency)}
+            {formatMoney(line.amount, currency)}
           </p>
         </div>
 
@@ -586,7 +583,7 @@ function VariantChoices({
           <SelectContent>
             {line.variants.map((option) => (
               <SelectItem key={option.id} value={option.id}>
-                {option.name} · {formatMoney(option.unitPriceIdr, currency)}
+                {option.name} · {formatMoney(option.unitPrice, currency)}
                 {option.durationDays ? ` / ${option.durationDays} days` : ''}
               </SelectItem>
             ))}

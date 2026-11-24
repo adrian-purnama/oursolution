@@ -51,11 +51,11 @@ export default function UnpaidNotice({ className }: { className?: string }) {
             {more
               ? m.unpaid_next({
                   number: first.invoiceNumber,
-                  amount: formatMoney(first.amountIdr, first.currency),
+                  amount: formatMoney(first.amount, first.currency),
                   date: formatDateTime(first.expiresAt),
                 })
               : m.unpaid_pay_before({
-                  amount: formatMoney(first.amountIdr, first.currency),
+                  amount: formatMoney(first.amount, first.currency),
                   date: formatDateTime(first.expiresAt),
                 })}
           </p>

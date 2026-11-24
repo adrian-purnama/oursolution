@@ -37,12 +37,13 @@ import {
   variantsOf,
   type VariantHost,
 } from "./product.variants";
+import { UserError } from "../../utils/userError";
 
 export type ProductDoc = HydratedDocument<ProductInterface>;
 
-export class ProductNotFoundError extends Error {
+export class ProductNotFoundError extends UserError {
   constructor() {
-    super("Product not found");
+    super("Product not found", 404);
   }
 }
 
@@ -363,7 +364,9 @@ export class ProductService {
   }
 
   /** The shop in a region: products it cannot be sold in are left out. */
-  async listPricing(region: BillingRegion = "ID"): Promise<PricingProductOutDto[]> {
+  async listPricing(
+    region: BillingRegion = "ID",
+  ): Promise<PricingProductOutDto[]> {
     const products = await ProductModel.find({
       showOnPricingPage: true,
       deletedAt: null,

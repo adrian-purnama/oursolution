@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   NotificationOutDto,
   NotificationPageOutDto,
@@ -12,43 +11,26 @@ import {
   parseNotificationListQuery,
 } from "../../validation/notification";
 import { parseRouteId } from "../../validation/parseParam";
-import {
-  NotificationNotFoundError,
-  notificationService,
-} from "./notification.service";
+import { notificationService } from "./notification.service";
 import {
   formatNotificationEvent,
   HEARTBEAT_MS,
   notificationStreams,
 } from "./notification.stream";
+import { fail, ok } from "../../utils/respond";
 
 const SOURCE = "modules/notification/notification.controller.ts";
-
-function fail(res: Response, error: unknown, fallback: string) {
-  if (error instanceof NotificationNotFoundError) {
-    return res.status(404).json({
-      success: false,
-      message: error.message,
-      data: null,
-    } satisfies ApiResponseDto);
-  }
-  return res.status(400).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
 
 /** The signed-in user's own notifications. */
 export class NotificationController {
   list = async (req: Request, res: Response) => {
     try {
       const query = parseNotificationListQuery(req.query);
-      return res.status(200).json({
-        success: true,
-        message: "Notifications retrieved",
-        data: await notificationService.list(req.user!.id, query),
-      } satisfies ApiResponseDto<NotificationPageOutDto>);
+      return ok<NotificationPageOutDto>(
+        res,
+        "Notifications retrieved",
+        await notificationService.list(req.user!.id, query),
+      );
     } catch (error) {
       return fail(res, error, "Failed to load notifications");
     }
@@ -56,11 +38,9 @@ export class NotificationController {
 
   unreadCount = async (req: Request, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        message: "Unread count retrieved",
-        data: { count: await notificationService.unreadCount(req.user!.id) },
-      } satisfies ApiResponseDto<UnreadCountOutDto>);
+      return ok<UnreadCountOutDto>(res, "Unread count retrieved", {
+        count: await notificationService.unreadCount(req.user!.id),
+      });
     } catch (error) {
       return fail(res, error, "Failed to load the unread count");
     }
@@ -68,14 +48,14 @@ export class NotificationController {
 
   markRead = async (req: Request, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        message: "Notification marked as read",
-        data: await notificationService.markRead(
+      return ok<NotificationOutDto>(
+        res,
+        "Notification marked as read",
+        await notificationService.markRead(
           req.user!.id,
           parseRouteId(req.params.id),
         ),
-      } satisfies ApiResponseDto<NotificationOutDto>);
+      );
     } catch (error) {
       return fail(res, error, "Could not update the notification");
     }
@@ -83,11 +63,9 @@ export class NotificationController {
 
   markAllRead = async (req: Request, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        message: "All notifications marked as read",
-        data: { updated: await notificationService.markAllRead(req.user!.id) },
-      } satisfies ApiResponseDto<ReadAllOutDto>);
+      return ok<ReadAllOutDto>(res, "All notifications marked as read", {
+        updated: await notificationService.markAllRead(req.user!.id),
+      });
     } catch (error) {
       return fail(res, error, "Could not update notifications");
     }

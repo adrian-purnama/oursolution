@@ -38,7 +38,7 @@ export function paddleStatus(txn: PaddleTransaction): ProviderStatus {
     state,
     raw: txn.status,
     // Prices are tax-exclusive, so the subtotal is what we billed.
-    amountIdr: amount !== null && Number.isFinite(amount) ? amount : null,
+    amount: amount !== null && Number.isFinite(amount) ? amount : null,
     reference: txn.id,
     paymentType: txn.payments?.[0]?.method_details?.type ?? null,
   };
@@ -67,10 +67,7 @@ export function verifyPaddleSignature(
   if (Math.abs(nowS - Number(ts)) > SIGNATURE_TOLERANCE_S) return false;
 
   const expected = Buffer.from(
-    createHmac("sha256", secret)
-      .update(`${ts}:`)
-      .update(rawBody)
-      .digest("hex"),
+    createHmac("sha256", secret).update(`${ts}:`).update(rawBody).digest("hex"),
     "utf8",
   );
   return hashes.some((hash) => {
@@ -143,8 +140,9 @@ export class PaddleProvider implements PaymentProvider {
       status: "pending",
       reference: txn.id,
       // Opened inside our page with Paddle.js; the hosted link is a fallback.
+      // The browser opens the transaction (`reference`) with Paddle.js.
       redirectUrl: txn.checkout?.url ?? request.finishUrl,
-      token: txn.id,
+      snapToken: null,
     };
   }
 

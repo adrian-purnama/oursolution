@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
+import { formatMoney } from "./money";
 import type {
   PaymentCurrency,
   PaymentStatus,
@@ -20,14 +21,16 @@ export type InvoicePdfInput = {
     name: string;
     detail: string;
     quantity: number;
-    unitPriceIdr: number;
-    amountIdr: number;
+    unitPrice: number;
+    amount: number;
   }[];
-  amountIdr: number;
+  amount: number;
   /** What the amounts are in: whole rupiah, or US cents. */
   currency: PaymentCurrency;
   /** Shown as a QR code on an unpaid invoice. */
   payUrl: string | null;
+  /** PNG or JPEG bytes of the logo; the brand name is drawn when absent or unreadable. */
+  logo?: Buffer | null;
 };
 
 const C = {
@@ -47,22 +50,6 @@ const C = {
 const LEFT = 48;
 const RIGHT = 547;
 const WIDTH = RIGHT - LEFT;
-
-/** "Rp 50.000" */
-export function formatIdr(value: number): string {
-  return `Rp ${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value)}`;
-}
-
-/** "Rp 50.000" for rupiah, "$9.00" for US cents. */
-export function formatMoney(value: number, currency: PaymentCurrency): string {
-  if (currency === "USD") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(value / 100);
-  }
-  return formatIdr(value);
-}
 
 function formatDateTime(date: Date): string {
   return `${new Intl.DateTimeFormat("id-ID", {
@@ -157,11 +144,22 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
     };
 
     // Header
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(16)
-      .fillColor(C.primary)
-      .text(input.brand, LEFT, 42, { width: 240 });
+    let logoDrawn = false;
+    if (input.logo) {
+      try {
+        doc.image(input.logo, LEFT, 38, { fit: [180, 32] });
+        logoDrawn = true;
+      } catch {
+        // Unsupported image format: fall back to the brand name.
+      }
+    }
+    if (!logoDrawn) {
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(16)
+        .fillColor(C.primary)
+        .text(input.brand, LEFT, 42, { width: 240 });
+    }
     doc
       .font("Helvetica-Bold")
       .fontSize(18)
@@ -219,7 +217,7 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
       metaTop + 8,
       150,
     );
-    metaCell("Currency", "IDR", 470, metaTop + 8, 70);
+    metaCell("Currency", input.currency, 470, metaTop + 8, 70);
 
     // Line items
     const tableTop = metaTop + 52;
@@ -262,11 +260,11 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
         .fontSize(9)
         .fillColor(C.text)
         .text(String(item.quantity), qtyX, y + 2, { width: 36, align: "right" })
-        .text(formatMoney(item.unitPriceIdr, input.currency), unitX, y + 2, {
+        .text(formatMoney(item.unitPrice, input.currency), unitX, y + 2, {
           width: 75,
           align: "right",
         })
-        .text(formatMoney(item.amountIdr, input.currency), amountX, y + 2, {
+        .text(formatMoney(item.amount, input.currency), amountX, y + 2, {
           width: 77,
           align: "right",
         });
@@ -286,8 +284,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
         .fillColor(C.text)
         .text(value, valueX, top, { width: 97, align: "right" });
     y += 6;
-    row("Subtotal", formatMoney(input.amountIdr, input.currency), y);
-    row("Paid", formatMoney(isPaid ? input.amountIdr : 0, input.currency), y + 16);
+    row("Subtotal", formatMoney(input.amount, input.currency), y);
+    row("Paid", formatMoney(isPaid ? input.amount : 0, input.currency), y + 16);
     const dueTop = y + 38;
     doc
       .save()
@@ -306,7 +304,7 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
       .font("Helvetica-Bold")
       .fontSize(12)
       .fillColor(isPaid ? C.green : C.primary)
-      .text(formatMoney(input.amountIdr, input.currency), valueX, dueTop + 1, {
+      .text(formatMoney(input.amount, input.currency), valueX, dueTop + 1, {
         width: 97,
         align: "right",
       });
@@ -320,19 +318,27 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
         : input.status === "pending"
           ? `Pay before ${formatDateTime(input.expiresAt)}. Unpaid invoices expire automatically.`
           : "This invoice was not paid. Nothing was charged.",
-      "Amounts are in Indonesian Rupiah (IDR).",
+      input.currency === "USD"
+        ? "Amounts are in US dollars (USD)."
+        : "Amounts are in Indonesian Rupiah (IDR).",
     ];
     doc
       .font("Helvetica-Bold")
       .fontSize(8)
       .fillColor(C.primary)
-      .text("NOTES", LEFT, cursor);
+      .text("NOTES", descX, cursor);
+    // Inset like the item names and invoice details above it.
+    const notesText = notes.join("\n");
+    const notesWidth = WIDTH - 20;
     doc
       .font("Helvetica")
       .fontSize(8)
       .fillColor(C.muted)
-      .text(notes.join("\n"), LEFT, cursor + 12, { width: WIDTH, lineGap: 2 });
-    cursor += 60;
+      .text(notesText, descX, cursor + 12, { width: notesWidth, lineGap: 2 });
+    cursor +=
+      12 +
+      doc.heightOfString(notesText, { width: notesWidth, lineGap: 2 }) +
+      16;
 
     if (qrPng && input.payUrl) {
       if (cursor > 640) {
@@ -357,7 +363,9 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
         .fontSize(8)
         .fillColor(C.muted)
         .text(
-          "Pay securely with bank transfer, e-wallet, QRIS or card.",
+          input.currency === "USD"
+            ? "Pay securely by card or PayPal."
+            : "Pay securely with bank transfer, e-wallet, QRIS or card.",
           textX,
           cursor + 34,
           { width: 340 },

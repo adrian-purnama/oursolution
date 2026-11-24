@@ -6,7 +6,6 @@ import type {
   PaymentSource,
   PaymentStatus,
 } from "../models/payment/payment.interface";
-import type { ProductKind } from "../models/product/product.interface";
 import type { VariantApplyMode } from "../models/userProductPeriod/userProductPeriod.interface";
 import type { ProductSummaryDto } from "./product.dto";
 
@@ -46,7 +45,7 @@ export interface CheckoutVariantOptionOutDto {
   id: string;
   name: string;
   specs: string;
-  unitPriceIdr: number;
+  unitPrice: number;
   durationDays: number | null;
 }
 
@@ -63,12 +62,12 @@ export interface CheckoutQuoteInDto {
 /** One line of a basket or checkout, priced now. */
 export interface CheckoutLineOutDto {
   product: ProductSummaryDto;
-  unitPriceIdr: number;
+  unitPrice: number;
   quantity: number;
   /** 1 for a one-time product. */
   maxQuantity: number;
   durationDays: number | null;
-  amountIdr: number;
+  amount: number;
   /** Subscription only: the variant this line buys; else null. */
   variant: { id: string; name: string } | null;
   /** Subscription only: every variant it could buy, the base first. */
@@ -90,7 +89,7 @@ export interface CheckoutLineOutDto {
 export interface CheckoutQuoteOutDto {
   lines: CheckoutLineOutDto[];
   /** Total of the lines without a problem. */
-  totalIdr: number;
+  total: number;
   /** True when there are lines and none has a problem. */
   canCheckout: boolean;
   currency: PaymentCurrency;
@@ -173,11 +172,11 @@ export interface PaymentItemOutDto {
   name: string;
   description: string | null;
   kind: PaymentItemKind;
-  unitPriceIdr: number;
+  unitPrice: number;
   quantity: number;
   durationDays: number | null;
   variantId: string | null;
-  amountIdr: number;
+  amount: number;
 }
 
 /** A payment and its invoice. */
@@ -188,7 +187,7 @@ export interface PaymentOutDto {
   source: PaymentSource;
   /** Every amount on the invoice is in it: whole rupiah, or US cents. */
   currency: PaymentCurrency;
-  amountIdr: number;
+  amount: number;
   items: PaymentItemOutDto[];
   provider: string;
   paymentType: string | null;

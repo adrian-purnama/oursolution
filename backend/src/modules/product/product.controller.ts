@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { regionForRequest } from "../payment/billingRegion";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   CheckDeploymentOutDto,
   PricingProductOutDto,
@@ -20,22 +19,7 @@ import {
   productService,
   toProductOut,
 } from "./product.service";
-
-function fail(res: Response, error: unknown, fallback: string) {
-  return res.status(400).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
-
-function ok<T>(res: Response, status: number, message: string, data: T) {
-  return res.status(status).json({
-    success: true,
-    message,
-    data,
-  } satisfies ApiResponseDto<T>);
-}
+import { fail, ok, refuse } from "../../utils/respond";
 
 export class ProductController {
   /** Public: the products listed on the pricing page. */
@@ -45,7 +29,7 @@ export class ProductController {
       const data = await productService.listPricing(
         await regionForRequest(req),
       );
-      return ok<PricingProductOutDto[]>(res, 200, "Pricing retrieved", data);
+      return ok<PricingProductOutDto[]>(res, "Pricing retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load pricing");
     }
@@ -58,14 +42,10 @@ export class ProductController {
         parseRouteId(req.params.id),
         await regionForRequest(req),
       );
-      return ok<PricingProductOutDto>(res, 200, "Product retrieved", data);
+      return ok<PricingProductOutDto>(res, "Product retrieved", data);
     } catch (error) {
       if (error instanceof ProductNotFoundError) {
-        return res.status(404).json({
-          success: false,
-          message: error.message,
-          data: null,
-        } satisfies ApiResponseDto);
+        return refuse(res, 404, error.message);
       }
       return fail(res, error, "Failed to load product");
     }
@@ -74,7 +54,7 @@ export class ProductController {
   list = async (_req: Request, res: Response) => {
     try {
       const data = await productService.list();
-      return ok<ProductOutDto[]>(res, 200, "Products retrieved", data);
+      return ok<ProductOutDto[]>(res, "Products retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to list products");
     }
@@ -83,12 +63,7 @@ export class ProductController {
   get = async (req: Request, res: Response) => {
     try {
       const product = await productService.get(parseRouteId(req.params.id));
-      return ok<ProductOutDto>(
-        res,
-        200,
-        "Product retrieved",
-        toProductOut(product),
-      );
+      return ok<ProductOutDto>(res, "Product retrieved", toProductOut(product));
     } catch (error) {
       return fail(res, error, "Failed to load product");
     }
@@ -101,7 +76,7 @@ export class ProductController {
         parseDeploymentDraft(req.body),
         env.deployDomain ?? undefined,
       );
-      return ok<CheckDeploymentOutDto>(res, 200, "Deployment checked", data);
+      return ok<CheckDeploymentOutDto>(res, "Deployment checked", data);
     } catch (error) {
       return fail(res, error, "Failed to check the deployment");
     }
@@ -110,7 +85,7 @@ export class ProductController {
   create = async (req: Request, res: Response) => {
     try {
       const data = await productService.create(parseCreateProductDto(req.body));
-      return ok<ProductOutDto>(res, 201, "Product created", data);
+      return ok<ProductOutDto>(res, "Product created", data, 201);
     } catch (error) {
       return fail(res, error, "Failed to create product");
     }
@@ -124,7 +99,7 @@ export class ProductController {
         id,
         parseUpdateProductDto(req.body, product.kind),
       );
-      return ok<ProductOutDto>(res, 200, "Product updated", data);
+      return ok<ProductOutDto>(res, "Product updated", data);
     } catch (error) {
       return fail(res, error, "Failed to update product");
     }
@@ -135,7 +110,7 @@ export class ProductController {
       const id = parseRouteId(req.params.id);
       if (!req.file) throw new Error("file required");
       const data = await productService.addImage(id, req.file.buffer);
-      return ok<ProductOutDto>(res, 201, "Product image added", data);
+      return ok<ProductOutDto>(res, "Product image added", data, 201);
     } catch (error) {
       return fail(res, error, "Failed to add the product image");
     }
@@ -146,7 +121,7 @@ export class ProductController {
       const id = parseRouteId(req.params.id);
       const { ids } = parseReorderImagesDto(req.body);
       const data = await productService.reorderImages(id, ids);
-      return ok<ProductOutDto>(res, 200, "Product images reordered", data);
+      return ok<ProductOutDto>(res, "Product images reordered", data);
     } catch (error) {
       return fail(res, error, "Failed to reorder the product images");
     }
@@ -160,7 +135,7 @@ export class ProductController {
         objectId: true,
       });
       const data = await productService.removeImage(id, imageId);
-      return ok<ProductOutDto>(res, 200, "Product image removed", data);
+      return ok<ProductOutDto>(res, "Product image removed", data);
     } catch (error) {
       return fail(res, error, "Failed to remove the product image");
     }
@@ -169,7 +144,7 @@ export class ProductController {
   remove = async (req: Request, res: Response) => {
     try {
       const data = await productService.softDelete(parseRouteId(req.params.id));
-      return ok<ProductOutDto>(res, 200, "Product deleted", data);
+      return ok<ProductOutDto>(res, "Product deleted", data);
     } catch (error) {
       return fail(res, error, "Failed to delete product");
     }
@@ -178,7 +153,7 @@ export class ProductController {
   restore = async (req: Request, res: Response) => {
     try {
       const data = await productService.restore(parseRouteId(req.params.id));
-      return ok<ProductOutDto>(res, 200, "Product restored", data);
+      return ok<ProductOutDto>(res, "Product restored", data);
     } catch (error) {
       return fail(res, error, "Failed to restore product");
     }
@@ -187,7 +162,7 @@ export class ProductController {
   removePermanently = async (req: Request, res: Response) => {
     try {
       await productService.deletePermanently(parseRouteId(req.params.id));
-      return ok(res, 200, "Product removed for good", null);
+      return ok(res, "Product removed for good", null);
     } catch (error) {
       return fail(res, error, "Failed to remove product");
     }

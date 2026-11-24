@@ -55,11 +55,11 @@ const oneTime = {
   deletedAt: null,
 };
 
-function paid(amountIdr: number | null): ProviderStatus {
+function paid(amount: number | null): ProviderStatus {
   return {
     state: "paid",
     raw: "settlement",
-    amountIdr,
+    amount,
     reference: "tx1",
     paymentType: "qris",
   };
@@ -75,7 +75,7 @@ function pendingProvider(charges: ChargeRequest[] = []): PaymentProvider {
         status: "pending",
         reference: null,
         redirectUrl: "https://pay.example/1",
-        token: "snap-token-1",
+        snapToken: "snap-token-1",
       };
     },
     async fetchStatus() {
@@ -175,7 +175,9 @@ function setup(
       const found = [...payments.values()].find(
         (p) => p.provider === provider && p.reference === reference,
       );
-      return found ? { ...found, items: found.items.map((i) => ({ ...i })) } : null;
+      return found
+        ? { ...found, items: found.items.map((i) => ({ ...i })) }
+        : null;
     },
   };
 
@@ -289,8 +291,8 @@ describe("checkout rules", () => {
   it("totals lines and numbers invoices", () => {
     assert.equal(
       totalAmount([
-        { unitPriceIdr: 99_000, quantity: 3 },
-        { unitPriceIdr: 150_000, quantity: 1 },
+        { unitPrice: 99_000, quantity: 3 },
+        { unitPrice: 150_000, quantity: 1 },
       ]),
       447_000,
     );
@@ -340,10 +342,7 @@ describe("Midtrans", () => {
       midtransStatus({ transaction_status: "refund" }).state,
       "refunded",
     );
-    assert.equal(
-      midtransStatus({ gross_amount: "447000.00" }).amountIdr,
-      447_000,
-    );
+    assert.equal(midtransStatus({ gross_amount: "447000.00" }).amount, 447_000);
   });
 
   it("accepts only notifications signed with the server key", () => {
@@ -383,15 +382,15 @@ describe("PaymentService.checkout", () => {
     assert.equal(out.snapToken, "snap-token-1");
     assert.match(out.invoiceNumber, /^INV-\d{4}-000001$/);
     const payment = payments.get(out.paymentId)!;
-    assert.equal(payment.amountIdr, 3 * 99_000 + 150_000);
+    assert.equal(payment.amount, 3 * 99_000 + 150_000);
     assert.deepEqual(
-      payment.items.map((i) => [i.name, i.quantity, i.amountIdr]),
+      payment.items.map((i) => [i.name, i.quantity, i.amount]),
       [
         ["n8n hosting", 3, 297_000],
         ["Lead scraper workflow", 1, 150_000],
       ],
     );
-    assert.equal(charges[0]?.amountIdr, 447_000);
+    assert.equal(charges[0]?.amount, 447_000);
     assert.equal(charges[0]?.lines[0]?.quantity, 3);
     assert.equal(periods.length, 0);
     assert.equal(purchases.length, 0);
@@ -405,7 +404,7 @@ describe("PaymentService.checkout", () => {
     });
     const payment = payments.get(out.paymentId)!;
     assert.equal(payment.items[0]?.quantity, 1);
-    assert.equal(payment.amountIdr, 150_000);
+    assert.equal(payment.amount, 150_000);
   });
 
   it("is paid and granted at once by the allow-all provider", async () => {
@@ -709,16 +708,16 @@ describe("PaymentService.issueForUser", () => {
     assert.equal(out.status, "pending");
     const payment = payments.get(out.paymentId)!;
     assert.equal(payment.source, "admin");
-    assert.equal(payment.amountIdr, 5_150_000);
+    assert.equal(payment.amount, 5_150_000);
     assert.equal(payment.items[0].kind, "custom");
     assert.equal(payment.items[0].productId, null);
     assert.equal(payment.items[0].description, "Landing page and CMS");
-    assert.equal(payment.items[1].unitPriceIdr, 50_000);
+    assert.equal(payment.items[1].unitPrice, 50_000);
     assert.equal(
       payment.expiresAt.getTime(),
       now.getTime() + 14 * 24 * 60 * 60_000,
     );
-    assert.equal(charges[0].amountIdr, 5_150_000);
+    assert.equal(charges[0].amount, 5_150_000);
     assert.equal(charges[0].lines[0].id, "custom-1");
   });
 
@@ -737,7 +736,7 @@ describe("PaymentService.issueForUser", () => {
       dueDays: 7,
       notify: false,
     });
-    assert.equal(payments.get(out.paymentId)!.amountIdr, 150_000);
+    assert.equal(payments.get(out.paymentId)!.amount, 150_000);
   });
 
   it("grants the products but nothing for custom lines once paid", async () => {
@@ -819,13 +818,13 @@ describe("PaymentService with variants", () => {
       { productId: SUB, quantity: 2, variantId: "big", applyVariant: "manual" },
     ]);
     const [line] = quote.lines;
-    assert.equal(line.unitPriceIdr, 180_000);
+    assert.equal(line.unitPrice, 180_000);
     assert.equal(line.durationDays, 15);
-    assert.equal(line.amountIdr, 360_000);
+    assert.equal(line.amount, 360_000);
     assert.deepEqual(line.variant, { id: "big", name: "4 cores / 4 GB" });
     assert.equal(line.applyVariant, "manual");
     assert.deepEqual(
-      line.variants.map((v) => [v.id, v.unitPriceIdr]),
+      line.variants.map((v) => [v.id, v.unitPrice]),
       [
         ["default", 99_000],
         ["big", 180_000],
@@ -839,7 +838,7 @@ describe("PaymentService with variants", () => {
       await service.quote(USER, [{ productId: SUB, quantity: 1 }])
     ).lines;
     assert.equal(line.variant?.id, "default");
-    assert.equal(line.unitPriceIdr, 99_000);
+    assert.equal(line.unitPrice, 99_000);
     assert.equal(line.applyVariant, "auto");
   });
 
@@ -849,7 +848,7 @@ describe("PaymentService with variants", () => {
       await service.quote(USER, [{ productId: SUB, quantity: 1 }])
     ).lines;
     assert.equal(line.variant?.id, "big");
-    assert.equal(line.unitPriceIdr, 180_000);
+    assert.equal(line.unitPrice, 180_000);
   });
 
   it("flags a variant the product no longer has", async () => {
@@ -973,7 +972,7 @@ describe("PaymentService with variants", () => {
       notify: false,
     });
     const [item] = payments.get(out.paymentId)!.items;
-    assert.equal(item.unitPriceIdr, 180_000);
+    assert.equal(item.unitPrice, 180_000);
     assert.equal(item.durationDays, 15);
     assert.equal(item.variantId, "big");
     await assert.rejects(
@@ -1020,7 +1019,7 @@ function paddleLike(charges: ChargeRequest[] = []): PaymentProvider {
         status: "pending",
         reference: "txn_1",
         redirectUrl: "https://pay.paddle.example/txn_1",
-        token: "txn_1",
+        snapToken: null,
       };
     },
     async fetchStatus() {
@@ -1045,21 +1044,24 @@ describe("checkout outside Indonesia", () => {
     assert.equal(quote.currency, "USD");
     assert.equal(quote.region, "INTL");
     assert.deepEqual(
-      quote.lines.map((l) => [l.unitPriceIdr, l.quantity, l.maxQuantity]),
+      quote.lines.map((l) => [l.unitPrice, l.quantity, l.maxQuantity]),
       [
         [900, 1, 1],
         [2500, 1, 1],
       ],
     );
-    assert.equal(quote.totalIdr, 3400);
+    assert.equal(quote.total, 3400);
     assert.equal(quote.canCheckout, true);
   });
 
   it("is billed in Indonesia while Paddle is not set up", async () => {
-    const { service } = setup({ products: usdProducts, billing: intlBilling() });
+    const { service } = setup({
+      products: usdProducts,
+      billing: intlBilling(),
+    });
     const quote = await service.quote(USER, basket.items);
     assert.equal(quote.currency, "IDR");
-    assert.equal(quote.lines[0].unitPriceIdr, 99_000);
+    assert.equal(quote.lines[0].unitPrice, 99_000);
   });
 
   it("refuses a product without a USD price", async () => {
@@ -1104,7 +1106,7 @@ describe("checkout outside Indonesia", () => {
     assert.equal(out.paddleTransactionId, "txn_1");
     assert.equal(out.snapToken, null);
     assert.equal(charges[0].currency, "USD");
-    assert.equal(charges[0].amountIdr, 3400);
+    assert.equal(charges[0].amount, 3400);
     assert.deepEqual(
       charges[0].lines.map((l) => l.providerPriceId),
       ["pri_sub", "pri_one"],
@@ -1147,7 +1149,7 @@ describe("checkout outside Indonesia", () => {
     const payment = payments.get(first)!;
     assert.equal(payment.source, "renewal");
     assert.equal(payment.status, "paid");
-    assert.equal(payment.amountIdr, 900);
+    assert.equal(payment.amount, 900);
     assert.ok(payment.grantedAt);
     assert.equal(periods.length, 1);
     assert.deepEqual(granted, [first]);
@@ -1175,7 +1177,7 @@ describe("checkout outside Indonesia", () => {
     assert.equal(payments.size, 1);
     const payment = payments.get(first)!;
     assert.equal(payment.status, "paid");
-    assert.equal(payment.amountIdr, 1000);
+    assert.equal(payment.amount, 1000);
     assert.equal(payment.items[0].kind, "custom");
     assert.equal(periods.length, 0);
     assert.deepEqual(granted, []);

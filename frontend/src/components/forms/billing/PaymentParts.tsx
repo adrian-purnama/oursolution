@@ -95,20 +95,20 @@ export function PaymentTable({
               className={onOpen ? 'cursor-pointer' : undefined}
               onClick={onOpen ? () => onOpen(payment) : undefined}
             >
-              <TableCell className="align-top">
+              <TableCell className="align-middle">
                 <p className="font-medium">{payment.invoiceNumber}</p>
                 <p className="text-xs text-[var(--muted)]">
                   {formatDateTime(payment.createdAt)}
                 </p>
               </TableCell>
               {showCustomer ? (
-                <TableCell className="max-w-[14rem] align-top">
+                <TableCell className="max-w-[14rem] align-middle">
                   <p className="truncate" title={payment.user?.email}>
                     {payment.user?.email ?? '—'}
                   </p>
                 </TableCell>
               ) : null}
-              <TableCell className="max-w-[18rem] align-top">
+              <TableCell className="max-w-[18rem] align-middle">
                 <p className="truncate" title={itemsSummary(payment)}>
                   {itemsSummary(payment)}
                 </p>
@@ -118,15 +118,15 @@ export function PaymentTable({
                   </p>
                 ) : null}
               </TableCell>
-              <TableCell className="text-right align-top tabular-nums">
-                {formatMoney(payment.amountIdr, payment.currency)}
+              <TableCell className="text-right align-middle tabular-nums">
+                {formatMoney(payment.amount, payment.currency)}
               </TableCell>
-              <TableCell className="align-top">
+              <TableCell className="align-middle">
                 <PaymentStatusBadge status={payment.status} />
               </TableCell>
               {actions ? (
                 <TableCell
-                  className="text-right align-top"
+                  className="text-right align-middle"
                   onClick={(event) => event.stopPropagation()}
                 >
                   {actions(payment)}

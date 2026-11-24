@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   AdminPaymentListOutDto,
   BillingRegionOutDto,
@@ -27,14 +26,18 @@ import {
   parsePageQuery,
 } from "../../validation/payment";
 import { basketService } from "../basket/basket.service";
-import { AlreadyOwnedError } from "../purchase/purchase.service";
-import { PlanScheduleError } from "../userProduct/userProduct.planner";
-import { MidtransProvider, midtransStatus } from "./midtrans.provider";
+import {
+  MidtransProvider,
+  type MidtransNotification,
+} from "./midtrans.provider";
 import { verifyPaddleSignature } from "./paddle.provider";
-import { PaddleEventError, paddleService, type PaddleEvent } from "./paddle.service";
+import {
+  PaddleEventError,
+  paddleService,
+  type PaddleEvent,
+} from "./paddle.service";
 import { notifyInvoiceIssued, invoicePdfFor } from "./payment.invoice";
 import {
-  CheckoutError,
   listAllPayments,
   listPayments,
   mongoPaymentStore,
@@ -46,6 +49,8 @@ import {
   toPaymentOut,
   type PaymentRecord,
 } from "./payment.service";
+import { fail, ok, refuse } from "../../utils/respond";
+import { UserError } from "../../utils/userError";
 
 const logSource = "modules/payment/payment.controller.ts";
 
@@ -63,28 +68,6 @@ function parseRegion(body: unknown): BillingRegion {
 async function regionOut(userId: string): Promise<BillingRegionOutDto> {
   const { region, locked } = await paymentService.regionOf(userId);
   return { region, locked, international: paddleProvider !== null };
-}
-
-function statusOf(error: unknown): number {
-  if (
-    error instanceof CheckoutError ||
-    error instanceof PlanScheduleError ||
-    error instanceof AlreadyOwnedError
-  ) {
-    return 409;
-  }
-  if (error instanceof Error && error.message === "Invoice not found") {
-    return 404;
-  }
-  return 400;
-}
-
-function fail(res: Response, error: unknown, fallback: string) {
-  return res.status(statusOf(error)).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
 }
 
 function sendPdf(res: Response, pdf: { buffer: Buffer; filename: string }) {
@@ -129,22 +112,22 @@ export class PaymentController {
               : ("production" as const),
           }
         : null;
-    return res.status(200).json({
-      success: true,
-      message: "Payment config",
-      data: { provider: paymentProvider?.name ?? null, snap, paddle },
-    } satisfies ApiResponseDto<PaymentConfigOutDto>);
+    return ok<PaymentConfigOutDto>(res, "Payment config", {
+      provider: paymentProvider?.name ?? null,
+      snap,
+      paddle,
+    });
   };
 
   /** Admin: a user's region, locked or not. */
   getUserRegion = async (req: Request, res: Response) => {
     try {
       const userId = parseRouteId(req.params.id);
-      return res.status(200).json({
-        success: true,
-        message: "Billing region",
-        data: await regionOut(userId),
-      } satisfies ApiResponseDto<BillingRegionOutDto>);
+      return ok<BillingRegionOutDto>(
+        res,
+        "Billing region",
+        await regionOut(userId),
+      );
     } catch (error) {
       return fail(res, error, "Could not load the billing region");
     }
@@ -171,11 +154,11 @@ export class PaymentController {
         },
       ).exec();
       if (updated.matchedCount === 0) throw new Error("User not found");
-      return res.status(200).json({
-        success: true,
-        message: "Billing region saved",
-        data: await regionOut(userId),
-      } satisfies ApiResponseDto<BillingRegionOutDto>);
+      return ok<BillingRegionOutDto>(
+        res,
+        "Billing region saved",
+        await regionOut(userId),
+      );
     } catch (error) {
       return fail(res, error, "Could not save the billing region");
     }
@@ -183,11 +166,11 @@ export class PaymentController {
 
   listOwnSubscriptions = async (req: Request, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        message: "Subscriptions retrieved",
-        data: await paddleService.listFor(req.user!.id),
-      } satisfies ApiResponseDto<PaddleSubscriptionOutDto[]>);
+      return ok<PaddleSubscriptionOutDto[]>(
+        res,
+        "Subscriptions retrieved",
+        await paddleService.listFor(req.user!.id),
+      );
     } catch (error) {
       return fail(res, error, "Could not load subscriptions");
     }
@@ -196,11 +179,7 @@ export class PaymentController {
   cancelRenewal = async (req: Request, res: Response) => {
     try {
       await paddleService.cancelRenewal(req.user!.id, String(req.params.id));
-      return res.status(200).json({
-        success: true,
-        message: "Renewal cancelled",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "Renewal cancelled", null);
     } catch (error) {
       return fail(res, error, "Could not cancel the renewal");
     }
@@ -209,11 +188,7 @@ export class PaymentController {
   resumeRenewal = async (req: Request, res: Response) => {
     try {
       await paddleService.resumeRenewal(req.user!.id, String(req.params.id));
-      return res.status(200).json({
-        success: true,
-        message: "Renewal resumed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "Renewal resumed", null);
     } catch (error) {
       return fail(res, error, "Could not resume the renewal");
     }
@@ -221,14 +196,11 @@ export class PaymentController {
 
   upgradeChoices = async (req: Request, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        message: "Upgrade choices",
-        data: await paddleService.upgradeChoices(
-          req.user!.id,
-          String(req.params.id),
-        ),
-      } satisfies ApiResponseDto<UpgradeChoiceOutDto[]>);
+      return ok<UpgradeChoiceOutDto[]>(
+        res,
+        "Upgrade choices",
+        await paddleService.upgradeChoices(req.user!.id, String(req.params.id)),
+      );
     } catch (error) {
       return fail(res, error, "Could not load the variants");
     }
@@ -236,15 +208,15 @@ export class PaymentController {
 
   upgradePreview = async (req: Request, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        message: "Upgrade preview",
-        data: await paddleService.previewUpgrade(
+      return ok<UpgradePreviewOutDto>(
+        res,
+        "Upgrade preview",
+        await paddleService.previewUpgrade(
           req.user!.id,
           String(req.params.id),
           String(req.body?.variantId ?? ""),
         ),
-      } satisfies ApiResponseDto<UpgradePreviewOutDto>);
+      );
     } catch (error) {
       return fail(res, error, "Could not preview the change");
     }
@@ -257,11 +229,7 @@ export class PaymentController {
         String(req.params.id),
         String(req.body?.variantId ?? ""),
       );
-      return res.status(200).json({
-        success: true,
-        message: "Subscription changed",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "Subscription changed", null);
     } catch (error) {
       return fail(res, error, "Could not change the subscription");
     }
@@ -273,11 +241,7 @@ export class PaymentController {
         req.user!.id,
         String(req.params.id),
       );
-      return res.status(200).json({
-        success: true,
-        message: "Scheduled change cancelled",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "Scheduled change cancelled", null);
     } catch (error) {
       return fail(res, error, "Could not cancel the change");
     }
@@ -289,11 +253,9 @@ export class PaymentController {
         req.user!.id,
         String(req.params.id),
       );
-      return res.status(200).json({
-        success: true,
-        message: "Card update",
-        data: { transactionId },
-      } satisfies ApiResponseDto<{ transactionId: string }>);
+      return ok<{ transactionId: string }>(res, "Card update", {
+        transactionId,
+      });
     } catch (error) {
       return fail(res, error, "Could not start the card update");
     }
@@ -306,11 +268,7 @@ export class PaymentController {
    */
   paddleWebhook = async (req: Request, res: Response) => {
     if (!paddleProvider || !env.paddleWebhookSecret) {
-      return res.status(404).json({
-        success: false,
-        message: "Paddle is not set up",
-        data: null,
-      } satisfies ApiResponseDto);
+      return refuse(res, 404, "Paddle is not set up");
     }
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     if (
@@ -325,29 +283,17 @@ export class PaymentController {
         logSource,
         "paddleWebhook",
       );
-      return res.status(403).json({
-        success: false,
-        message: "Invalid signature",
-        data: null,
-      } satisfies ApiResponseDto);
+      return refuse(res, 403, "Invalid signature");
     }
     let event: PaddleEvent;
     try {
       event = JSON.parse(raw.toString("utf8")) as PaddleEvent;
     } catch {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid JSON",
-        data: null,
-      } satisfies ApiResponseDto);
+      return refuse(res, 400, "Invalid JSON");
     }
     try {
       await paddleService.handle(event);
-      return res.status(200).json({
-        success: true,
-        message: "OK",
-        data: null,
-      } satisfies ApiResponseDto);
+      return ok(res, "OK", null);
     } catch (error) {
       const level = error instanceof PaddleEventError ? "warn" : "error";
       logger[level](
@@ -355,11 +301,7 @@ export class PaymentController {
         logSource,
         "paddleWebhook",
       );
-      return res.status(500).json({
-        success: false,
-        message: "Could not process the webhook",
-        data: null,
-      } satisfies ApiResponseDto);
+      return refuse(res, 500, "Could not process the webhook");
     }
   };
 
@@ -367,11 +309,7 @@ export class PaymentController {
     try {
       const { items } = parseCheckoutQuoteInDto(req.body);
       const data = await paymentService.quote(req.user!.id, items);
-      return res.status(200).json({
-        success: true,
-        message: "Checkout priced",
-        data,
-      } satisfies ApiResponseDto<CheckoutQuoteOutDto>);
+      return ok<CheckoutQuoteOutDto>(res, "Checkout priced", data);
     } catch (error) {
       return fail(res, error, "Could not price the checkout");
     }
@@ -395,12 +333,11 @@ export class PaymentController {
             ),
           );
       }
-      return res.status(200).json({
-        success: true,
-        message:
-          data.status === "paid" ? "Payment received" : "Payment started",
+      return ok<CheckoutOutDto>(
+        res,
+        data.status === "paid" ? "Payment received" : "Payment started",
         data,
-      } satisfies ApiResponseDto<CheckoutOutDto>);
+      );
     } catch (error) {
       return fail(res, error, "Checkout failed");
     }
@@ -416,11 +353,7 @@ export class PaymentController {
         pageSize,
         false,
       );
-      return res.status(200).json({
-        success: true,
-        message: "Payments retrieved",
-        data,
-      } satisfies ApiResponseDto<PaymentListOutDto>);
+      return ok<PaymentListOutDto>(res, "Payments retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load payments");
     }
@@ -433,11 +366,7 @@ export class PaymentController {
       await paymentService.getOwn(req.user!.id, id);
       await paymentService.refresh(id).catch(() => undefined);
       const payment = await paymentService.getOwn(req.user!.id, id);
-      return res.status(200).json({
-        success: true,
-        message: "Payment retrieved",
-        data: toPaymentOut(payment),
-      } satisfies ApiResponseDto<PaymentOutDto>);
+      return ok<PaymentOutDto>(res, "Payment retrieved", toPaymentOut(payment));
     } catch (error) {
       return fail(res, error, "Failed to load the payment");
     }
@@ -449,11 +378,7 @@ export class PaymentController {
         req.user!.id,
         parseRouteId(req.params.id),
       );
-      return res.status(200).json({
-        success: true,
-        message: "Invoice cancelled",
-        data,
-      } satisfies ApiResponseDto<PaymentOutDto>);
+      return ok<PaymentOutDto>(res, "Invoice cancelled", data);
     } catch (error) {
       return fail(res, error, "Could not cancel the invoice");
     }
@@ -476,11 +401,7 @@ export class PaymentController {
       const userId = parseRouteId(req.params.id);
       const { page, pageSize } = parsePageQuery(req.query);
       const data = await listPayments({ userId }, page, pageSize, true);
-      return res.status(200).json({
-        success: true,
-        message: "Payments retrieved",
-        data,
-      } satisfies ApiResponseDto<PaymentListOutDto>);
+      return ok<PaymentListOutDto>(res, "Payments retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load payments");
     }
@@ -499,11 +420,7 @@ export class PaymentController {
       const search =
         typeof rawSearch === "string" ? rawSearch.slice(0, 200) : "";
       const data = await listAllPayments({ group, search }, page, pageSize);
-      return res.status(200).json({
-        success: true,
-        message: "Payments retrieved",
-        data,
-      } satisfies ApiResponseDto<AdminPaymentListOutDto>);
+      return ok<AdminPaymentListOutDto>(res, "Payments retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load payments");
     }
@@ -516,7 +433,7 @@ export class PaymentController {
       const input = parseAdminInvoiceInDto(req.body);
       const created = await paymentService.issueForUser(userId, input);
       const payment = await mongoPaymentStore.get(created.paymentId);
-      if (!payment) throw new Error("Invoice not found");
+      if (!payment) throw new UserError("Invoice not found", 404);
       if (input.notify && payment.status === "pending") {
         void notifyInvoiceIssued(payment.id).catch((error: unknown) =>
           logger.error(
@@ -526,14 +443,14 @@ export class PaymentController {
           ),
         );
       }
-      return res.status(201).json({
-        success: true,
-        message:
-          payment.status === "paid"
-            ? `Invoice ${payment.invoiceNumber} made and marked paid`
-            : `Invoice ${payment.invoiceNumber} sent`,
-        data: await withUser(payment),
-      } satisfies ApiResponseDto<PaymentOutDto>);
+      return ok<PaymentOutDto>(
+        res,
+        payment.status === "paid"
+          ? `Invoice ${payment.invoiceNumber} made and marked paid`
+          : `Invoice ${payment.invoiceNumber} sent`,
+        await withUser(payment),
+        201,
+      );
     } catch (error) {
       return fail(res, error, "Could not make the invoice");
     }
@@ -545,12 +462,12 @@ export class PaymentController {
       const id = parseRouteId(req.params.paymentId);
       await paymentService.refresh(id).catch(() => undefined);
       const payment = await mongoPaymentStore.get(id);
-      if (!payment) throw new Error("Invoice not found");
-      return res.status(200).json({
-        success: true,
-        message: "Payment retrieved",
-        data: await withUser(payment),
-      } satisfies ApiResponseDto<PaymentOutDto>);
+      if (!payment) throw new UserError("Invoice not found", 404);
+      return ok<PaymentOutDto>(
+        res,
+        "Payment retrieved",
+        await withUser(payment),
+      );
     } catch (error) {
       return fail(res, error, "Failed to load the payment");
     }
@@ -561,7 +478,7 @@ export class PaymentController {
       const payment = await mongoPaymentStore.get(
         parseRouteId(req.params.paymentId),
       );
-      if (!payment) throw new Error("Invoice not found");
+      if (!payment) throw new UserError("Invoice not found", 404);
       return sendPdf(res, await invoicePdfFor(payment));
     } catch (error) {
       return fail(res, error, "Could not make the invoice");
@@ -574,47 +491,12 @@ export class PaymentController {
    * Midtrans stops retrying them.
    */
   midtransNotification = async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    if (!(paymentProvider instanceof MidtransProvider)) {
-      return res.status(404).json({
-        success: false,
-        message: "Midtrans is not set up",
-        data: null,
-      } satisfies ApiResponseDto);
-    }
-    if (!paymentProvider.verifySignature(body)) {
-      logger.warn(
-        `Midtrans notification with a bad signature for ${String(body.order_id)}`,
-        logSource,
-        "midtransNotification",
-      );
-      return res.status(403).json({
-        success: false,
-        message: "Invalid signature",
-        data: null,
-      } satisfies ApiResponseDto);
-    }
+    const body = (req.body ?? {}) as MidtransNotification;
+    let outcome: Awaited<
+      ReturnType<typeof paymentService.onMidtransNotification>
+    >;
     try {
-      const orderId = String(body.order_id);
-      const payment = await mongoPaymentStore.get(orderId);
-      if (payment && payment.provider === "midtrans") {
-        await paymentService.applyProviderStatus(
-          payment.id,
-          midtransStatus(body),
-          "notification",
-        );
-      } else {
-        logger.warn(
-          `Midtrans notification for unknown order ${orderId}`,
-          logSource,
-          "midtransNotification",
-        );
-      }
-      return res.status(200).json({
-        success: true,
-        message: "OK",
-        data: null,
-      } satisfies ApiResponseDto);
+      outcome = await paymentService.onMidtransNotification(body);
     } catch (error) {
       logger.error(
         error instanceof Error ? error.message : String(error),
@@ -622,11 +504,28 @@ export class PaymentController {
         "midtransNotification",
       );
       // 500 makes Midtrans retry later.
-      return res.status(500).json({
-        success: false,
-        message: "Could not process the notification",
-        data: null,
-      } satisfies ApiResponseDto);
+      return refuse(res, 500, "Could not process the notification");
     }
+    switch (outcome) {
+      case "not-set-up":
+        return refuse(res, 404, "Midtrans is not set up");
+      case "bad-signature":
+        logger.warn(
+          `Midtrans notification with a bad signature for ${String(body.order_id)}`,
+          logSource,
+          "midtransNotification",
+        );
+        return refuse(res, 403, "Invalid signature");
+      case "unknown":
+        logger.warn(
+          `Midtrans notification for unknown order ${String(body.order_id)}`,
+          logSource,
+          "midtransNotification",
+        );
+        break;
+      case "applied":
+        break;
+    }
+    return ok(res, "OK", null);
   };
 }

@@ -5,7 +5,12 @@ import {
   BASE_VARIANT_ID,
   type ProductInterface,
 } from "../../models/product/product.interface";
-import { paddleClient, type PaddleClient, type PaddlePrice } from "./paddle.client";
+import {
+  paddleClient,
+  type PaddleClient,
+  type PaddlePrice,
+} from "./paddle.client";
+import { UserError } from "../../utils/userError";
 
 const logSource = "modules/payment/paddle.catalog.ts";
 
@@ -59,7 +64,11 @@ export function wantedPrices(product: ProductInterface): WantedPrice[] {
   ];
 }
 
-export class PaddleSyncError extends Error {}
+export class PaddleSyncError extends UserError {
+  constructor(message: string) {
+    super(message, 502);
+  }
+}
 
 /**
  * Bring a product's Paddle prices in step with its USD prices: create a
@@ -83,11 +92,15 @@ export async function syncToPaddle(
     let paddleProductId = product.paddleProductId ?? null;
     const custom = { fedierProductId: productId };
     if (!paddleProductId) {
-      const created = await client.request<{ id: string }>("POST", "/products", {
-        name: product.name,
-        tax_category: env.paddleTaxCategory,
-        custom_data: custom,
-      });
+      const created = await client.request<{ id: string }>(
+        "POST",
+        "/products",
+        {
+          name: product.name,
+          tax_category: env.paddleTaxCategory,
+          custom_data: custom,
+        },
+      );
       paddleProductId = created.id;
       product.paddleProductId = paddleProductId;
     } else {
@@ -158,7 +171,8 @@ async function saveIds(
     product.paddlePriceId = ids.get(BASE_VARIANT_ID) ?? null;
   }
   for (const variant of product.variants ?? []) {
-    if (ids.has(variant.id)) variant.paddlePriceId = ids.get(variant.id) ?? null;
+    if (ids.has(variant.id))
+      variant.paddlePriceId = ids.get(variant.id) ?? null;
   }
   await product.save();
 }

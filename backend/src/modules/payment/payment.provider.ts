@@ -9,7 +9,7 @@ export type ChargeLine = {
   id: string;
   name: string;
   /** In the request's currency (whole rupiah, or US cents). */
-  unitPriceIdr: number;
+  unitPrice: number;
   quantity: number;
   /** The provider's own price for the line (Paddle), or null. */
   providerPriceId: string | null;
@@ -22,7 +22,7 @@ export type ChargeRequest = {
   customerEmail: string;
   currency: PaymentCurrency;
   /** In `currency`. */
-  amountIdr: number;
+  amount: number;
   lines: ChargeLine[];
   expiresAt: Date;
   /** Where the provider sends the user back after paying. */
@@ -37,8 +37,8 @@ export type ChargeResult =
       status: "pending";
       reference: string | null;
       redirectUrl: string;
-      /** Lets the page show the provider's payment form inline (Snap). */
-      token: string | null;
+      /** Midtrans Snap's token, to show its payment form inline; null otherwise. */
+      snapToken: string | null;
     }
   | { status: "failed"; reason: string };
 
@@ -58,7 +58,7 @@ export type ProviderStatus = {
   /** The provider's raw status, e.g. "settlement". */
   raw: string;
   /** Amount the provider saw, when it says. */
-  amountIdr: number | null;
+  amount: number | null;
   reference: string | null;
   paymentType: string | null;
 };

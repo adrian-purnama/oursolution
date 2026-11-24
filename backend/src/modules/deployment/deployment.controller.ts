@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { ApiResponseDto } from "../../dto/apiResponse.dto";
 import type {
   AdminDeploymentRowOutDto,
   DeploymentBulkOutDto,
@@ -13,34 +12,8 @@ import {
   parseUpdateDeploymentValuesInDto,
 } from "../../validation/deployment";
 import { parseParam, parseRouteId } from "../../validation/parseParam";
-import {
-  DeploymentBusyError,
-  DeploymentLimitError,
-  deploymentService,
-  type DeploymentView,
-} from "./deployment.service";
-
-function ok<T>(res: Response, status: number, message: string, data: T) {
-  return res.status(status).json({
-    success: true,
-    message,
-    data,
-  } satisfies ApiResponseDto<T>);
-}
-
-function fail(res: Response, error: unknown, fallback: string) {
-  const status =
-    error instanceof DeploymentBusyError
-      ? 409
-      : error instanceof DeploymentLimitError
-        ? 429
-        : 400;
-  return res.status(status).json({
-    success: false,
-    message: error instanceof Error ? error.message : fallback,
-    data: null,
-  } satisfies ApiResponseDto);
-}
+import { deploymentService, type DeploymentView } from "./deployment.service";
+import { fail, ok } from "../../utils/respond";
 
 /** Whose deployments: the signed-in user's, or (admin) the route's user. */
 function target(req: Request, view: DeploymentView): string {
@@ -65,12 +38,7 @@ export class DeploymentController {
   listAll = async (_req: Request, res: Response) => {
     try {
       const data = await deploymentService.listAll();
-      return ok<AdminDeploymentRowOutDto[]>(
-        res,
-        200,
-        "Deployments retrieved",
-        data,
-      );
+      return ok<AdminDeploymentRowOutDto[]>(res, "Deployments retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load deployments");
     }
@@ -80,7 +48,7 @@ export class DeploymentController {
   syncAll = async (_req: Request, res: Response) => {
     try {
       const data = await deploymentService.syncAll();
-      return ok<DeploymentSyncOutDto>(res, 200, "Deployments synced", data);
+      return ok<DeploymentSyncOutDto>(res, "Deployments synced", data);
     } catch (error) {
       return fail(res, error, "Failed to sync deployments");
     }
@@ -91,7 +59,7 @@ export class DeploymentController {
     try {
       const input = parseDeploymentBulkInDto(req.body);
       const data = await deploymentService.bulk(input, req.user!.id);
-      return ok<DeploymentBulkOutDto>(res, 200, "Bulk action done", data);
+      return ok<DeploymentBulkOutDto>(res, "Bulk action done", data);
     } catch (error) {
       return fail(res, error, "Failed to run the bulk action");
     }
@@ -103,7 +71,7 @@ export class DeploymentController {
         target(req, this.view),
         this.view,
       );
-      return ok<DeploymentOutDto[]>(res, 200, "Deployments retrieved", data);
+      return ok<DeploymentOutDto[]>(res, "Deployments retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load deployments");
     }
@@ -116,7 +84,7 @@ export class DeploymentController {
         productIdOf(req),
         this.view,
       );
-      return ok<DeploymentOutDto>(res, 200, "Deployment retrieved", data);
+      return ok<DeploymentOutDto>(res, "Deployment retrieved", data);
     } catch (error) {
       return fail(res, error, "Failed to load the deployment");
     }
@@ -131,7 +99,7 @@ export class DeploymentController {
         values,
         this.view,
       );
-      return ok<DeploymentOutDto>(res, 200, "Settings saved", data);
+      return ok<DeploymentOutDto>(res, "Settings saved", data);
     } catch (error) {
       return fail(res, error, "Failed to save the settings");
     }
@@ -147,7 +115,7 @@ export class DeploymentController {
         input,
         req.user!.id,
       );
-      return ok<DeploymentOutDto>(res, 200, "Overrides saved", data);
+      return ok<DeploymentOutDto>(res, "Overrides saved", data);
     } catch (error) {
       return fail(res, error, "Failed to save the overrides");
     }
@@ -165,7 +133,7 @@ export class DeploymentController {
         req.user!.id,
         this.view,
       );
-      return ok<DeploymentOutDto>(res, 202, "Started", data);
+      return ok<DeploymentOutDto>(res, "Started", data, 202);
     } catch (error) {
       return fail(res, error, "Failed to run the command");
     }
@@ -181,7 +149,7 @@ export class DeploymentController {
         req.user!.id,
         this.view,
       );
-      return ok<DeploymentOutDto>(res, 202, "Started", data);
+      return ok<DeploymentOutDto>(res, "Started", data, 202);
     } catch (error) {
       return fail(res, error, "Failed to start");
     }

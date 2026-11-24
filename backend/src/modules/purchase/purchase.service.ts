@@ -4,8 +4,13 @@ import { ProductModel } from "../../models/product/product.model";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
 import { toProductSummary } from "../product/product.service";
+import { UserError } from "../../utils/userError";
 
-export class AlreadyOwnedError extends Error {}
+export class AlreadyOwnedError extends UserError {
+  constructor(message: string) {
+    super(message, 409);
+  }
+}
 
 function isDuplicateKeyError(error: unknown): boolean {
   return (

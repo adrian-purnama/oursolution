@@ -333,7 +333,7 @@ export default function InvoiceDetail({
             <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
               <p className="text-sm font-medium text-[var(--ink)]">
                 {m.invoice_pay_amount({
-                  amount: formatMoney(payment.amountIdr, payment.currency),
+                  amount: formatMoney(payment.amount, payment.currency),
                 })}
               </p>
               <p className="flex items-center gap-1.5 text-xs text-amber-700">
@@ -425,7 +425,7 @@ function ItemsTable({ payment }: { payment: Payment }) {
                 )}
                 {item.quantity > 1 ? (
                   <p className="text-xs text-[var(--muted)] tabular-nums sm:hidden">
-                    {item.quantity} × {money(item.unitPriceIdr)}
+                    {item.quantity} × {money(item.unitPrice)}
                   </p>
                 ) : null}
                 {item.description ? (
@@ -438,10 +438,10 @@ function ItemsTable({ payment }: { payment: Payment }) {
                 {item.quantity}
               </TableCell>
               <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                {money(item.unitPriceIdr)}
+                {money(item.unitPrice)}
               </TableCell>
               <TableCell className="text-right align-top tabular-nums">
-                {money(item.amountIdr)}
+                {money(item.amount)}
               </TableCell>
             </TableRow>
           ))}
@@ -453,7 +453,7 @@ function ItemsTable({ payment }: { payment: Payment }) {
               {m.common_total()}
             </TableCell>
             <TableCell className="text-right font-semibold tabular-nums">
-              {money(payment.amountIdr)}
+              {money(payment.amount)}
             </TableCell>
           </TableRow>
         </TableFooter>

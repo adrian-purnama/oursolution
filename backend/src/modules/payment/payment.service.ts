@@ -35,8 +35,6 @@ import {
   purchaseService,
 } from "../purchase/purchase.service";
 import type { VariantApplyMode } from "../../models/userProductPeriod/userProductPeriod.interface";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 import {
   lineName,
   variantIdOf,
@@ -54,7 +52,12 @@ import {
   mergeDuplicateItems,
   totalAmount,
 } from "./checkout.rules";
-import { MidtransProvider } from "./midtrans.provider";
+import {
+  MidtransProvider,
+  midtransStatus,
+  type MidtransNotification,
+} from "./midtrans.provider";
+import { formatMoney } from "./money";
 import { paddleClient } from "./paddle.client";
 import { PaddleProvider } from "./paddle.provider";
 import {
@@ -62,8 +65,11 @@ import {
   type PaymentProvider,
   type ProviderStatus,
 } from "./payment.provider";
+import { UserError } from "../../utils/userError";
 
 const logSource = "modules/payment/payment.service.ts";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** A grant held longer than this is assumed crashed and may be retried. */
 const GRANT_CLAIM_STALE_MS = 2 * 60_000;
@@ -78,7 +84,11 @@ export type PaymentRecord = PaymentInterface & { id: string };
 type Product = Awaited<ReturnType<typeof productService.get>>;
 
 /** Thrown when checkout is refused for a reason the user can fix. */
-export class CheckoutError extends Error {}
+export class CheckoutError extends UserError {
+  constructor(message: string) {
+    super(message, 409);
+  }
+}
 
 /** Longest an admin invoice may stay open. */
 export const MAX_INVOICE_DUE_DAYS = 90;
@@ -179,9 +189,7 @@ export interface PaymentStore {
 
 /** Where a user is billed, and whether that can still change. */
 export interface BillingProfiles {
-  regionOf(
-    userId: string,
-  ): Promise<{ region: BillingRegion; locked: boolean }>;
+  regionOf(userId: string): Promise<{ region: BillingRegion; locked: boolean }>;
   /** Fix the region once the user has checked out in it. */
   lockRegion(userId: string, region: BillingRegion): Promise<void>;
   /** Whether Paddle renews this product for the user by itself. */
@@ -340,17 +348,17 @@ export function toPaymentOut(
     // Older documents read through `lean()` have no source yet.
     source: payment.source ?? "checkout",
     currency: payment.currency ?? "IDR",
-    amountIdr: payment.amountIdr,
+    amount: payment.amount,
     items: payment.items.map((item) => ({
       productId: item.productId?.toString() ?? null,
       name: item.name,
       description: item.description ?? null,
       kind: item.kind,
-      unitPriceIdr: item.unitPriceIdr,
+      unitPrice: item.unitPrice,
       quantity: item.quantity,
       durationDays: item.durationDays,
       variantId: item.variantId ?? null,
-      amountIdr: item.amountIdr,
+      amount: item.amount,
     })),
     provider: payment.provider,
     paymentType: payment.paymentType,
@@ -431,9 +439,9 @@ export class PaymentService {
     );
     return {
       lines: out,
-      totalIdr: out
+      total: out
         .filter((line) => !line.problem)
-        .reduce((sum, line) => sum + line.amountIdr, 0),
+        .reduce((sum, line) => sum + line.amount, 0),
       canCheckout: out.length > 0 && out.every((line) => !line.problem),
     };
   }
@@ -511,7 +519,7 @@ export class PaymentService {
           ? (variant?.paddlePriceId ?? null)
           : (product.paddlePriceId ?? null)
         : null;
-      const unitPriceIdr = intl
+      const unitPrice = intl
         ? (unitPriceUsd ?? 0)
         : (variant?.priceIdr ?? product.priceIdr);
       const durationDays = isSubscription
@@ -596,11 +604,11 @@ export class PaymentService {
         productDoc: product,
         providerPriceId,
         product: toProductSummary(product),
-        unitPriceIdr,
+        unitPrice,
         quantity,
         maxQuantity: intl && isSubscription ? 1 : maxQuantity(product.kind),
         durationDays,
-        amountIdr: lineAmount(unitPriceIdr, quantity),
+        amount: lineAmount(unitPrice, quantity),
         variant: variant ? { id: variant.id, name: variant.name } : null,
         variants: isSubscription
           ? variantsOf(product).flatMap((option) => {
@@ -612,7 +620,7 @@ export class PaymentService {
                   id: option.id,
                   name: option.name,
                   specs: option.specs,
-                  unitPriceIdr: price,
+                  unitPrice: price,
                   durationDays: option.durationDays,
                 },
               ];
@@ -658,13 +666,13 @@ export class PaymentService {
         name: lineName(line.productDoc, line.variant),
         description: null,
         kind: line.product.kind,
-        unitPriceIdr: line.unitPriceIdr,
+        unitPrice: line.unitPrice,
         quantity: line.quantity,
         durationDays: line.durationDays,
         variantId: line.variant?.id ?? null,
         applyVariant: line.applyVariant,
         placement: line.placement,
-        amountIdr: line.amountIdr,
+        amount: line.amount,
         providerPriceId: line.providerPriceId,
       })),
       new Date(now.getTime() + env.paymentTtlMinutes * 60_000),
@@ -762,13 +770,13 @@ export class PaymentService {
           name: line.name,
           description: line.description,
           kind: "custom",
-          unitPriceIdr: line.unitPriceIdr,
+          unitPrice: line.unitPriceIdr,
           quantity: line.quantity,
           durationDays: null,
           variantId: null,
           applyVariant: null,
           placement: null,
-          amountIdr: lineAmount(line.unitPriceIdr, line.quantity),
+          amount: lineAmount(line.unitPriceIdr, line.quantity),
           providerPriceId: null,
         });
         continue;
@@ -826,14 +834,14 @@ export class PaymentService {
       }
 
       const quantity = clampQuantity(product.kind, line.quantity);
-      const unitPriceIdr =
+      const unitPrice =
         line.unitPriceIdr ?? variant?.priceIdr ?? product.priceIdr;
       lines.push({
         productId,
         name: lineName(product, variant),
         description: line.description,
         kind: product.kind,
-        unitPriceIdr,
+        unitPrice,
         quantity,
         durationDays,
         variantId: variant?.id ?? null,
@@ -841,7 +849,7 @@ export class PaymentService {
         // applies a new variant by itself.
         applyVariant: isSubscription ? "auto" : null,
         placement: isSubscription ? "after" : null,
-        amountIdr: lineAmount(unitPriceIdr, quantity),
+        amount: lineAmount(unitPrice, quantity),
         providerPriceId: null,
       });
     }
@@ -868,8 +876,8 @@ export class PaymentService {
     const { store } = this.deps;
     const provider =
       currency === "USD" ? (this.deps.paddle ?? null) : this.deps.provider;
-    const amountIdr = totalAmount(lines);
-    const free = amountIdr === 0;
+    const amount = totalAmount(lines);
+    const free = amount === 0;
     if (!free && !provider) {
       throw new CheckoutError("Payments are not set up yet");
     }
@@ -886,7 +894,7 @@ export class PaymentService {
       userId: new Types.ObjectId(userId),
       invoiceNumber,
       items,
-      amountIdr,
+      amount,
       currency,
       status: "pending",
       source,
@@ -926,17 +934,17 @@ export class PaymentService {
       userId,
       customerEmail: await this.deps.customerEmail(userId),
       currency,
-      amountIdr,
+      amount,
       // Free lines add nothing; payment gateways may refuse a zero price.
       lines: lines
-        .filter((line) => line.unitPriceIdr > 0)
+        .filter((line) => line.unitPrice > 0)
         .map((line, index) => ({
           id: line.productId ?? `custom-${index + 1}`,
           name:
             line.durationDays !== null
               ? `${line.name} (${line.durationDays} days)`
               : line.name,
-          unitPriceIdr: line.unitPriceIdr,
+          unitPrice: line.unitPrice,
           quantity: line.quantity,
           providerPriceId: line.providerPriceId ?? null,
         })),
@@ -974,7 +982,7 @@ export class PaymentService {
     await store.update(paymentId, {
       reference: result.reference,
       redirectUrl: result.redirectUrl,
-      snapToken: isPaddle ? null : result.token,
+      snapToken: result.snapToken,
     });
     return {
       paymentId,
@@ -982,7 +990,7 @@ export class PaymentService {
       status: "pending",
       provider: provider!.name,
       redirectUrl: result.redirectUrl,
-      snapToken: isPaddle ? null : result.token,
+      snapToken: result.snapToken,
       paddleTransactionId: isPaddle ? result.reference : null,
     };
   }
@@ -1160,11 +1168,12 @@ export class PaymentService {
       ...(status.paymentType ? { paymentType: status.paymentType } : {}),
     };
 
-    if (status.amountIdr !== null && status.amountIdr !== payment.amountIdr) {
+    if (status.amount !== null && status.amount !== payment.amount) {
+      const currency = payment.currency ?? "IDR";
       await store.update(paymentId, {
         ...known,
         needsReview: true,
-        reviewNote: `Provider reported Rp ${status.amountIdr}, invoice is Rp ${payment.amountIdr} (${source})`,
+        reviewNote: `Provider reported ${formatMoney(status.amount, currency)}, invoice is ${formatMoney(payment.amount, currency)} (${source})`,
       });
       logger.error(
         `Amount mismatch on ${payment.invoiceNumber} (${source})`,
@@ -1222,6 +1231,27 @@ export class PaymentService {
         });
         return;
     }
+  }
+
+  /**
+   * Midtrans' HTTP notification. Trusted only when signed with our server
+   * key; applied to the Midtrans invoice it names. Throws when it cannot be
+   * applied right now, so Midtrans retries it.
+   */
+  async onMidtransNotification(
+    body: MidtransNotification,
+  ): Promise<"applied" | "unknown" | "bad-signature" | "not-set-up"> {
+    const midtrans = this.deps.provider;
+    if (!(midtrans instanceof MidtransProvider)) return "not-set-up";
+    if (!midtrans.verifySignature(body)) return "bad-signature";
+    const payment = await this.deps.store.get(String(body.order_id));
+    if (!payment || payment.provider !== midtrans.name) return "unknown";
+    await this.applyProviderStatus(
+      payment.id,
+      midtransStatus(body),
+      "notification",
+    );
+    return "applied";
   }
 
   /**
@@ -1303,13 +1333,13 @@ export class PaymentService {
       name: item.name,
       description: null,
       kind: "subscription",
-      unitPriceIdr: item.unitPrice,
+      unitPrice: item.unitPrice,
       quantity: item.quantity,
       durationDays: item.durationDays,
       variantId: item.variantId,
       applyVariant: item.applyVariant,
       placement: "after",
-      amountIdr: lineAmount(item.unitPrice, item.quantity),
+      amount: lineAmount(item.unitPrice, item.quantity),
       providerPriceId: item.providerPriceId,
       periodIds: [],
       purchaseId: null,
@@ -1320,7 +1350,7 @@ export class PaymentService {
         userId: new Types.ObjectId(input.userId),
         invoiceNumber: await this.deps.nextInvoiceNumber(now),
         items,
-        amountIdr: totalAmount(items),
+        amount: totalAmount(items),
         currency: input.currency,
         status: "pending",
         source: "renewal",
@@ -1375,13 +1405,13 @@ export class PaymentService {
         name: input.name,
         description: input.description,
         kind: "custom",
-        unitPriceIdr: input.amount,
+        unitPrice: input.amount,
         quantity: 1,
         durationDays: null,
         variantId: null,
         applyVariant: null,
         placement: null,
-        amountIdr: input.amount,
+        amount: input.amount,
         providerPriceId: null,
         periodIds: [],
         purchaseId: null,
@@ -1393,7 +1423,7 @@ export class PaymentService {
         userId: new Types.ObjectId(input.userId),
         invoiceNumber: await this.deps.nextInvoiceNumber(now),
         items,
-        amountIdr: totalAmount(items),
+        amount: totalAmount(items),
         currency: input.currency,
         status: "pending",
         source: "renewal",
@@ -1452,7 +1482,7 @@ export class PaymentService {
   async getOwn(userId: string, paymentId: string): Promise<PaymentRecord> {
     const payment = await this.deps.store.get(paymentId);
     if (!payment || payment.userId.toString() !== userId) {
-      throw new Error("Invoice not found");
+      throw new UserError("Invoice not found", 404);
     }
     return payment;
   }

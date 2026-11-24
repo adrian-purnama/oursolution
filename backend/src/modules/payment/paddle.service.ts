@@ -5,6 +5,7 @@ import type {
   UpgradePreviewOutDto,
 } from "../../dto/payment.dto";
 import { logger } from "../../logger/logger";
+import type { PaymentCurrency } from "../../models/payment/payment.interface";
 import type {
   PaddleSubscriptionInterface,
   PaddleSubscriptionItem,
@@ -17,17 +18,20 @@ import { lineName, variantOf, variantsOf } from "../product/product.variants";
 import { itemsAfterSwitch, upgradeOptions } from "./paddle.upgrade";
 import { publicFileUrl } from "../../buckets/publicBucket";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
-import { UserModel } from "../../models/user/user.model";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
 import type { PaddleClient, PaddleTransaction } from "./paddle.client";
 import { PaddleApiError, paddleClient } from "./paddle.client";
 import { env } from "../../environment/env";
 import { mailer } from "../mail/mail.service";
-import { absoluteLink, notificationService } from "../notification/notification.service";
+import {
+  absoluteLink,
+  notificationService,
+} from "../notification/notification.service";
 import { paddleStatus } from "./paddle.provider";
 import {
   mongoPaymentStore,
   paymentService,
+  type PaymentService,
   RENEWING_STATUSES,
   type PaymentRecord,
   type PaymentStore,
@@ -75,6 +79,20 @@ function declinedAsMessage(error: unknown): unknown {
 /** Thrown when an event cannot be applied yet; Paddle retries it later. */
 export class PaddleEventError extends Error {}
 
+/**
+ * The currency of a charge on a subscription. Every Paddle price we sell is
+ * in US dollars, so anything else is refused (and logged) rather than
+ * recorded with amounts in the wrong unit.
+ */
+function chargeCurrency(txn: PaddleTransaction): PaymentCurrency {
+  if (txn.currency_code !== "USD") {
+    throw new Error(
+      `Paddle transaction ${txn.id} is in ${txn.currency_code ?? "no currency"}; only USD is billed through Paddle`,
+    );
+  }
+  return "USD";
+}
+
 function str(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
@@ -116,7 +134,10 @@ export function subscriptionItemsOf(
 }
 
 /** Tell a user their renewal could not be charged. */
-async function notifyPaymentFailed(userId: string, names: string[]): Promise<void> {
+async function notifyPaymentFailed(
+  userId: string,
+  names: string[],
+): Promise<void> {
   const what = names.length > 0 ? names.join(", ") : "your subscription";
   const title = "We could not charge your card";
   const body = `The renewal of ${what} was declined. Update your card before it expires or the service will be turned off. We will keep retrying for a few days.`;
@@ -144,6 +165,11 @@ export class PaddleService {
   constructor(
     private readonly client: PaddleClient | null,
     private readonly store: PaymentStore = mongoPaymentStore,
+    /** Where invoices are recorded and granted. */
+    private readonly payments: Pick<
+      PaymentService,
+      "applyProviderStatus" | "recordCharge" | "recordRenewal"
+    > = paymentService,
   ) {}
 
   /** Apply one verified webhook. Throws to have Paddle retry it later. */
@@ -238,7 +264,7 @@ export class PaddleService {
       );
       return;
     }
-    await paymentService.applyProviderStatus(
+    await this.payments.applyProviderStatus(
       payment.id,
       paddleStatus(txn),
       "notification",
@@ -275,21 +301,26 @@ export class PaddleService {
     const priceId = txn.items[0]?.price?.id ?? txn.items[0]?.price_id ?? null;
     const product = priceId
       ? await ProductModel.findOne({
-          $or: [{ paddlePriceId: priceId }, { "variants.paddlePriceId": priceId }],
+          $or: [
+            { paddlePriceId: priceId },
+            { "variants.paddlePriceId": priceId },
+          ],
         })
           .lean()
           .exec()
       : null;
     const variant = product
-      ? variantsOf(product).find((v) => v.paddlePriceId === priceId) ?? null
+      ? (variantsOf(product).find((v) => v.paddlePriceId === priceId) ?? null)
       : null;
-    await paymentService.recordCharge({
+    await this.payments.recordCharge({
       userId: subscription.userId.toString(),
       subscriptionRef: subscription.subscriptionId,
       reference: txn.id,
-      currency: txn.currency_code === "USD" ? "USD" : "IDR",
+      currency: chargeCurrency(txn),
       paymentType: paddleStatus(txn).paymentType,
-      name: product ? `Plan change: ${lineName(product, variant)}` : "Plan change",
+      name: product
+        ? `Plan change: ${lineName(product, variant)}`
+        : "Plan change",
       description: "Difference for the rest of the current period",
       amount,
     });
@@ -303,10 +334,10 @@ export class PaddleService {
     const subscriptionId = txn.subscription_id!;
     let subscription: PaddleSubscriptionInterface | null =
       await PaddleSubscriptionModel.findOne({
-      subscriptionId,
-    })
-      .lean()
-      .exec();
+        subscriptionId,
+      })
+        .lean()
+        .exec();
     if (!subscription && firstPayment && txn.customer_id) {
       subscription = await this.ensureSubscription(
         subscriptionId,
@@ -349,11 +380,11 @@ export class PaddleService {
         { $set: { pendingChange: null } },
       ).exec();
     }
-    await paymentService.recordRenewal({
+    await this.payments.recordRenewal({
       userId: subscription.userId.toString(),
       subscriptionRef: subscriptionId,
       reference: txn.id,
-      currency: txn.currency_code === "USD" ? "USD" : "IDR",
+      currency: chargeCurrency(txn),
       paymentType: paddleStatus(txn).paymentType,
       items,
     });
@@ -400,7 +431,8 @@ export class PaddleService {
     const fields = {
       status,
       customerId: data.customer_id,
-      nextBilledAt: status === "canceled" ? null : dateOrNull(data.next_billed_at),
+      nextBilledAt:
+        status === "canceled" ? null : dateOrNull(data.next_billed_at),
       cancelsAt,
     };
 
@@ -462,12 +494,12 @@ export class PaddleService {
     }
     const payment = await this.store.findByReference("paddle", transactionId);
     if (!payment) return;
-    await paymentService.applyProviderStatus(
+    await this.payments.applyProviderStatus(
       payment.id,
       {
         state: "refunded",
         raw: action,
-        amountIdr: null,
+        amount: null,
         reference: transactionId,
         paymentType: null,
       },
@@ -503,7 +535,11 @@ export class PaddleService {
     } catch (error) {
       // Already ended (Paddle may cancel it itself): nothing more to do.
       // Anything else is retried, because Paddle sends the event again.
-      if (error instanceof PaddleApiError && error.status < 500 && error.status !== 429) {
+      if (
+        error instanceof PaddleApiError &&
+        error.status < 500 &&
+        error.status !== 429
+      ) {
         logger.warn(
           `Could not cancel ${subscriptionId} after a chargeback: ${error.message}`,
           logSource,
@@ -520,7 +556,10 @@ export class PaddleService {
    * removed, the running one ends now, one-time purchases are removed.
    * Periods already over stay as history. Safe to run twice.
    */
-  async revokeAccessOf(paymentId: string, now: Date = new Date()): Promise<void> {
+  async revokeAccessOf(
+    paymentId: string,
+    now: Date = new Date(),
+  ): Promise<void> {
     const id = new Types.ObjectId(paymentId);
     const removed = await UserProductPeriodModel.deleteMany({
       paymentId: id,
@@ -551,7 +590,9 @@ export class PaddleService {
     const covers = new Map(
       (
         await ProductModel.find({
-          _id: { $in: docs.flatMap((doc) => doc.items.map((i) => i.productId)) },
+          _id: {
+            $in: docs.flatMap((doc) => doc.items.map((i) => i.productId)),
+          },
         })
           .select("images")
           .lean()
@@ -583,7 +624,10 @@ export class PaddleService {
     subscriptionId: string,
   ): Promise<PaddleSubscriptionInterface> {
     if (!this.client) throw new Error("Paddle is not set up");
-    const doc = await PaddleSubscriptionModel.findOne({ userId, subscriptionId })
+    const doc = await PaddleSubscriptionModel.findOne({
+      userId,
+      subscriptionId,
+    })
       .lean()
       .exec();
     if (!doc) throw new Error("Subscription not found");
@@ -605,7 +649,9 @@ export class PaddleService {
       { subscriptionId },
       {
         $set: {
-          cancelsAt: dateOrNull(result.scheduled_change?.effective_at) ?? doc.nextBilledAt,
+          cancelsAt:
+            dateOrNull(result.scheduled_change?.effective_at) ??
+            doc.nextBilledAt,
         },
       },
     ).exec();
@@ -810,7 +856,11 @@ export class PaddleService {
     userId: string,
     subscriptionId: string,
   ): Promise<void> {
-    const { doc, line } = await this.upgradeContext(userId, subscriptionId, true);
+    const { doc, line } = await this.upgradeContext(
+      userId,
+      subscriptionId,
+      true,
+    );
     const pending = doc.pendingChange;
     if (!pending) return;
     try {
@@ -840,12 +890,15 @@ export class PaddleService {
   }
 
   /** The Paddle transaction to open in checkout to change the card. */
-  async cardTransactionId(userId: string, subscriptionId: string): Promise<string> {
+  async cardTransactionId(
+    userId: string,
+    subscriptionId: string,
+  ): Promise<string> {
     await this.ownRenewing(userId, subscriptionId);
-    const txn = await this.client!.updatePaymentMethodTransaction(subscriptionId);
+    const txn =
+      await this.client!.updatePaymentMethodTransaction(subscriptionId);
     return txn.id;
   }
-
 }
 
 export const paddleService = new PaddleService(paddleClient);

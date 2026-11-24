@@ -26,7 +26,7 @@ export type CheckoutVariantOption = {
   id: string
   name: string
   specs: string
-  unitPriceIdr: number
+  unitPrice: number
   durationDays: number | null
 }
 
@@ -40,12 +40,12 @@ export type CheckoutSwitch = {
 /** One product in the basket or checkout, priced now. */
 export type CheckoutLine = {
   product: ProductSummary
-  unitPriceIdr: number
+  unitPrice: number
   quantity: number
   /** 1 for a one-time product. */
   maxQuantity: number
   durationDays: number | null
-  amountIdr: number
+  amount: number
   /** Subscription only: the variant it buys. */
   variant: { id: string; name: string } | null
   /** Subscription only: every variant it could buy, the base first. */
@@ -69,7 +69,7 @@ export type Currency = 'IDR' | 'USD'
 export type CheckoutQuote = {
   lines: CheckoutLine[]
   /** In `currency`, like every amount of the quote. */
-  totalIdr: number
+  total: number
   canCheckout: boolean
   currency: Currency
   region: BillingRegion
@@ -79,7 +79,7 @@ export type CheckoutQuote = {
 
 /** A quote with nothing in it, keeping the region of `from`. */
 export function emptyQuote(from: CheckoutQuote): CheckoutQuote {
-  return { ...from, lines: [], totalIdr: 0, canCheckout: false }
+  return { ...from, lines: [], total: 0, canCheckout: false }
 }
 
 export type BillingRegionInfo = {
@@ -145,11 +145,11 @@ export type PaymentItem = {
   name: string
   description: string | null
   kind: PaymentItemKind
-  unitPriceIdr: number
+  unitPrice: number
   quantity: number
   durationDays: number | null
   variantId: string | null
-  amountIdr: number
+  amount: number
 }
 
 export type Payment = {
@@ -160,7 +160,7 @@ export type Payment = {
   source: 'checkout' | 'admin' | 'renewal'
   /** Every amount on it: whole rupiah for IDR, cents for USD. */
   currency: Currency
-  amountIdr: number
+  amount: number
   items: PaymentItem[]
   provider: string
   paymentType: string | null

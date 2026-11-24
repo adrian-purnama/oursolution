@@ -24,6 +24,7 @@ import { NotificationModel } from "./models/notification/notification.model";
 import notificationRoutes from "./modules/notification/notification.route";
 import paymentRoutes from "./modules/payment/payment.route";
 import {
+  migrateAmountFieldNames,
   migrateLegacyPayments,
   startPaymentSweep,
 } from "./modules/payment/payment.scheduler";
@@ -120,6 +121,8 @@ async function bootstrap() {
   startExpiryReminderSweep();
   // Older one-product payments get an invoice; pending ones are checked.
   await migrateLegacyPayments();
+  // Amounts stored as amountIdr / unitPriceIdr become amount / unitPrice.
+  await migrateAmountFieldNames();
   startPaymentSweep();
 
   const httpServer = http.createServer(app);

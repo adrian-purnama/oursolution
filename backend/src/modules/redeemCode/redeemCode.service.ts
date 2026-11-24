@@ -23,6 +23,7 @@ import {
   type AppendPlan,
 } from "../userProduct/userProduct.planner";
 import { userProductService } from "../userProduct/userProduct.service";
+import { UserError } from "../../utils/userError";
 
 /** No 0/O or 1/I/L, so a code read off paper is not mistyped. */
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -31,7 +32,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 type RedeemCodeDoc = HydratedDocument<RedeemCodeInterface>;
 
 /** A code that cannot be used: unknown, used, expired, or nothing to give. */
-export class RedeemError extends Error {}
+export class RedeemError extends UserError {
+  constructor(message: string) {
+    super(message, 409);
+  }
+}
 
 function generateCode(): string {
   const chars = Array.from(
