@@ -936,8 +936,14 @@
   "billing_upgrade_calculating": "Menghitung biaya…",
   "billing_upgrade_due_label": "Dibayar sekarang",
   "billing_upgrade_credit_label": "Kredit ke akun Anda",
-  "billing_manage": "Kelola perpanjangan dan kartu",
-  "billing_portal_failed": "Tidak bisa membuka halaman tagihan Paddle",
+  "billing_upgrade_scheduled": "Tidak ada biaya sekarang. Paket Anda saat ini tetap berjalan sampai {date}, lalu {name} dimulai dengan {renewal} ditambah pajak per perpanjangan.",
+  "billing_upgrade_scheduled_label": "Mulai saat perpanjangan berikutnya",
+  "billing_upgrade_schedule_confirm": "Jadwalkan perubahan",
+  "billing_upgrade_scheduled_done": "Perubahan dijadwalkan",
+  "billing_pending_line": "Pindah ke {name} pada {date}",
+  "billing_pending_undo": "Batalkan perubahan",
+  "billing_pending_undone": "Perubahan dibatalkan",
+  "billing_status_changing": "Paket berubah",
   "product_not_in_region": "Belum tersedia di wilayah Anda.",
   "pricing_from": "Mulai {price}"
 }

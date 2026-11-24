@@ -31,6 +31,9 @@ router.post(
   paymentController.upgradePreview,
 );
 router.post("/subscriptions/:id/upgrade", paymentController.upgrade);
-router.post("/billing-portal", paymentController.billingPortal);
+router.post(
+  "/subscriptions/:id/upgrade/undo",
+  paymentController.cancelScheduledChange,
+);
 
 export default router;

@@ -27,6 +27,18 @@ export interface PaddleSubscriptionItem {
   durationDays: number;
 }
 
+/** What a scheduled plan change moves from and to. */
+export interface PendingPlanChange {
+  /** To put the plan back if the customer cancels the change. */
+  fromPriceId: string;
+  fromVariantId: string | null;
+  fromName: string;
+  /** The plan it becomes, as the customer sees it. */
+  toName: string;
+  /** When it starts: the next renewal. */
+  effectiveAt: Date | null;
+}
+
 /**
  * A subscription Paddle renews by itself for a customer outside Indonesia.
  * Each renewal Paddle charges becomes a Payment (source "renewal") that
@@ -36,7 +48,7 @@ export interface PaddleSubscriptionInterface {
   userId: Types.ObjectId;
   /** Paddle's id, "sub_...". Unique. */
   subscriptionId: string;
-  /** Paddle's customer id, "ctm_...", for the customer portal. */
+  /** Paddle's customer id, "ctm_...". */
   customerId: string;
   status: PaddleSubscriptionStatus;
   items: PaddleSubscriptionItem[];
@@ -46,6 +58,12 @@ export interface PaddleSubscriptionInterface {
   nextBilledAt: Date | null;
   /** Set when the customer cancelled: it ends at this time. */
   cancelsAt: Date | null;
+  /**
+   * A move to a cheaper variant that starts at the next renewal. Paddle
+   * already bills the new price from then; the customer keeps what they
+   * paid for until it starts. Null when none is waiting.
+   */
+  pendingChange: PendingPlanChange | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

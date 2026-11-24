@@ -99,6 +99,21 @@ export function currencyOf(region: BillingRegion): PaymentCurrency {
 /** Paddle statuses that still renew, or are retrying a renewal. */
 export const RENEWING_STATUSES = ["active", "trialing", "past_due"] as const;
 
+/** A charge on a subscription that buys no new period. */
+export interface ChargeInput {
+  userId: string;
+  subscriptionRef: string;
+  /** Paddle's transaction id. Recording the same one twice does nothing. */
+  reference: string;
+  currency: PaymentCurrency;
+  paymentType: string | null;
+  /** The invoice line: what it was for. */
+  name: string;
+  description: string | null;
+  /** Before tax: whole rupiah for IDR, cents for USD. */
+  amount: number;
+}
+
 /** One renewal Paddle charged, to be recorded and granted. */
 export interface RenewalInput {
   userId: string;
@@ -1336,6 +1351,84 @@ export class PaymentService {
       `Renewal ${input.reference} of ${input.subscriptionRef} recorded`,
       logSource,
       "recordRenewal",
+    );
+    return paymentId;
+  }
+
+  /**
+   * Record a charge Paddle made on a subscription that buys no new period
+   * (a plan change billed for the rest of the period) as a paid invoice with
+   * one custom line. Nothing is granted. Safe to call again for the same
+   * transaction. Returns the payment's id.
+   */
+  async recordCharge(
+    input: ChargeInput,
+    now: Date = new Date(),
+  ): Promise<string> {
+    const { store } = this.deps;
+    const known = await store.findByReference("paddle", input.reference);
+    if (known) return known.id;
+
+    const items: PaymentItem[] = [
+      {
+        productId: null,
+        name: input.name,
+        description: input.description,
+        kind: "custom",
+        unitPriceIdr: input.amount,
+        quantity: 1,
+        durationDays: null,
+        variantId: null,
+        applyVariant: null,
+        placement: null,
+        amountIdr: input.amount,
+        providerPriceId: null,
+        periodIds: [],
+        purchaseId: null,
+      },
+    ];
+    let paymentId: string;
+    try {
+      paymentId = await store.create({
+        userId: new Types.ObjectId(input.userId),
+        invoiceNumber: await this.deps.nextInvoiceNumber(now),
+        items,
+        amountIdr: totalAmount(items),
+        currency: input.currency,
+        status: "pending",
+        source: "renewal",
+        provider: "paddle",
+        reference: input.reference,
+        subscriptionRef: input.subscriptionRef,
+        redirectUrl: null,
+        snapToken: null,
+        paymentType: input.paymentType,
+        providerStatus: "completed",
+        failureReason: null,
+        expiresAt: now,
+        paidAt: null,
+        grantedAt: null,
+        grantClaimedAt: null,
+        checkedAt: null,
+        needsReview: false,
+        reviewNote: null,
+      });
+    } catch (error) {
+      // Another delivery of the same webhook recorded it first.
+      const raced = await store.findByReference("paddle", input.reference);
+      if (raced) return raced.id;
+      throw error;
+    }
+    // Paid and settled in one step: there is nothing to grant.
+    await store.update(
+      paymentId,
+      { status: "paid", paidAt: now, grantedAt: now },
+      ["pending"],
+    );
+    logger.info(
+      `Charge ${input.reference} of ${input.subscriptionRef} recorded`,
+      logSource,
+      "recordCharge",
     );
     return paymentId;
   }

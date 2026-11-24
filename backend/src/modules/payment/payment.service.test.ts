@@ -1152,4 +1152,32 @@ describe("checkout outside Indonesia", () => {
     assert.equal(periods.length, 1);
     assert.deepEqual(granted, [first]);
   });
+
+  it("records a plan-change charge once as a paid invoice that grants nothing", async () => {
+    const { service, payments, periods, granted } = setup({
+      products: usdProducts,
+      paddle: paddleLike(),
+      billing: intlBilling(),
+    });
+    const charge = {
+      userId: USER,
+      subscriptionRef: "sub_1",
+      reference: "txn_3",
+      currency: "USD" as const,
+      paymentType: "card",
+      name: "Plan change: n8n hosting (Pro)",
+      description: null,
+      amount: 1000,
+    };
+    const first = await service.recordCharge(charge);
+    const second = await service.recordCharge(charge);
+    assert.equal(first, second);
+    assert.equal(payments.size, 1);
+    const payment = payments.get(first)!;
+    assert.equal(payment.status, "paid");
+    assert.equal(payment.amountIdr, 1000);
+    assert.equal(payment.items[0].kind, "custom");
+    assert.equal(periods.length, 0);
+    assert.deepEqual(granted, []);
+  });
 });

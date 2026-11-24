@@ -130,9 +130,11 @@ export interface BillingRegionOutDto {
 export interface PaddleSubscriptionOutDto {
   id: string;
   status: string;
-  products: { productId: string; name: string }[];
+  products: { productId: string; name: string; imageUrl: string | null }[];
   nextBilledAt: string | null;
   cancelsAt: string | null;
+  /** A cheaper plan that starts at the next renewal, if one is scheduled. */
+  pendingChange: { name: string; effectiveAt: string | null } | null;
 }
 
 /** One line of an invoice an admin makes for a user. */
@@ -250,6 +252,8 @@ export interface UpgradePreviewOutDto {
   /** Charged now, or credited when `credit`, in the lowest unit. */
   amountCents: number;
   credit: boolean;
+  /** True for a cheaper plan: nothing is charged now, it starts at `nextBilledAt`. */
+  scheduled: boolean;
   nextBilledAt: string | null;
   /** What each renewal costs from now on, in US cents (before tax). */
   renewalCents: number;

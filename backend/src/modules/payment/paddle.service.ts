@@ -13,8 +13,9 @@ import type {
 import { PADDLE_SUBSCRIPTION_STATUSES } from "../../models/paddleSubscription/paddleSubscription.interface";
 import { PaddleSubscriptionModel } from "../../models/paddleSubscription/paddleSubscription.model";
 import { ProductModel } from "../../models/product/product.model";
-import { lineName } from "../product/product.variants";
+import { lineName, variantOf, variantsOf } from "../product/product.variants";
 import { itemsAfterSwitch, upgradeOptions } from "./paddle.upgrade";
+import { publicFileUrl } from "../../buckets/publicBucket";
 import { PurchaseModel } from "../../models/purchase/purchase.model";
 import { UserModel } from "../../models/user/user.model";
 import { UserProductPeriodModel } from "../../models/userProductPeriod/userProductPeriod.model";
@@ -137,7 +138,7 @@ async function notifyPaymentFailed(userId: string, names: string[]): Promise<voi
 /**
  * The Paddle side that is not a single payment: webhooks (payments
  * confirmed, renewals charged, subscriptions changed, refunds), the
- * user's renewing subscriptions and Paddle's customer portal.
+ * user's renewing subscriptions: changing plan or card and stopping renewal.
  */
 export class PaddleService {
   constructor(
@@ -189,11 +190,9 @@ export class PaddleService {
         txn.origin === "subscription_update" ||
         txn.origin === "subscription_charge"
       ) {
-        logger.info(
-          `Paddle transaction ${txn.id} (${txn.origin}) grants no period`,
-          logSource,
-          "onTransaction",
-        );
+        if (txn.origin === "subscription_update") {
+          await this.onPlanChangeCharge(txn);
+        }
         return;
       }
       await this.onRenewal(txn, payment);
@@ -256,6 +255,46 @@ export class PaddleService {
     }
   }
 
+  /** The charge for a plan change: an invoice, but no new period. */
+  private async onPlanChangeCharge(txn: PaddleTransaction): Promise<void> {
+    const subscription = await PaddleSubscriptionModel.findOne({
+      subscriptionId: txn.subscription_id!,
+    })
+      .lean()
+      .exec();
+    if (!subscription) {
+      throw new PaddleEventError(
+        `Plan change ${txn.id} of unknown subscription ${txn.subscription_id}`,
+      );
+    }
+    const amount = Number(txn.details?.totals?.subtotal ?? 0);
+    // A downgrade is credited, not charged: nothing to invoice.
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    // What it was for: the plan the customer moved to, by its Paddle price.
+    const priceId = txn.items[0]?.price?.id ?? txn.items[0]?.price_id ?? null;
+    const product = priceId
+      ? await ProductModel.findOne({
+          $or: [{ paddlePriceId: priceId }, { "variants.paddlePriceId": priceId }],
+        })
+          .lean()
+          .exec()
+      : null;
+    const variant = product
+      ? variantsOf(product).find((v) => v.paddlePriceId === priceId) ?? null
+      : null;
+    await paymentService.recordCharge({
+      userId: subscription.userId.toString(),
+      subscriptionRef: subscription.subscriptionId,
+      reference: txn.id,
+      currency: txn.currency_code === "USD" ? "USD" : "IDR",
+      paymentType: paddleStatus(txn).paymentType,
+      name: product ? `Plan change: ${lineName(product, variant)}` : "Plan change",
+      description: "Difference for the rest of the current period",
+      amount,
+    });
+  }
+
   /** A renewal Paddle charged by itself: one more period of each item. */
   private async onRenewal(
     txn: PaddleTransaction,
@@ -303,6 +342,13 @@ export class PaddleService {
         `Renewal ${txn.id} bills no price of subscription ${subscriptionId}`,
       );
     }
+    // The renewal bills the plan a scheduled change moved to: it has started.
+    if (subscription.pendingChange) {
+      await PaddleSubscriptionModel.updateOne(
+        { subscriptionId },
+        { $set: { pendingChange: null } },
+      ).exec();
+    }
     await paymentService.recordRenewal({
       userId: subscription.userId.toString(),
       subscriptionRef: subscriptionId,
@@ -329,12 +375,12 @@ export class PaddleService {
           status: "active",
           nextBilledAt: null,
           cancelsAt: null,
-        },
-        $set: {
-          customerId,
+          // Only when it is first made: a webhook delivered again later must
+          // not put back the plan a customer has since moved to.
           items,
           firstPaymentId: new Types.ObjectId(firstPayment.id),
         },
+        $set: { customerId },
       },
       { upsert: true, returnDocument: "after" },
     )
@@ -464,15 +510,32 @@ export class PaddleService {
       .sort({ createdAt: -1 })
       .lean()
       .exec();
+    const covers = new Map(
+      (
+        await ProductModel.find({
+          _id: { $in: docs.flatMap((doc) => doc.items.map((i) => i.productId)) },
+        })
+          .select("images")
+          .lean()
+          .exec()
+      ).map((p) => [p._id.toString(), publicFileUrl(p.images?.[0] ?? null)]),
+    );
     return docs.map((doc) => ({
       id: doc.subscriptionId,
       status: doc.status,
       products: doc.items.map((item) => ({
         productId: item.productId.toString(),
         name: item.name,
+        imageUrl: covers.get(item.productId.toString()) ?? null,
       })),
       nextBilledAt: doc.nextBilledAt?.toISOString() ?? null,
       cancelsAt: doc.cancelsAt?.toISOString() ?? null,
+      pendingChange: doc.pendingChange
+        ? {
+            name: doc.pendingChange.toName,
+            effectiveAt: doc.pendingChange.effectiveAt?.toISOString() ?? null,
+          }
+        : null,
     }));
   }
 
@@ -522,8 +585,17 @@ export class PaddleService {
   }
 
   /** The one product line a subscription can change variants on, with its product. */
-  private async upgradeContext(userId: string, subscriptionId: string) {
+  private async upgradeContext(
+    userId: string,
+    subscriptionId: string,
+    allowPending = false,
+  ) {
     const doc = await this.ownRenewing(userId, subscriptionId);
+    if (doc.pendingChange && !allowPending) {
+      throw new Error(
+        `A change to ${doc.pendingChange.toName} is already scheduled: cancel it first`,
+      );
+    }
     if (doc.status === "past_due") {
       throw new Error("Update your card first: the last renewal was declined");
     }
@@ -573,7 +645,11 @@ export class PaddleService {
       context.line.priceId,
       target.paddlePriceId,
     );
-    return { ...context, target, items };
+    // A cheaper (or equal) plan starts at the next renewal, not now.
+    const current = variantOf(context.product, context.line.variantId);
+    const scheduled =
+      (target.priceUsdCents ?? 0) <= (current?.priceUsdCents ?? 0);
+    return { ...context, target, items, scheduled };
   }
 
   /** What moving to this variant would cost now, before the user agrees. */
@@ -582,11 +658,23 @@ export class PaddleService {
     subscriptionId: string,
     variantId: string,
   ): Promise<UpgradePreviewOutDto> {
-    const { items, target } = await this.targetOf(
+    const { doc, items, target, scheduled } = await this.targetOf(
       userId,
       subscriptionId,
       variantId,
     );
+    if (scheduled) {
+      return {
+        variantId: target.id,
+        name: target.name,
+        currency: "USD",
+        amountCents: 0,
+        credit: false,
+        scheduled: true,
+        nextBilledAt: doc.nextBilledAt?.toISOString() ?? null,
+        renewalCents: target.priceUsdCents ?? 0,
+      };
+    }
     let preview;
     try {
       preview = await this.client!.previewPriceChange(subscriptionId, items);
@@ -606,6 +694,7 @@ export class PaddleService {
       amountCents: Number.isFinite(amount) ? Math.abs(amount) : 0,
       // "credit": the user is owed money; otherwise they pay now.
       credit: result?.action === "credit",
+      scheduled: false,
       nextBilledAt: dateOrNull(preview.next_billed_at)?.toISOString() ?? null,
       renewalCents: target.priceUsdCents ?? 0,
     };
@@ -622,15 +711,39 @@ export class PaddleService {
     subscriptionId: string,
     variantId: string,
   ): Promise<void> {
-    const { doc, line, product, target, items } = await this.targetOf(
-      userId,
-      subscriptionId,
-      variantId,
-    );
+    const { doc, line, product, target, items, scheduled } =
+      await this.targetOf(userId, subscriptionId, variantId);
     try {
-      await this.client!.changePrice(subscriptionId, items);
+      await this.client!.changePrice(
+        subscriptionId,
+        items,
+        scheduled ? "full_next_billing_period" : "prorated_immediately",
+      );
     } catch (error) {
       throw declinedAsMessage(error);
+    }
+
+    if (scheduled) {
+      // Paddle bills the new price from the next renewal; the customer keeps
+      // the plan they paid for until then, so their periods stay as they are.
+      await PaddleSubscriptionModel.updateOne(
+        { subscriptionId, "items.priceId": line.priceId },
+        {
+          $set: {
+            "items.$.priceId": target.paddlePriceId,
+            "items.$.variantId": target.id,
+            "items.$.name": lineName(product, target),
+            pendingChange: {
+              fromPriceId: line.priceId,
+              fromVariantId: line.variantId,
+              fromName: line.name,
+              toName: lineName(product, target),
+              effectiveAt: doc.nextBilledAt,
+            },
+          },
+        },
+      ).exec();
+      return;
     }
 
     await PaddleSubscriptionModel.updateOne(
@@ -654,6 +767,40 @@ export class PaddleService {
     ).exec();
   }
 
+  /** Take back a scheduled move to a cheaper plan before it starts. */
+  async cancelScheduledChange(
+    userId: string,
+    subscriptionId: string,
+  ): Promise<void> {
+    const { doc, line } = await this.upgradeContext(userId, subscriptionId, true);
+    const pending = doc.pendingChange;
+    if (!pending) return;
+    try {
+      await this.client!.changePrice(
+        subscriptionId,
+        itemsAfterSwitch(
+          doc.items.map((item) => item.priceId),
+          line.priceId,
+          pending.fromPriceId,
+        ),
+        "full_next_billing_period",
+      );
+    } catch (error) {
+      throw declinedAsMessage(error);
+    }
+    await PaddleSubscriptionModel.updateOne(
+      { subscriptionId, "items.priceId": line.priceId },
+      {
+        $set: {
+          "items.$.priceId": pending.fromPriceId,
+          "items.$.variantId": pending.fromVariantId,
+          "items.$.name": pending.fromName,
+          pendingChange: null,
+        },
+      },
+    ).exec();
+  }
+
   /** The Paddle transaction to open in checkout to change the card. */
   async cardTransactionId(userId: string, subscriptionId: string): Promise<string> {
     await this.ownRenewing(userId, subscriptionId);
@@ -661,30 +808,6 @@ export class PaddleService {
     return txn.id;
   }
 
-  /**
-   * A link to Paddle's customer portal, where the user cancels renewal or
-   * changes their card. Throws when the user has never paid with Paddle.
-   */
-  async portalUrl(userId: string): Promise<string> {
-    if (!this.client) throw new Error("Paddle is not set up");
-    const subscriptions = await PaddleSubscriptionModel.find({ userId })
-      .lean()
-      .exec();
-    let customerId = subscriptions[0]?.customerId ?? null;
-    if (!customerId) {
-      const user = await UserModel.findById(userId).select("email").lean();
-      if (!user) throw new Error("User not found");
-      customerId = await this.client.customerIdFor(user.email);
-    }
-    return this.client.portalUrl(
-      customerId,
-      subscriptions
-        .filter((s) =>
-          (RENEWING_STATUSES as readonly string[]).includes(s.status),
-        )
-        .map((s) => s.subscriptionId),
-    );
-  }
 }
 
 export const paddleService = new PaddleService(paddleClient);

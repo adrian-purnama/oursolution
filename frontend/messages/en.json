@@ -936,8 +936,14 @@
   "billing_upgrade_calculating": "Calculating the cost…",
   "billing_upgrade_due_label": "Due now",
   "billing_upgrade_credit_label": "Credit to your account",
-  "billing_manage": "Manage renewals and card",
-  "billing_portal_failed": "Could not open Paddle's billing page",
+  "billing_upgrade_scheduled": "Nothing is charged now. You keep your current plan until {date}, then {name} starts at {renewal} plus tax per renewal.",
+  "billing_upgrade_scheduled_label": "Starts at your next renewal",
+  "billing_upgrade_schedule_confirm": "Schedule change",
+  "billing_upgrade_scheduled_done": "Change scheduled",
+  "billing_pending_line": "Switches to {name} on {date}",
+  "billing_pending_undo": "Cancel change",
+  "billing_pending_undone": "Change cancelled",
+  "billing_status_changing": "Changing plan",
   "product_not_in_region": "Not available in your region yet.",
   "pricing_from": "From {price}"
 }

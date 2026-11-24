@@ -93,9 +93,11 @@ export type BillingRegionInfo = {
 export type RenewingSubscription = {
   id: string
   status: 'active' | 'trialing' | 'past_due' | 'paused' | 'canceled'
-  products: { productId: string; name: string }[]
+  products: { productId: string; name: string; imageUrl: string | null }[]
   nextBilledAt: string | null
   cancelsAt: string | null
+  /** A cheaper plan that starts at the next renewal, if one is scheduled. */
+  pendingChange: { name: string; effectiveAt: string | null } | null
 }
 
 export type PaymentStatus =
@@ -541,15 +543,6 @@ export async function openPaddleCheckout(
   }
 }
 
-/** A one-time link to Paddle's page for cancelling renewal or the card. */
-export async function openBillingPortal(): Promise<string | null> {
-  const res = await apiFetch<{ url: string }>('/me/billing-portal', {
-    method: 'POST',
-  })
-  if (!res.success || !res.data) throw new Error(res.message)
-  return res.data.url
-}
-
 /** Stop a subscription renewing after the period already paid for. */
 export async function cancelRenewal(id: string): Promise<void> {
   const res = await apiFetch(`/me/subscriptions/${id}/cancel`, {
@@ -590,6 +583,8 @@ export type UpgradePreview = {
   currency: string
   amountCents: number
   credit: boolean
+  /** A cheaper plan: nothing is charged now, it starts at the next renewal. */
+  scheduled: boolean
   nextBilledAt: string | null
   renewalCents: number
 }
@@ -619,6 +614,14 @@ export async function applyUpgrade(
   const res = await apiFetch(`/me/subscriptions/${id}/upgrade`, {
     method: 'POST',
     body: JSON.stringify({ variantId }),
+  })
+  if (!res.success) throw new Error(res.message)
+}
+
+/** Take back a move to a cheaper plan that has not started yet. */
+export async function cancelScheduledChange(id: string): Promise<void> {
+  const res = await apiFetch(`/me/subscriptions/${id}/upgrade/undo`, {
+    method: 'POST',
   })
   if (!res.success) throw new Error(res.message)
 }

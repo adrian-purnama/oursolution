@@ -8,7 +8,6 @@ import {
   Check,
   CircleAlert,
   CreditCard,
-  ExternalLink,
   LoaderCircle,
   Receipt,
   RefreshCw,
@@ -17,14 +16,14 @@ import {
 } from 'lucide-react'
 import PaddlePay from '#/components/forms/billing/PaddlePay'
 import { Button } from '#/components/ui/button'
-import { apiFetch } from '#/lib/api'
+import { apiFetch, toAbsoluteMediaUrl } from '#/lib/api'
 import {
   applyUpgrade,
   cancelRenewal,
+  cancelScheduledChange,
   cardTransactionId,
   formatDateTime,
   formatMoney,
-  openBillingPortal,
   previewUpgrade,
   resumeRenewal,
   upgradeChoices,
@@ -57,6 +56,9 @@ function statusOf(s: RenewingSubscription): { label: string; tone: Tone } {
     return { label: m.billing_renewals_ended(), tone: 'idle' }
   }
   if (s.cancelsAt) return { label: m.billing_status_ending(), tone: 'warn' }
+  if (s.pendingChange) {
+    return { label: m.billing_status_changing(), tone: 'warn' }
+  }
   return { label: m.billing_status_active(), tone: 'good' }
 }
 
@@ -78,8 +80,27 @@ const TILE_COLORS = [
   'from-rose-500 to-pink-500',
 ]
 
-/** A coloured tile with the product's first letter, steady per product. */
-function ProductTile({ name, seed }: { name: string; seed: string }) {
+/** The product's image, else a coloured tile with its first letter. */
+function ProductTile({
+  name,
+  seed,
+  imageUrl,
+}: {
+  name: string
+  seed: string
+  imageUrl: string | null
+}) {
+  const src = toAbsoluteMediaUrl(imageUrl)
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        className="size-11 shrink-0 rounded-xl border border-[var(--line)] bg-white object-cover shadow-sm"
+      />
+    )
+  }
   const hash = [...seed].reduce((sum, ch) => sum + ch.charCodeAt(0), 0)
   return (
     <span
@@ -139,7 +160,6 @@ function ActionButton({
  */
 export default function RenewingSubscriptions() {
   const [items, setItems] = useState<RenewingSubscription[]>([])
-  const [opening, setOpening] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [card, setCard] = useState<{
     id: string
@@ -205,6 +225,14 @@ export default function RenewingSubscriptions() {
     })
   }
 
+  function undoPending(s: RenewingSubscription) {
+    void act(s.id, async () => {
+      await cancelScheduledChange(s.id)
+      toast.success(m.billing_pending_undone())
+      await load()
+    })
+  }
+
   function togglePlan(s: RenewingSubscription) {
     setCard(null)
     if (plan?.id === s.id) {
@@ -247,30 +275,13 @@ export default function RenewingSubscriptions() {
     void act(s.id, async () => {
       await applyUpgrade(s.id, variantId)
       setPlan(null)
-      toast.success(m.billing_upgrade_done())
+      toast.success(
+        plan?.preview?.scheduled
+          ? m.billing_upgrade_scheduled_done()
+          : m.billing_upgrade_done(),
+      )
       await load()
     })
-  }
-
-  async function manage() {
-    // Opened before the await, so the browser does not block the new tab.
-    const tab = window.open('', '_blank')
-    setOpening(true)
-    try {
-      const url = await openBillingPortal()
-      if (!url) throw new Error()
-      if (tab) tab.location.href = url
-      else window.location.href = url
-    } catch (error) {
-      tab?.close()
-      toast.error(
-        error instanceof Error && error.message
-          ? error.message
-          : m.billing_portal_failed(),
-      )
-    } finally {
-      setOpening(false)
-    }
   }
 
   if (items.length === 0) return null
@@ -280,7 +291,7 @@ export default function RenewingSubscriptions() {
       aria-labelledby="renewals-title"
       className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 via-white to-white px-5 py-4">
+      <header className="flex flex-wrap items-center gap-3 bg-gradient-to-r from-indigo-50 via-white to-white px-5 py-4">
         <div className="flex items-center gap-3">
           <span className="grid size-10 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm">
             <RefreshCw className="size-5" aria-hidden />
@@ -297,21 +308,6 @@ export default function RenewingSubscriptions() {
             </p>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={opening}
-          onClick={() => void manage()}
-          className="text-[var(--muted)]"
-        >
-          {opening ? (
-            <LoaderCircle className="animate-spin" aria-hidden />
-          ) : (
-            <ExternalLink aria-hidden />
-          )}
-          {m.billing_manage()}
-        </Button>
       </header>
 
       <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
@@ -324,13 +320,20 @@ export default function RenewingSubscriptions() {
           const status = statusOf(s)
           const name = s.products.map((p) => p.name).join(', ')
           const canChangePlan =
-            s.status === 'active' && !s.cancelsAt && s.products.length === 1
+            s.status === 'active' &&
+            !s.cancelsAt &&
+            !s.pendingChange &&
+            s.products.length === 1
           const panelPlan = plan?.id === s.id ? plan : null
 
           return (
             <li key={s.id} className="space-y-4 px-5 py-4">
               <div className="flex items-start gap-3">
-                <ProductTile name={name} seed={s.products[0]?.productId ?? s.id} />
+                <ProductTile
+                  name={name}
+                  seed={s.products[0]?.productId ?? s.id}
+                  imageUrl={s.products[0]?.imageUrl ?? null}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-semibold text-[var(--ink)]">
@@ -350,6 +353,31 @@ export default function RenewingSubscriptions() {
                   ) : null}
                 </div>
               </div>
+
+              {s.pendingChange ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                  <span className="flex items-center gap-2">
+                    <CalendarClock className="size-4 shrink-0" aria-hidden />
+                    {m.billing_pending_line({
+                      name: s.pendingChange.name,
+                      date: s.pendingChange.effectiveAt
+                        ? formatDateTime(s.pendingChange.effectiveAt)
+                        : '',
+                    })}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    disabled={busy}
+                    onClick={() => undoPending(s)}
+                    className="text-amber-800 hover:bg-amber-100"
+                  >
+                    <RotateCcw aria-hidden />
+                    {m.billing_pending_undo()}
+                  </Button>
+                </div>
+              ) : null}
 
               {s.status === 'past_due' ? (
                 <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs text-red-700">
@@ -473,17 +501,25 @@ export default function RenewingSubscriptions() {
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-[var(--muted)]">
-                          {panelPlan.preview.credit
-                            ? m.billing_upgrade_credit_label()
-                            : m.billing_upgrade_due_label()}
+                          {panelPlan.preview.scheduled
+                            ? m.billing_upgrade_scheduled_label()
+                            : panelPlan.preview.credit
+                              ? m.billing_upgrade_credit_label()
+                              : m.billing_upgrade_due_label()}
                         </p>
                         <p className="text-lg font-semibold text-[var(--ink)]">
-                          {formatMoney(panelPlan.preview.amountCents, 'USD')}
+                          {panelPlan.preview.scheduled
+                            ? panelPlan.preview.nextBilledAt
+                              ? formatDateTime(panelPlan.preview.nextBilledAt)
+                              : ''
+                            : formatMoney(panelPlan.preview.amountCents, 'USD')}
                         </p>
                         <p className="mt-1 text-xs text-[var(--muted)]">
-                          {(panelPlan.preview.credit
-                            ? m.billing_upgrade_credit
-                            : m.billing_upgrade_pay)({
+                          {(panelPlan.preview.scheduled
+                            ? m.billing_upgrade_scheduled
+                            : panelPlan.preview.credit
+                              ? m.billing_upgrade_credit
+                              : m.billing_upgrade_pay)({
                             amount: formatMoney(
                               panelPlan.preview.amountCents,
                               'USD',
@@ -510,7 +546,9 @@ export default function RenewingSubscriptions() {
                         ) : (
                           <Check aria-hidden />
                         )}
-                        {m.billing_upgrade_confirm()}
+                        {panelPlan.preview.scheduled
+                          ? m.billing_upgrade_schedule_confirm()
+                          : m.billing_upgrade_confirm()}
                       </Button>
                     </div>
                   ) : null}

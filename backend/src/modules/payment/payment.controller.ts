@@ -267,6 +267,22 @@ export class PaymentController {
     }
   };
 
+  cancelScheduledChange = async (req: Request, res: Response) => {
+    try {
+      await paddleService.cancelScheduledChange(
+        req.user!.id,
+        String(req.params.id),
+      );
+      return res.status(200).json({
+        success: true,
+        message: "Scheduled change cancelled",
+        data: null,
+      } satisfies ApiResponseDto);
+    } catch (error) {
+      return fail(res, error, "Could not cancel the change");
+    }
+  };
+
   cardTransaction = async (req: Request, res: Response) => {
     try {
       const transactionId = await paddleService.cardTransactionId(
@@ -280,20 +296,6 @@ export class PaymentController {
       } satisfies ApiResponseDto<{ transactionId: string }>);
     } catch (error) {
       return fail(res, error, "Could not start the card update");
-    }
-  };
-
-  /** A one-time link to Paddle's page for cancelling renewal or the card. */
-  billingPortal = async (req: Request, res: Response) => {
-    try {
-      const url = await paddleService.portalUrl(req.user!.id);
-      return res.status(200).json({
-        success: true,
-        message: "Billing portal",
-        data: { url },
-      } satisfies ApiResponseDto<{ url: string }>);
-    } catch (error) {
-      return fail(res, error, "Could not open the billing portal");
     }
   };
 

@@ -185,10 +185,11 @@ export class PaddleClient {
   changePrice(
     id: string,
     items: { price_id: string; quantity: number }[],
+    mode: "prorated_immediately" | "full_next_billing_period" = "prorated_immediately",
   ): Promise<{ id: string }> {
     return this.request("PATCH", `/subscriptions/${encodeURIComponent(id)}`, {
       items,
-      proration_billing_mode: "prorated_immediately",
+      proration_billing_mode: mode,
       on_payment_failure: "prevent_change",
     });
   }
@@ -208,15 +209,6 @@ export class PaddleClient {
     );
   }
 
-  /** A link to Paddle's page where the customer manages their billing. */
-  async portalUrl(customerId: string, subscriptionIds: string[]): Promise<string> {
-    const session = await this.request<{
-      urls: { general: { overview: string } };
-    }>("POST", `/customers/${encodeURIComponent(customerId)}/portal-sessions`, {
-      subscription_ids: subscriptionIds,
-    });
-    return session.urls.general.overview;
-  }
 }
 
 /** The app's Paddle client; null when PADDLE_API_KEY is not set. */

@@ -18,6 +18,17 @@ const itemSchema = new Schema<PaddleSubscriptionItem>(
   { _id: false },
 );
 
+const pendingChangeSchema = new Schema(
+  {
+    fromPriceId: { type: String, required: true },
+    fromVariantId: { type: String, default: null },
+    fromName: { type: String, required: true },
+    toName: { type: String, required: true },
+    effectiveAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const paddleSubscriptionSchema = new Schema<PaddleSubscriptionInterface>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -36,6 +47,7 @@ const paddleSubscriptionSchema = new Schema<PaddleSubscriptionInterface>(
     },
     nextBilledAt: { type: Date, default: null },
     cancelsAt: { type: Date, default: null },
+    pendingChange: { type: pendingChangeSchema, default: null },
   },
   { timestamps: true },
 );
