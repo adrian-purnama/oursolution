@@ -40,7 +40,11 @@ import { SERVICES } from '#/lib/services'
 import { SHOW_HOME_STATE } from '#/lib/home'
 import { cn } from '#/lib/utils'
 import { m } from '#/paraglide/messages'
-import { LanguageButtons, LanguageMenu } from '#/components/LanguageSwitcher'
+import {
+  LanguageButtons,
+  LanguageMenu,
+  LanguageMenuItems,
+} from '#/components/LanguageSwitcher'
 
 const DRAWER_TRANSITION_MS = 300
 
@@ -189,7 +193,8 @@ export default function Header() {
         </div>
 
         <div className="hidden items-center justify-self-end gap-2 md:flex">
-          <LanguageMenu />
+          {/* Signed in, the language is in the account menu instead. */}
+          {isAuthenticated ? null : <LanguageMenu />}
           {isLoading ? null : isAuthenticated ? (
             <>
               <NotificationMenu />
@@ -280,7 +285,7 @@ export default function Header() {
                 menuAnimated ? 'translate-x-0' : 'translate-x-full',
               )}
             >
-              <div className="flex items-center justify-between border-b border-[var(--line)] bg-white px-4 py-3">
+              <div className="flex shrink-0 items-center justify-between border-b border-[var(--line)] bg-white px-4 py-3">
                 <span className="font-display inline-flex items-center gap-2.5 text-[17px]">
                   {appLogo ? (
                     <img
@@ -301,181 +306,195 @@ export default function Header() {
                 </button>
               </div>
 
-              <div className="flex flex-1 flex-col bg-white py-2">
-                <Link
-                  to={isAuthenticated ? '/dashboard' : '/'}
-                  className={drawerLinkClass}
-                  activeOptions={{ exact: true }}
-                  activeProps={{ className: drawerActiveClass }}
-                  onClick={closeMenu}
-                >
-                  {isAuthenticated ? m.nav_dashboard() : m.nav_home()}
-                </Link>
-                <>
-                  {isAuthenticated ? (
-                    <Link
-                      to="/"
-                      state={SHOW_HOME_STATE}
-                      className={drawerSubLinkClass}
-                      activeOptions={{ exact: true }}
-                      activeProps={{
-                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                      }}
-                      onClick={closeMenu}
-                    >
-                      <House className="size-5" aria-hidden />
-                      {m.nav_home_page()}
-                    </Link>
-                  ) : null}
+              {/* Everything under the title scrolls together, so a short
+                  screen can still reach the account and log out. */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+                <div className="flex flex-col bg-white py-2">
                   <Link
-                    to="/contact"
-                    className={drawerSubLinkClass}
-                    activeProps={{
-                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                    }}
-                    onClick={closeMenu}
-                  >
-                    <Mail className="size-5" aria-hidden />
-                    {m.nav_contact()}
-                  </Link>
-                  {isAuthenticated ? (
-                    <Link
-                      to="/support"
-                      className={drawerSubLinkClass}
-                      activeProps={{
-                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                      }}
-                      onClick={closeMenu}
-                    >
-                      <span className="relative">
-                        <LifeBuoy className="size-5" aria-hidden />
-                        {unreadTickets > 0 ? (
-                          <UnreadDot className="-top-0.5 -right-0.5" />
-                        ) : null}
-                      </span>
-                      {m.nav_tickets()}
-                      {unreadTickets > 0 ? (
-                        <span className="text-xs font-medium text-red-600">
-                          {m.nav_tickets_new_reply()}
-                        </span>
-                      ) : null}
-                    </Link>
-                  ) : null}
-                  <Link
-                    to="/privacy"
-                    className={drawerSubLinkClass}
-                    activeProps={{
-                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                    }}
-                    onClick={closeMenu}
-                  >
-                    <ShieldCheck className="size-5" aria-hidden />
-                    {m.nav_privacy()}
-                  </Link>
-                  <Link
-                    to="/terms"
-                    className={drawerSubLinkClass}
-                    activeProps={{
-                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                    }}
-                    onClick={closeMenu}
-                  >
-                    <FileText className="size-5" aria-hidden />
-                    {m.nav_terms()}
-                  </Link>
-                </>
-                <Link
-                  to="/services"
-                  className={drawerLinkClass}
-                  activeOptions={{ exact: true }}
-                  activeProps={{ className: drawerActiveClass }}
-                  onClick={closeMenu}
-                >
-                  {m.nav_services()}
-                </Link>
-                {SERVICES.map((service) => (
-                  <Link
-                    key={service.slug}
-                    to="/services/$slug"
-                    params={{ slug: service.slug }}
-                    className={drawerSubLinkClass}
-                    activeProps={{
-                      className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
-                    }}
-                    onClick={closeMenu}
-                  >
-                    <ServiceIcon service={service} className="size-5" />
-                    {service.name}
-                  </Link>
-                ))}
-                <Link
-                  to="/pricing"
-                  className={cn(drawerLinkClass, 'flex items-center gap-2.5')}
-                  activeProps={{
-                    className: cn(
-                      drawerActiveClass,
-                      'flex items-center gap-2.5',
-                    ),
-                  }}
-                  onClick={closeMenu}
-                >
-                  <ShoppingBag className="size-5" aria-hidden />
-                  {m.nav_shop()}
-                </Link>
-                {isAdmin ? (
-                  <Link
-                    to="/admin"
+                    to={isAuthenticated ? '/dashboard' : '/'}
                     className={drawerLinkClass}
+                    activeOptions={{ exact: true }}
                     activeProps={{ className: drawerActiveClass }}
                     onClick={closeMenu}
                   >
-                    {m.nav_admin()}
+                    {isAuthenticated ? m.nav_dashboard() : m.nav_home()}
                   </Link>
-                ) : null}
-              </div>
-
-              <div className="mt-auto border-t border-[var(--line)] bg-white p-4">
-                <LanguageButtons className="mb-4 flex-wrap" />
-                {isLoading ? null : isAuthenticated ? (
                   <>
-                    {user ? (
+                    {isAuthenticated ? (
                       <Link
-                        to="/profile"
+                        to="/"
+                        state={SHOW_HOME_STATE}
+                        className={drawerSubLinkClass}
+                        activeOptions={{ exact: true }}
+                        activeProps={{
+                          className: cn(
+                            drawerSubLinkClass,
+                            'text-[var(--ink)]',
+                          ),
+                        }}
                         onClick={closeMenu}
-                        data-tour="profile-drawer"
-                        className="mb-3 flex items-center gap-3 rounded-[var(--radius-sm)] px-1 py-1 text-sm text-[var(--muted)] no-underline transition hover:bg-[var(--surface)]"
                       >
-                        <UserAvatar email={user.email} />
-                        <span className="min-w-0 truncate">{user.email}</span>
+                        <House className="size-5" aria-hidden />
+                        {m.nav_home_page()}
                       </Link>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                    <Link
+                      to="/contact"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
                     >
-                      <LogOut className="size-4" aria-hidden />
-                      {m.nav_log_out()}
-                    </button>
+                      <Mail className="size-5" aria-hidden />
+                      {m.nav_contact()}
+                    </Link>
+                    {isAuthenticated ? (
+                      <Link
+                        to="/support"
+                        className={drawerSubLinkClass}
+                        activeProps={{
+                          className: cn(
+                            drawerSubLinkClass,
+                            'text-[var(--ink)]',
+                          ),
+                        }}
+                        onClick={closeMenu}
+                      >
+                        <span className="relative">
+                          <LifeBuoy className="size-5" aria-hidden />
+                          {unreadTickets > 0 ? (
+                            <UnreadDot className="-top-0.5 -right-0.5" />
+                          ) : null}
+                        </span>
+                        {m.nav_tickets()}
+                        {unreadTickets > 0 ? (
+                          <span className="text-xs font-medium text-red-600">
+                            {m.nav_tickets_new_reply()}
+                          </span>
+                        ) : null}
+                      </Link>
+                    ) : null}
+                    <Link
+                      to="/privacy"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <ShieldCheck className="size-5" aria-hidden />
+                      {m.nav_privacy()}
+                    </Link>
+                    <Link
+                      to="/terms"
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
+                      onClick={closeMenu}
+                    >
+                      <FileText className="size-5" aria-hidden />
+                      {m.nav_terms()}
+                    </Link>
                   </>
-                ) : (
-                  <div className="flex flex-col gap-3">
+                  <Link
+                    to="/services"
+                    className={drawerLinkClass}
+                    activeOptions={{ exact: true }}
+                    activeProps={{ className: drawerActiveClass }}
+                    onClick={closeMenu}
+                  >
+                    {m.nav_services()}
+                  </Link>
+                  {SERVICES.map((service) => (
                     <Link
-                      to="/login"
-                      className="block rounded-[var(--radius-sm)] border border-[var(--line)] bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--ink)] no-underline transition hover:border-[var(--ink)]"
+                      key={service.slug}
+                      to="/services/$slug"
+                      params={{ slug: service.slug }}
+                      className={drawerSubLinkClass}
+                      activeProps={{
+                        className: cn(drawerSubLinkClass, 'text-[var(--ink)]'),
+                      }}
                       onClick={closeMenu}
                     >
-                      {m.nav_log_in()}
+                      <ServiceIcon service={service} className="size-5" />
+                      {service.name}
                     </Link>
+                  ))}
+                  <Link
+                    to="/pricing"
+                    className={cn(drawerLinkClass, 'flex items-center gap-2.5')}
+                    activeProps={{
+                      className: cn(
+                        drawerActiveClass,
+                        'flex items-center gap-2.5',
+                      ),
+                    }}
+                    onClick={closeMenu}
+                  >
+                    <ShoppingBag className="size-5" aria-hidden />
+                    {m.nav_shop()}
+                  </Link>
+                  {isAdmin ? (
                     <Link
-                      to="/register"
-                      className="block rounded-[var(--radius-sm)] bg-[var(--navy)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
+                      to="/admin"
+                      className={drawerLinkClass}
+                      activeProps={{ className: drawerActiveClass }}
                       onClick={closeMenu}
                     >
-                      {m.nav_sign_up()}
+                      {m.nav_admin()}
                     </Link>
-                  </div>
-                )}
+                  ) : null}
+                </div>
+
+                <div className="mt-auto border-t border-[var(--line)] bg-white p-4">
+                  {/* Signed in, the language sits with the account below. */}
+                  {isAuthenticated ? null : (
+                    <LanguageButtons className="mb-4 flex-wrap" />
+                  )}
+                  {isLoading ? null : isAuthenticated ? (
+                    <>
+                      {user ? (
+                        <Link
+                          to="/profile"
+                          onClick={closeMenu}
+                          data-tour="profile-drawer"
+                          className="mb-3 flex items-center gap-3 rounded-[var(--radius-sm)] px-1 py-1 text-sm text-[var(--muted)] no-underline transition hover:bg-[var(--surface)]"
+                        >
+                          <UserAvatar email={user.email} />
+                          <span className="min-w-0 truncate">{user.email}</span>
+                        </Link>
+                      ) : null}
+                      <LanguageButtons className="mb-3 flex-wrap px-1" />
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                      >
+                        <LogOut className="size-4" aria-hidden />
+                        {m.nav_log_out()}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <Link
+                        to="/login"
+                        className="block rounded-[var(--radius-sm)] border border-[var(--line)] bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--ink)] no-underline transition hover:border-[var(--ink)]"
+                        onClick={closeMenu}
+                      >
+                        {m.nav_log_in()}
+                      </Link>
+                      <Link
+                        to="/register"
+                        className="block rounded-[var(--radius-sm)] bg-[var(--navy)] px-4 py-3 text-center text-sm font-semibold text-white no-underline transition hover:opacity-90"
+                        onClick={closeMenu}
+                      >
+                        {m.nav_sign_up()}
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </div>
             </aside>
           </div>,
@@ -764,6 +783,11 @@ function AccountMenu({
             </Link>
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuSeparator className="my-1" />
+        <DropdownMenuLabel className="px-3 pt-2 pb-1 text-xs font-normal text-[var(--muted)]">
+          {m.language_label()}
+        </DropdownMenuLabel>
+        <LanguageMenuItems />
         <DropdownMenuSeparator className="my-1" />
         <DropdownMenuItem
           onSelect={onLogout}

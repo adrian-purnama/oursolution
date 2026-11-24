@@ -62,6 +62,35 @@ function switchTo(locale: Locale) {
   void setLocale(locale)
 }
 
+/** Each language as a menu item, the current one checked; for any dropdown. */
+export function LanguageMenuItems({
+  itemClassName,
+}: {
+  itemClassName?: string
+}) {
+  const current = getLocale()
+
+  return locales.map((locale) => (
+    <DropdownMenuItem
+      key={locale}
+      lang={locale}
+      onSelect={() => switchTo(locale)}
+      className={cn(
+        'flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm text-[var(--ink)]',
+        itemClassName,
+      )}
+    >
+      <span className="flex items-center gap-2.5">
+        <LocaleFlag locale={locale} />
+        {LOCALE_NAMES[locale]}
+      </span>
+      {locale === current ? (
+        <Check className="size-4 text-[var(--accent)]" aria-hidden />
+      ) : null}
+    </DropdownMenuItem>
+  ))
+}
+
 /** Top-bar language menu: the current code, opening the full names. */
 export function LanguageMenu({ className }: { className?: string }) {
   const current = getLocale()
@@ -87,22 +116,7 @@ export function LanguageMenu({ className }: { className?: string }) {
         sideOffset={10}
         className="w-52 rounded-2xl border-[var(--line)] p-2 shadow-[0_24px_48px_-20px_rgba(12,12,11,0.25)]"
       >
-        {locales.map((locale) => (
-          <DropdownMenuItem
-            key={locale}
-            lang={locale}
-            onSelect={() => switchTo(locale)}
-            className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm text-[var(--ink)]"
-          >
-            <span className="flex items-center gap-2.5">
-              <LocaleFlag locale={locale} />
-              {LOCALE_NAMES[locale]}
-            </span>
-            {locale === current ? (
-              <Check className="size-4 text-[var(--accent)]" aria-hidden />
-            ) : null}
-          </DropdownMenuItem>
-        ))}
+        <LanguageMenuItems />
       </DropdownMenuContent>
     </DropdownMenu>
   )
