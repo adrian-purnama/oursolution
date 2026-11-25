@@ -81,6 +81,23 @@ export function BeatBar({
   )
 }
 
+/** How many grey ovals stand in before a service has any checks. */
+const EMPTY_BEATS = 30
+
+/** The same row of ovals, all grey: no checks yet, or not monitored. */
+export function EmptyBeatBar({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex h-3.5 gap-[3px]', className)} aria-hidden>
+      {Array.from({ length: EMPTY_BEATS }, (_, index) => (
+        <span
+          key={index}
+          className="min-w-0 flex-1 rounded-full bg-[var(--line)]"
+        />
+      ))}
+    </div>
+  )
+}
+
 /** A small label over a larger value. */
 export function Stat({
   label,

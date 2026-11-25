@@ -65,7 +65,7 @@ export default function TicketsAdminForm() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Status">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Status">
         {(['all', ...TICKET_STATUSES] as Filter[]).map((option) => (
           <button
             key={option}
@@ -73,7 +73,7 @@ export default function TicketsAdminForm() {
             aria-pressed={filter === option}
             onClick={() => setFilter(option)}
             className={cn(
-              'rounded-full border px-3 py-1 text-sm transition',
+              'rounded-full border px-3 py-1 text-xs transition',
               filter === option
                 ? 'border-[var(--ink)] bg-[var(--ink)] text-white'
                 : 'border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--ink)]',
@@ -125,7 +125,37 @@ export default function TicketsAdminForm() {
         </p>
       ) : (
         <>
-          <div className={`${cardClassName} overflow-x-auto`}>
+          <ul
+            className={`${cardClassName} divide-y divide-[var(--line)] overflow-hidden sm:hidden`}
+          >
+            {data.items.map((ticket) => (
+              <li key={ticket.id}>
+                <Link
+                  to="/admin/tickets/$ticketId"
+                  params={{ ticketId: ticket.id }}
+                  className="flex items-start gap-3 px-4 py-3 text-[var(--ink)] no-underline active:bg-[var(--surface)]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {ticket.subject}
+                    </p>
+                    <p className="truncate text-xs text-[var(--muted)]">
+                      {ticket.user?.email ?? '—'} ·{' '}
+                      {formatDateTime(ticket.updatedAt)}
+                    </p>
+                    {ticket.status !== 'closed' &&
+                    ticket.followupCount >= MAX_FOLLOWUPS ? (
+                      <p className="text-xs text-amber-700">
+                        Waiting for a reply
+                      </p>
+                    ) : null}
+                  </div>
+                  <TicketStatusBadge status={ticket.status} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className={`${cardClassName} hidden overflow-x-auto sm:block`}>
             <Table>
               <TableHeader>
                 <TableRow>

@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import UsersAdminForm from '#/components/forms/admin/UsersAdminForm'
-import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/admin/users/')({
@@ -11,11 +10,8 @@ export const Route = createFileRoute('/admin/users/')({
 function AdminUsersPage() {
   return (
     <div className="mx-auto w-full max-w-3xl text-[var(--ink)]">
-      <div className="mb-8">
+      <div className="mb-5 sm:mb-8">
         <h1 className="text-2xl font-medium tracking-tight">Users</h1>
-        <p className={`mt-2 ${hintClassName}`}>
-          Search by email and open a user to manage them.
-        </p>
       </div>
 
       <UsersAdminForm />

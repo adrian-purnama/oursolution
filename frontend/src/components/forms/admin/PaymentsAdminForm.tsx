@@ -98,6 +98,9 @@ export default function PaymentsAdminForm() {
             key={key}
             type="button"
             aria-pressed={group === key}
+            title={
+              key === 'closed' ? 'Failed, expired and cancelled' : undefined
+            }
             onClick={() => {
               setGroup(key)
               setPage(1)
@@ -118,9 +121,6 @@ export default function PaymentsAdminForm() {
           </button>
         ))}
       </div>
-      <p className={`-mt-2 text-xs ${hintClassName}`}>
-        Closed covers failed, expired and cancelled invoices.
-      </p>
 
       {state.status === 'error' ? (
         <div className="flex flex-col items-start gap-3 py-8">
@@ -135,7 +135,7 @@ export default function PaymentsAdminForm() {
           Loading payments…
         </div>
       ) : list.total === 0 ? (
-        <div className="rounded-xl border border-dashed border-[var(--line)] px-6 py-12 text-center">
+        <div className="rounded-xl border border-dashed border-[var(--line)] px-6 py-10 text-center sm:py-12">
           <ReceiptText
             className="mx-auto mb-3 size-6 text-[var(--muted)]"
             aria-hidden

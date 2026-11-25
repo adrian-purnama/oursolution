@@ -12,6 +12,7 @@ import {
   Trash2,
   ExternalLink,
   Globe,
+  Info,
   LoaderCircle,
   Play,
   Power,
@@ -98,6 +99,22 @@ const ACTION_ICONS: Record<RunAction, LucideIcon> = {
   erase: Eraser,
   wipe: Trash2,
   command: SquareTerminal,
+}
+
+/** Colour per action, so turning off or erasing never looks like a restart. */
+const ACTION_TONES: Record<RunAction, string> = {
+  deploy:
+    'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800',
+  redeploy:
+    'border-sky-200 bg-white text-sky-700 hover:bg-sky-50 hover:text-sky-800',
+  restart:
+    'border-amber-200 bg-white text-amber-700 hover:bg-amber-50 hover:text-amber-800',
+  turnOff:
+    'border-red-200 bg-white text-red-600 hover:bg-red-50 hover:text-red-700',
+  erase:
+    'border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800',
+  wipe: 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800',
+  command: 'bg-white',
 }
 
 function StepIcon({ status }: { status: RunStep['status'] }) {
@@ -214,6 +231,7 @@ export default function DeploymentPanel({
   const [saving, setSaving] = useState(false)
   const [starting, setStarting] = useState<RunAction | null>(null)
   const [confirmOff, setConfirmOff] = useState(false)
+  const [manageInfo, setManageInfo] = useState(false)
   /** The erasing action waiting for the product name to be typed. */
   const [confirmErase, setConfirmErase] = useState<'erase' | 'wipe' | null>(
     null,
@@ -698,7 +716,6 @@ export default function DeploymentPanel({
                 <span>
                   {m.panel_ago({ time: formatSince(status.beats[0].at) })}
                 </span>
-                <span>{m.panel_checked()}</span>
                 <span>{m.panel_now()}</span>
               </div>
             </div>
@@ -747,28 +764,14 @@ export default function DeploymentPanel({
             </span>
           </h3>
           <Stepper run={featured} admin={admin} />
-          {featured.status === 'running' ? (
-            <p className={`mt-4 text-xs ${hintClassName}`}>
-              {m.panel_auto_updates()}
-            </p>
-          ) : null}
         </section>
       ) : null}
 
       {show('configuration') && (editable.length > 0 || shown.length > 0) ? (
         <section className="space-y-3" data-tour="settings">
-          <div>
-            <h3 className="text-sm font-medium">
-              {admin ? m.panel_settings_admin() : m.panel_settings()}
-            </h3>
-            <p className={`text-xs ${hintClassName}`}>
-              {admin
-                ? m.panel_settings_admin_hint()
-                : state === 'notDeployed'
-                  ? m.panel_settings_first_hint()
-                  : m.panel_settings_hint()}
-            </p>
-          </div>
+          <h3 className="text-sm font-medium">
+            {admin ? m.panel_settings_admin() : m.panel_settings()}
+          </h3>
 
           {unfilled.length > 0 && !admin ? (
             <div
@@ -804,14 +807,6 @@ export default function DeploymentPanel({
                       {key}
                     </button>
                   ))}
-                </p>
-                <p className={`text-xs ${hintClassName}`}>
-                  {m.panel_marked_with()}{' '}
-                  <span className="text-[var(--destructive)]">*</span>{' '}
-                  {m.panel_marked_below()}{' '}
-                  {unfilled.length === 1
-                    ? m.panel_once_saved_one()
-                    : m.panel_once_saved_other()}
                 </p>
               </div>
             </div>
@@ -966,48 +961,80 @@ export default function DeploymentPanel({
 
       {show('overview') && secondary.length > 0 ? (
         <section className="space-y-3" data-tour="power">
-          <h3 className="text-sm font-medium">{m.panel_manage()}</h3>
-          <ul className={`${cardClassName} divide-y divide-[var(--line)]`}>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-medium">{m.panel_manage()}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="text-[var(--muted)]"
+              aria-label={m.panel_manage_info()}
+              onClick={() => setManageInfo(true)}
+            >
+              <Info aria-hidden />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
             {secondary.map((action) => {
               const Icon = ACTION_ICONS[action]
-              const danger = action === 'erase'
               return (
-                <li
+                <Button
                   key={action}
-                  className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5"
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={locked}
+                  className={cn(
+                    ACTION_TONES[action],
+                    action === 'erase' && 'sm:ml-auto',
+                  )}
+                  onClick={() => attempt(action, () => ask(action))}
                 >
-                  <div className="min-w-0 flex-1 basis-64">
-                    <p
-                      className={cn(
-                        'text-sm font-medium',
-                        danger && 'text-[var(--destructive)]',
-                      )}
-                    >
-                      {actionLabel(action, state)}
-                    </p>
-                    <p className={`text-xs ${hintClassName}`}>
-                      {RUN_ACTION_HINTS[action]}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={locked}
-                    className={danger ? 'text-[var(--destructive)]' : undefined}
-                    onClick={() => attempt(action, () => ask(action))}
-                  >
-                    {starting === action ? (
-                      <LoaderCircle className="animate-spin" aria-hidden />
-                    ) : (
-                      <Icon aria-hidden />
-                    )}
-                    {actionLabel(action, state)}
-                  </Button>
-                </li>
+                  {starting === action ? (
+                    <LoaderCircle className="animate-spin" aria-hidden />
+                  ) : (
+                    <Icon aria-hidden />
+                  )}
+                  {actionLabel(action, state)}
+                </Button>
               )
             })}
-          </ul>
+          </div>
+          <Dialog open={manageInfo} onOpenChange={setManageInfo}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{m.panel_manage()}</DialogTitle>
+                <DialogDescription className="sr-only">
+                  {m.panel_manage_info()}
+                </DialogDescription>
+              </DialogHeader>
+              <ul className="space-y-3">
+                {secondary.map((action) => {
+                  const Icon = ACTION_ICONS[action]
+                  return (
+                    <li key={action} className="flex items-start gap-3">
+                      <span
+                        className={cn(
+                          'flex size-8 shrink-0 items-center justify-center rounded-md border',
+                          ACTION_TONES[action],
+                        )}
+                      >
+                        <Icon className="size-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {actionLabel(action, state)}
+                        </p>
+                        <p className={`text-sm ${hintClassName}`}>
+                          {RUN_ACTION_HINTS[action]}
+                        </p>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </DialogContent>
+          </Dialog>
         </section>
       ) : null}
 

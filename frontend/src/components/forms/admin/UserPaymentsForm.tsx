@@ -13,7 +13,6 @@ import {
 } from '#/components/ui/dialog'
 import { apiFetch } from '#/lib/api'
 import type { Payment, PaymentList } from '#/lib/billing'
-import { hintClassName } from '#/lib/ui-classes'
 
 const PAGE_SIZE = 20
 
@@ -54,11 +53,8 @@ export default function UserPaymentsForm({ userId }: { userId: string }) {
 
   return (
     <section>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-medium">Payments</h2>
-          <p className={hintClassName}>Checkouts and invoices.</p>
-        </div>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-base font-medium">Payments</h2>
         <Button type="button" onClick={() => setCreating(true)}>
           <Plus className="size-4" aria-hidden />
           New invoice

@@ -78,9 +78,13 @@ function AdminLayout() {
   const crumbs = breadcrumbFor(pathname)
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 gap-0 px-0 text-[var(--ink)] md:gap-6 md:px-6">
-      <aside className="sticky top-[57px] flex h-[calc(100dvh-57px)] w-14 shrink-0 flex-col border-r border-[var(--line)] bg-white py-4 md:w-52">
-        <nav className="flex flex-col gap-1 px-2" aria-label="Admin sections">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-0 px-0 text-[var(--ink)] md:flex-row md:gap-6 md:px-6">
+      {/* Phones: a scrolling strip under the header. Wider: a sidebar. */}
+      <aside className="sticky top-[57px] z-10 shrink-0 border-b border-[var(--line)] bg-white md:h-[calc(100dvh-57px)] md:w-52 md:border-r md:border-b-0 md:py-4">
+        <nav
+          className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] md:flex-col md:overflow-visible md:px-2 md:py-0"
+          aria-label="Admin sections"
+        >
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
             const active =
@@ -89,25 +93,25 @@ function AdminLayout() {
               <Link
                 key={item.to}
                 to={item.to}
-                aria-label={item.label}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-2 text-sm no-underline transition',
+                  'flex shrink-0 items-center gap-2 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm whitespace-nowrap no-underline transition md:gap-3 md:px-2 md:py-2',
                   active
-                    ? 'bg-[var(--surface)] font-semibold text-[var(--ink)] underline underline-offset-4'
+                    ? 'bg-[var(--surface)] font-semibold text-[var(--ink)]'
                     : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]',
                 )}
               >
-                <Icon className="size-5 shrink-0" aria-hidden />
-                <span className="hidden md:inline">{item.label}</span>
+                <Icon className="size-4 shrink-0 md:size-5" aria-hidden />
+                {item.label}
               </Link>
             )
           })}
         </nav>
       </aside>
 
-      <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8">
+      <div className="min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-8">
         <nav
-          className="mb-4 text-sm text-[var(--muted)]"
+          className="mb-4 hidden text-sm text-[var(--muted)] md:block"
           aria-label="Breadcrumb"
         >
           {crumbs.map((crumb, index) => (

@@ -68,74 +68,117 @@ export function PaymentTable({
   showCustomer?: boolean
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{m.payment_col_invoice()}</TableHead>
-            {showCustomer ? (
-              <TableHead>{m.payment_col_customer()}</TableHead>
-            ) : null}
-            <TableHead>{m.payment_col_products()}</TableHead>
-            <TableHead className="text-right">
-              {m.payment_col_total()}
-            </TableHead>
-            <TableHead>{m.payment_col_status()}</TableHead>
-            {actions ? (
-              <TableHead>
-                <span className="sr-only">{m.payment_col_actions()}</span>
-              </TableHead>
-            ) : null}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {payments.map((payment) => (
-            <TableRow
-              key={payment.id}
-              className={onOpen ? 'cursor-pointer' : undefined}
-              onClick={onOpen ? () => onOpen(payment) : undefined}
-            >
-              <TableCell className="align-middle">
-                <p className="font-medium">{payment.invoiceNumber}</p>
-                <p className="text-xs text-[var(--muted)]">
-                  {formatDateTime(payment.createdAt)}
+    <>
+      {/* Phones: one stacked row per invoice instead of a wide table. */}
+      <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-xl border border-[var(--line)] bg-white sm:hidden">
+        {payments.map((payment) => (
+          <li
+            key={payment.id}
+            className={cn(
+              'flex items-start gap-3 px-4 py-3',
+              onOpen && 'cursor-pointer active:bg-[var(--surface)]',
+            )}
+            onClick={onOpen ? () => onOpen(payment) : undefined}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {itemsSummary(payment)}
+              </p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                {showCustomer && payment.user?.email
+                  ? `${payment.user.email} · `
+                  : ''}
+                {payment.invoiceNumber} · {formatDateTime(payment.createdAt)}
+              </p>
+              {payment.needsReview ? (
+                <p className="text-xs text-red-600">
+                  {m.payment_needs_review()}
                 </p>
-              </TableCell>
-              {showCustomer ? (
-                <TableCell className="max-w-[14rem] align-middle">
-                  <p className="truncate" title={payment.user?.email}>
-                    {payment.user?.email ?? '—'}
-                  </p>
-                </TableCell>
               ) : null}
-              <TableCell className="max-w-[18rem] align-middle">
-                <p className="truncate" title={itemsSummary(payment)}>
-                  {itemsSummary(payment)}
-                </p>
-                {payment.needsReview ? (
-                  <p className="text-xs text-red-600">
-                    {m.payment_needs_review()}
-                  </p>
-                ) : null}
-              </TableCell>
-              <TableCell className="text-right align-middle tabular-nums">
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <span className="text-sm tabular-nums">
                 {formatMoney(payment.amount, payment.currency)}
-              </TableCell>
-              <TableCell className="align-middle">
-                <PaymentStatusBadge status={payment.status} />
-              </TableCell>
+              </span>
+              <PaymentStatusBadge status={payment.status} />
               {actions ? (
-                <TableCell
-                  className="text-right align-middle"
-                  onClick={(event) => event.stopPropagation()}
-                >
+                <div onClick={(event) => event.stopPropagation()}>
                   {actions(payment)}
-                </TableCell>
+                </div>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-xl border border-[var(--line)] bg-white sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{m.payment_col_invoice()}</TableHead>
+              {showCustomer ? (
+                <TableHead>{m.payment_col_customer()}</TableHead>
+              ) : null}
+              <TableHead>{m.payment_col_products()}</TableHead>
+              <TableHead className="text-right">
+                {m.payment_col_total()}
+              </TableHead>
+              <TableHead>{m.payment_col_status()}</TableHead>
+              {actions ? (
+                <TableHead>
+                  <span className="sr-only">{m.payment_col_actions()}</span>
+                </TableHead>
               ) : null}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {payments.map((payment) => (
+              <TableRow
+                key={payment.id}
+                className={onOpen ? 'cursor-pointer' : undefined}
+                onClick={onOpen ? () => onOpen(payment) : undefined}
+              >
+                <TableCell className="align-middle">
+                  <p className="font-medium">{payment.invoiceNumber}</p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {formatDateTime(payment.createdAt)}
+                  </p>
+                </TableCell>
+                {showCustomer ? (
+                  <TableCell className="max-w-[14rem] align-middle">
+                    <p className="truncate" title={payment.user?.email}>
+                      {payment.user?.email ?? '—'}
+                    </p>
+                  </TableCell>
+                ) : null}
+                <TableCell className="max-w-[18rem] align-middle">
+                  <p className="truncate" title={itemsSummary(payment)}>
+                    {itemsSummary(payment)}
+                  </p>
+                  {payment.needsReview ? (
+                    <p className="text-xs text-red-600">
+                      {m.payment_needs_review()}
+                    </p>
+                  ) : null}
+                </TableCell>
+                <TableCell className="text-right align-middle tabular-nums">
+                  {formatMoney(payment.amount, payment.currency)}
+                </TableCell>
+                <TableCell className="align-middle">
+                  <PaymentStatusBadge status={payment.status} />
+                </TableCell>
+                {actions ? (
+                  <TableCell
+                    className="text-right align-middle"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {actions(payment)}
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   )
 }

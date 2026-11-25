@@ -11,7 +11,6 @@ import { useAuth } from '#/context/authContext'
 import { apiFetch } from '#/lib/api'
 import type { Deployment } from '#/lib/deployment'
 import type { ProductSummary } from '#/lib/product'
-import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
 import type { TourId } from '#/lib/tours'
 import { m } from '#/paraglide/messages'
@@ -83,18 +82,17 @@ function DashboardPage() {
   const deployableIds = new Set(
     (deployments ?? []).map((item) => item.product.id),
   )
+  // Services already listed above are not repeated here.
+  const others = deployments
+    ? (user?.products ?? []).filter((product) => !deployableIds.has(product.id))
+    : []
 
   return (
     <main className="mx-auto mt-0 mb-8 w-full sm:mb-12 max-w-4xl px-4 py-6 text-[var(--ink)] sm:mt-12 sm:px-6 sm:py-10">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-medium tracking-tight">
-            {m.dash_title()}
-          </h1>
-          {user ? (
-            <p className={`mt-1 truncate ${hintClassName}`}>{user.email}</p>
-          ) : null}
-        </div>
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4 sm:mb-8">
+        <h1 className="text-2xl font-medium tracking-tight">
+          {m.dash_title()}
+        </h1>
         <div className="flex gap-2">
           <SupportButton />
           <Button asChild size="sm" data-tour="shop">
@@ -113,11 +111,11 @@ function DashboardPage() {
         <DeploymentList />
       </section>
 
-      {user && user.products.length > 0 ? (
+      {others.length > 0 ? (
         <section className="mt-10 space-y-3">
           <h2 className="text-sm font-medium">{m.dash_everything()}</h2>
           <ul className="flex flex-wrap gap-1.5">
-            {user.products.map((product) => (
+            {others.map((product) => (
               <li key={product.id} className="max-w-full min-w-0">
                 <OwnedProductLink
                   product={product}

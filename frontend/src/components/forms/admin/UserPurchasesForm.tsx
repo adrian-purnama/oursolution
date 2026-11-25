@@ -140,13 +140,8 @@ export default function UserPurchasesForm({ userId }: { userId: string }) {
   const givable = products.filter((product) => !ownedIds.has(product.id))
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h2 className="text-base font-medium">Purchases</h2>
-        <p className={`mt-1 ${hintClassName}`}>
-          One-time products this user owns.
-        </p>
-      </div>
+    <section className="space-y-4 sm:space-y-6">
+      <h2 className="text-base font-medium">Purchases</h2>
 
       <PurchaseList
         purchases={purchases}

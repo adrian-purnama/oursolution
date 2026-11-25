@@ -163,8 +163,9 @@ export default function RedeemCodesAdminForm() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
         <Tabs
+          className="min-w-0 overflow-x-auto [scrollbar-width:none]"
           value={group}
           onValueChange={(value) => {
             setGroup(value as RedeemCodeGroup)
@@ -184,9 +185,14 @@ export default function RedeemCodesAdminForm() {
             ))}
           </TabsList>
         </Tabs>
-        <Button type="button" onClick={() => setCreating(true)}>
+        <Button
+          type="button"
+          aria-label="New codes"
+          className="shrink-0"
+          onClick={() => setCreating(true)}
+        >
           <Plus aria-hidden />
-          New codes
+          <span className="hidden sm:inline">New codes</span>
         </Button>
       </div>
 
@@ -235,7 +241,59 @@ export default function RedeemCodesAdminForm() {
           )}
           aria-busy={state.status === 'loading'}
         >
-          <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
+          <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-xl border border-[var(--line)] bg-white sm:hidden">
+            {list.items.map((code) => (
+              <li key={code.id} className="flex items-start gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => void copy(code.code)}
+                    className="inline-flex items-center gap-1.5 font-mono text-sm font-medium"
+                    aria-label={`Copy ${code.code}`}
+                  >
+                    {code.code}
+                    <Copy
+                      className="size-3.5 text-[var(--muted)]"
+                      aria-hidden
+                    />
+                  </button>
+                  <p className="truncate text-xs text-[var(--muted)]">
+                    {code.product?.name ?? 'Erased product'} ·{' '}
+                    {redeemLengthText(code)}
+                  </p>
+                  <p className="truncate text-xs text-[var(--muted)]">
+                    {code.redeemedBy
+                      ? `Redeemed by ${code.redeemedBy.email}`
+                      : code.validUntil
+                        ? `${code.status === 'expired' ? 'Expired' : 'Valid until'} ${formatDateTime(code.validUntil)}`
+                        : 'Never expires'}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={cn(
+                      'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                      STATUS_CLASS[code.status],
+                    )}
+                  >
+                    {STATUS_LABEL[code.status]}
+                  </span>
+                  {code.status !== 'redeemed' ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${code.code}`}
+                      onClick={() => setDeleting(code)}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-xl border border-[var(--line)] bg-white sm:block">
             <Table>
               <TableHeader>
                 <TableRow>

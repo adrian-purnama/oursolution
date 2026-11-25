@@ -9,7 +9,7 @@ import { apiFetch } from '#/lib/api'
 import { formatDateTime } from '#/lib/product'
 import { formatRedeemInput } from '#/lib/redeem'
 import type { RedeemResult } from '#/lib/redeem'
-import { cardClassName, hintClassName } from '#/lib/ui-classes'
+import { cardClassName } from '#/lib/ui-classes'
 import { m } from '#/paraglide/messages'
 
 /** A user redeems a code for a product. */
@@ -60,10 +60,7 @@ export default function RedeemCodeForm() {
 
   return (
     <section className={`${cardClassName} space-y-3 px-4 py-4`}>
-      <div>
-        <h2 className="text-sm font-medium">{m.redeem_title()}</h2>
-        <p className={`text-xs ${hintClassName}`}>{m.redeem_copy()}</p>
-      </div>
+      <h2 className="text-sm font-medium">{m.redeem_title()}</h2>
       <form
         className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => void handleSubmit(event)}

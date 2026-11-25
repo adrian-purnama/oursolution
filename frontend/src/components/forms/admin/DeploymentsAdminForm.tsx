@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import {
   BeatBar,
+  EmptyBeatBar,
   StateBadge,
   overallCheckState,
 } from '#/components/forms/deployment/ServiceStatus'
@@ -231,8 +232,8 @@ export default function DeploymentsAdminForm() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-0 flex-1 basis-64">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="relative min-w-0 flex-1">
           <Search
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted)]"
             aria-hidden
@@ -250,15 +251,17 @@ export default function DeploymentsAdminForm() {
           type="button"
           variant="outline"
           disabled={refreshing}
+          aria-label="Refresh"
           onClick={() => void load(true)}
         >
           <RefreshCw className={cn(refreshing && 'animate-spin')} aria-hidden />
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </Button>
         <Button
           type="button"
           disabled={syncing}
           onClick={() => void handleSync()}
+          aria-label="Sync with Dokploy"
           title="Check every deployment's containers and addresses in Dokploy and Cloudflare"
         >
           {syncing ? (
@@ -266,7 +269,9 @@ export default function DeploymentsAdminForm() {
           ) : (
             <ArrowDownUp aria-hidden />
           )}
-          {syncing ? 'Syncing…' : 'Sync'}
+          <span className="hidden sm:inline">
+            {syncing ? 'Syncing…' : 'Sync'}
+          </span>
         </Button>
       </div>
 
@@ -306,7 +311,7 @@ export default function DeploymentsAdminForm() {
       />
 
       {shown.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[var(--line)] px-6 py-12 text-center">
+        <div className="rounded-xl border border-dashed border-[var(--line)] px-6 py-10 text-center sm:py-12">
           <Server
             className="mx-auto mb-3 size-6 text-[var(--muted)]"
             aria-hidden
@@ -467,9 +472,9 @@ function DeploymentRow({
   const busy = BUSY_STATES.includes(deployment.state)
 
   return (
-    <li className="flex items-start gap-3">
+    <li className="flex items-start gap-2 sm:gap-3">
       <Checkbox
-        className="mt-5 bg-white"
+        className="mt-4 bg-white sm:mt-5"
         checked={selected}
         aria-label={`Select ${deployment.product.name} of ${user.email}`}
         onCheckedChange={(checked) => onSelect(checked === true)}
@@ -480,14 +485,14 @@ function DeploymentRow({
         search={{ tab: 'deployments', deployment: deployment.product.id }}
         className={cn(
           cardClassName,
-          'block min-w-0 flex-1 px-4 py-4 no-underline transition hover:border-[var(--ink)] sm:px-5',
+          'block min-w-0 flex-1 px-3 py-3 no-underline transition hover:border-[var(--ink)] sm:px-5 sm:py-4',
           selected && 'border-[var(--ink)]',
         )}
       >
-        <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <div className="flex items-start gap-3 sm:gap-4">
           <ProductImage
             product={deployment.product}
-            className="size-10 shrink-0 rounded-lg border border-[var(--line)]"
+            className="hidden size-10 shrink-0 rounded-lg border border-[var(--line)] sm:block"
             iconClassName="size-4"
           />
           <div className="min-w-0 flex-1">
@@ -510,7 +515,7 @@ function DeploymentRow({
             <p className="mt-0.5 truncate text-sm text-[var(--ink)]/80">
               {user.email}
             </p>
-            <p className={`text-xs ${hintClassName}`}>
+            <p className={`truncate text-xs ${hintClassName}`}>
               {subscriptionLine(deployment)}
               {deployment.hosts.length > 0
                 ? ` · ${deployment.hosts.join(', ')}`
@@ -519,7 +524,7 @@ function DeploymentRow({
           </div>
         </div>
 
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[var(--line)] pt-3 text-sm sm:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-3 border-t border-[var(--line)] pt-3 text-sm sm:mt-4 sm:grid-cols-4 sm:gap-x-4">
           <Field label="Check">
             {check ? (
               <span className={CHECK_TEXT[check]}>
@@ -537,19 +542,19 @@ function DeploymentRow({
           <Field label="Response">
             {responses.length > 0 ? `${Math.max(...responses)} ms` : '—'}
           </Field>
-          <Field label="Last up">
+          <Field label="Last up" className="hidden sm:block">
             {upAt ? (
               <span title={formatDateTime(upAt)}>{formatSince(upAt)} ago</span>
             ) : (
               '—'
             )}
           </Field>
-          <Field label="Running for">
+          <Field label="Running for" className="hidden sm:block">
             {deployment.runningSince
               ? formatSince(deployment.runningSince)
               : '—'}
           </Field>
-          <Field label="Last activity" className="col-span-1 sm:col-span-3">
+          <Field label="Last activity" className="col-span-3">
             {latest ? (
               <span>
                 {runTitle(latest)}{' '}
@@ -575,7 +580,11 @@ function DeploymentRow({
           </Field>
         </dl>
 
-        {charted ? <BeatBar status={charted} className="mt-3" /> : null}
+        {charted ? (
+          <BeatBar status={charted} className="mt-3" />
+        ) : (
+          <EmptyBeatBar className="mt-3" />
+        )}
       </Link>
     </li>
   )
