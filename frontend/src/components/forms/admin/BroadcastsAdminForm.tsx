@@ -31,30 +31,33 @@ export default function BroadcastsAdminForm() {
   const [page, setPage] = useState(1)
   const [state, setState] = useState<State>({ status: 'loading' })
 
-  const load = useCallback(async (quiet = false) => {
-    if (!quiet) setState({ status: 'loading' })
-    try {
-      const res = await apiFetch<BroadcastList>(
-        `/admin/broadcasts?page=${page}&pageSize=${PAGE_SIZE}`,
-      )
-      if (!res.success || !res.data) {
-        if (!quiet) {
-          setState({
-            status: 'error',
-            message: res.message || 'Could not load sent emails',
-          })
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setState({ status: 'loading' })
+      try {
+        const res = await apiFetch<BroadcastList>(
+          `/admin/broadcasts?page=${page}&pageSize=${PAGE_SIZE}`,
+        )
+        if (!res.success || !res.data) {
+          if (!quiet) {
+            setState({
+              status: 'error',
+              message: res.message || 'Could not load sent emails',
+            })
+          }
+          return
         }
-        return
+        setState({ status: 'ready', list: res.data })
+      } catch {
+        if (!quiet) {
+          setState({ status: 'error', message: 'Unable to reach the server' })
+        } else {
+          toast.error('Unable to reach the server')
+        }
       }
-      setState({ status: 'ready', list: res.data })
-    } catch {
-      if (!quiet) {
-        setState({ status: 'error', message: 'Unable to reach the server' })
-      } else {
-        toast.error('Unable to reach the server')
-      }
-    }
-  }, [page])
+    },
+    [page],
+  )
 
   useEffect(() => {
     void load()
@@ -76,7 +79,7 @@ export default function BroadcastsAdminForm() {
   }
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-10 sm:space-y-14">
       <BroadcastComposeForm onSent={handleSent} />
 
       <section className="space-y-4" aria-labelledby="broadcast-log">
@@ -113,7 +116,42 @@ export default function BroadcastsAdminForm() {
 
         {state.status === 'ready' && state.list.total > 0 ? (
           <>
-            <div className="overflow-x-auto">
+            <ul className="divide-y divide-[var(--line)] border-y border-[var(--line)] sm:hidden">
+              {state.list.items.map((item) => (
+                <li key={item.id} className="flex items-start gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {item.subject}
+                    </p>
+                    <p className="truncate text-xs text-[var(--muted)]">
+                      {item.audienceLabel} · {formatDateTime(item.createdAt)}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right text-sm tabular-nums">
+                    {item.status === 'sending' ? (
+                      <span className="inline-flex items-center gap-1.5 text-[var(--muted)]">
+                        <LoaderCircle
+                          className="size-3.5 animate-spin"
+                          aria-hidden
+                        />
+                        {item.sentCount + item.failedCount} /{' '}
+                        {item.recipientCount}
+                      </span>
+                    ) : (
+                      <>
+                        {item.sentCount} / {item.recipientCount}
+                        {item.failedCount > 0 ? (
+                          <span className="block text-xs text-red-600">
+                            {item.failedCount} failed
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto sm:block">
               <Table>
                 <TableHeader>
                   <TableRow>

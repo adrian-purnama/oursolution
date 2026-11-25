@@ -47,12 +47,12 @@ function AdminUserDetailPage() {
           })
         }
       >
-        <TabsList className="mb-8">
+        <TabsList className="mb-6 sm:mb-8">
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
         </TabsList>
-        <TabsContent value="account" className="space-y-12">
+        <TabsContent value="account" className="space-y-10 sm:space-y-12">
           <UserDetailForm userId={userId} />
           <UserProductsForm userId={userId} />
           <UserPurchasesForm userId={userId} />

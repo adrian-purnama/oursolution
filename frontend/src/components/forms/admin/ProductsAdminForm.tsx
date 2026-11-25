@@ -136,10 +136,11 @@ export default function ProductsAdminForm() {
         <Button
           type="button"
           variant="outline"
+          aria-label="Upload JSON"
           onClick={() => setImporting(true)}
         >
           <FileUp aria-hidden />
-          Upload JSON
+          <span className="hidden sm:inline">Upload JSON</span>
         </Button>
         <Button asChild>
           <Link to="/admin/products/new">
@@ -175,41 +176,35 @@ export default function ProductsAdminForm() {
           {liveProducts.map((product) => (
             <li
               key={product.id}
-              className={`${cardClassName} flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3`}
+              className={`${cardClassName} flex items-center gap-3 px-3 py-3 sm:gap-4 sm:px-4`}
             >
-              <ProductMark product={product} className="size-10 rounded-md" />
+              <ProductMark
+                product={product}
+                className="size-9 shrink-0 rounded-md sm:size-10"
+              />
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{product.name}</span>
-                  <span className="rounded-full border border-[var(--line)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium">{product.name}</span>
+                  <span className="hidden shrink-0 rounded-full border border-[var(--line)] px-2 py-0.5 text-xs text-[var(--muted)] sm:inline">
                     {PRODUCT_KIND_LABELS[product.kind]}
                   </span>
                   {product.deployment ? (
-                    <span className="rounded-full border border-[var(--line)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                    <span className="hidden shrink-0 rounded-full border border-[var(--line)] px-2 py-0.5 text-xs text-[var(--muted)] sm:inline">
                       Docker Compose
                     </span>
                   ) : null}
-                  {product.showOnPricingPage ? null : (
-                    <span className={`text-xs ${hintClassName}`}>
-                      Hidden from pricing
-                    </span>
-                  )}
                 </div>
-                <p className="mt-0.5 text-sm text-[var(--ink)]">
+                <p className="mt-0.5 truncate text-sm text-[var(--ink)]">
                   {formatIdr(product.priceIdr)}
                   {product.durationDays
                     ? ` per ${formatDays(product.durationDays)}`
                     : ' once'}
-                  {product.pricingText ? (
-                    <span className="text-[var(--muted)]">
-                      {' · shown as “'}
-                      {product.pricingText}
-                      {'”'}
-                    </span>
-                  ) : null}
+                  {product.showOnPricingPage ? null : (
+                    <span className="text-[var(--muted)]"> · Hidden</span>
+                  )}
                 </p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex shrink-0 gap-0.5 sm:gap-1">
                 <Button asChild variant="ghost" size="icon">
                   <Link
                     to="/admin/products/$productId"
@@ -236,25 +231,20 @@ export default function ProductsAdminForm() {
 
       {!loading && !failed && deletedProducts.length > 0 ? (
         <section className="space-y-2 pt-4">
-          <h2 className="text-sm font-medium">
-            Deleted
-            <span className={`ml-2 font-normal ${hintClassName}`}>
-              Hidden from pricing and assignment. Owners keep access.
-            </span>
-          </h2>
+          <h2 className="text-sm font-medium">Deleted</h2>
           <ul className="space-y-2">
             {deletedProducts.map((product) => (
               <li
                 key={product.id}
-                className={`${cardClassName} flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 opacity-75`}
+                className={`${cardClassName} flex items-center gap-3 px-3 py-3 opacity-75 sm:gap-4 sm:px-4`}
               >
                 <ProductMark
                   product={product}
                   className="size-8 rounded-md grayscale"
                 />
                 <div className="min-w-0 flex-1">
-                  <span className="font-medium">{product.name}</span>
-                  <p className={`text-xs ${hintClassName}`}>
+                  <p className="truncate font-medium">{product.name}</p>
+                  <p className={`truncate text-xs ${hintClassName}`}>
                     {PRODUCT_KIND_LABELS[product.kind]} · deleted{' '}
                     {product.deletedAt ? formatDateTime(product.deletedAt) : ''}
                   </p>
@@ -265,10 +255,13 @@ export default function ProductsAdminForm() {
                     variant="outline"
                     size="sm"
                     disabled={restoringId === product.id}
+                    aria-label={`Restore ${product.name}`}
                     onClick={() => void handleRestore(product)}
                   >
                     <RotateCcw aria-hidden />
-                    {restoringId === product.id ? 'Restoring…' : 'Restore'}
+                    <span className="hidden sm:inline">
+                      {restoringId === product.id ? 'Restoring…' : 'Restore'}
+                    </span>
                   </Button>
                   <Button
                     type="button"

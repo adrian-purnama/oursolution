@@ -8,6 +8,7 @@ import BulkDeploymentActions, {
 } from '#/components/forms/admin/BulkDeploymentActions'
 import {
   BeatBar,
+  EmptyBeatBar,
   Stat,
   StateBadge,
 } from '#/components/forms/deployment/ServiceStatus'
@@ -119,15 +120,18 @@ function ServiceCard({
       {status && status.beats.length > 0 ? (
         <BeatBar status={status} />
       ) : (
-        <p
-          className={
-            deployment.state === 'failed'
-              ? 'text-sm text-[var(--destructive)]'
-              : `text-sm ${hintClassName}`
-          }
-        >
-          {quietLine(deployment)}
-        </p>
+        <div className="space-y-2">
+          <EmptyBeatBar />
+          <p
+            className={
+              deployment.state === 'failed'
+                ? 'text-xs text-[var(--destructive)]'
+                : `text-xs ${hintClassName}`
+            }
+          >
+            {quietLine(deployment)}
+          </p>
+        </div>
       )}
 
       <div className="mt-auto flex items-center gap-3 text-xs text-[var(--muted)]">
@@ -317,10 +321,7 @@ export default function DeploymentList({
           </div>
         )}
       </TabsContent>
-      <TabsContent value="expired" className="space-y-3">
-        <p className={`text-sm ${hintClassName}`}>
-          {m.dep_list_expired_copy()}
-        </p>
+      <TabsContent value="expired">
         <ServiceGrid deployments={expired} onSelect={onSelect} />
       </TabsContent>
     </Tabs>

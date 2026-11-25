@@ -217,13 +217,8 @@ export default function UserProductsForm({ userId }: { userId: string }) {
   const confirmOpen = deleting !== null || stopping !== null
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h2 className="text-base font-medium">Plan</h2>
-        <p className={`mt-1 ${hintClassName}`}>
-          Active subscriptions and their periods.
-        </p>
-      </div>
+    <section className="space-y-4 sm:space-y-6">
+      <h2 className="text-base font-medium">Plan</h2>
 
       <PlanGantt
         plan={plan}
@@ -249,10 +244,10 @@ export default function UserProductsForm({ userId }: { userId: string }) {
             {scheduled.map((item) => (
               <li
                 key={item.period.periodId}
-                className={`${cardClassName} flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3`}
+                className={`${cardClassName} flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 sm:px-4 sm:py-3`}
               >
                 <ProductBadge product={item.product} />
-                <span className="min-w-0 flex-1 text-sm text-[var(--muted)]">
+                <span className="min-w-0 flex-1 basis-40 text-xs text-[var(--muted)] sm:text-sm">
                   {item.period.isCurrent ? (
                     <span className="mr-1.5 font-medium text-[var(--ink)]">
                       Running ·

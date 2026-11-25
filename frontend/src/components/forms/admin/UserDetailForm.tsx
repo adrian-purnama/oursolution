@@ -108,12 +108,12 @@ export default function UserDetailForm({ userId }: { userId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-2xl text-[var(--ink)]">
-      <div className="mb-8">
-        <h1 className="text-2xl font-medium tracking-tight">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl font-medium tracking-tight break-all sm:text-2xl">
           {detail?.email ?? 'User'}
         </h1>
         {detail ? (
-          <p className={`mt-2 ${hintClassName}`}>
+          <p className={`mt-1 ${hintClassName}`}>
             Created {new Date(detail.accountCreatedAt).toLocaleDateString()}
             {' · '}
             {USER_ROLE_LABELS[detail.role]}
@@ -131,7 +131,7 @@ export default function UserDetailForm({ userId }: { userId: string }) {
         <p className={hintClassName}>This user could not be loaded.</p>
       ) : (
         <form
-          className="space-y-8"
+          className="space-y-6"
           onSubmit={(event) => void handleSubmit(event)}
         >
           <div>
@@ -153,9 +153,6 @@ export default function UserDetailForm({ userId }: { userId: string }) {
                 <SelectItem value="admin">{USER_ROLE_LABELS.admin}</SelectItem>
               </SelectContent>
             </Select>
-            <p className={`mt-1.5 text-xs ${hintClassName}`}>
-              Admins can open the admin area.
-            </p>
           </div>
 
           <div>

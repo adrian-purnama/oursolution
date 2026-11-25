@@ -23,11 +23,11 @@ export default function ListPagination({
   const to = Math.min(page * pageSize, totalItems)
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className={`text-sm ${hintClassName}`}>
+    <div className="flex items-center justify-between gap-3">
+      <p className={`hidden text-sm sm:block ${hintClassName}`}>
         {m.pagination_showing({ from, to, total: totalItems })}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
         <Button
           type="button"
           variant="outline"

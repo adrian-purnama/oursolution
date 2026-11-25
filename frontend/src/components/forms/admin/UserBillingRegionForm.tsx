@@ -129,8 +129,8 @@ export default function UserBillingRegionForm({ userId }: { userId: string }) {
             ) : null}
           </div>
           <p className={`mt-1.5 text-xs ${hintClassName}`}>
-            Decides the prices they see and who bills them. Unlocked, it follows
-            where they browse from; their first checkout locks it.
+            Sets their prices. Unlocked, it follows their location until the
+            first checkout.
           </p>
         </>
       ) : (

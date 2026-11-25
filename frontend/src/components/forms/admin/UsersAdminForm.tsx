@@ -77,8 +77,8 @@ export default function UsersAdminForm() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-0 flex-1 basis-64">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="relative min-w-0 flex-1">
           <Search
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted)]"
             aria-hidden
@@ -93,9 +93,13 @@ export default function UsersAdminForm() {
             autoComplete="off"
           />
         </div>
-        <Button type="button" onClick={() => setCreating(true)}>
+        <Button
+          type="button"
+          aria-label="Add user"
+          onClick={() => setCreating(true)}
+        >
           <UserPlus aria-hidden />
-          Add user
+          <span className="hidden sm:inline">Add user</span>
         </Button>
       </div>
 
@@ -123,9 +127,11 @@ export default function UsersAdminForm() {
               <TableHeader>
                 <TableRow className="border-[var(--line)] hover:bg-transparent">
                   <TableHead className="pl-4">Email</TableHead>
-                  <TableHead className="w-28">Role</TableHead>
-                  <TableHead className="w-28">Status</TableHead>
-                  <TableHead className="w-10 pr-4">
+                  <TableHead className="hidden w-28 sm:table-cell">
+                    Role
+                  </TableHead>
+                  <TableHead className="w-20 sm:w-28">Status</TableHead>
+                  <TableHead className="w-8 pr-3 sm:w-10 sm:pr-4">
                     <span className="sr-only">Open</span>
                   </TableHead>
                 </TableRow>
@@ -146,8 +152,13 @@ export default function UsersAdminForm() {
                       >
                         {user.email}
                       </Link>
+                      {user.role === 'admin' ? (
+                        <span className="text-xs text-[var(--muted)] sm:hidden">
+                          {USER_ROLE_LABELS[user.role]}
+                        </span>
+                      ) : null}
                     </TableCell>
-                    <TableCell className="text-[var(--ink)]/80">
+                    <TableCell className="hidden text-[var(--ink)]/80 sm:table-cell">
                       {USER_ROLE_LABELS[user.role]}
                     </TableCell>
                     <TableCell>
@@ -161,7 +172,7 @@ export default function UsersAdminForm() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="pr-4 text-right">
+                    <TableCell className="pr-3 text-right sm:pr-4">
                       <ChevronRight
                         className="ml-auto size-4 text-[var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--ink)]"
                         aria-hidden

@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import RedeemCodesAdminForm from '#/components/forms/admin/RedeemCodesAdminForm'
-import { hintClassName } from '#/lib/ui-classes'
 import { privatePage } from '#/lib/seo'
 
 export const Route = createFileRoute('/admin/redeem-codes')({
@@ -11,11 +10,8 @@ export const Route = createFileRoute('/admin/redeem-codes')({
 function AdminRedeemCodesPage() {
   return (
     <div className="mx-auto w-full max-w-5xl text-[var(--ink)]">
-      <div className="mb-8">
+      <div className="mb-5 sm:mb-8">
         <h1 className="text-2xl font-medium tracking-tight">Redeem codes</h1>
-        <p className={`mt-2 ${hintClassName}`}>
-          Codes that give a product to whoever redeems them.
-        </p>
       </div>
       <RedeemCodesAdminForm />
     </div>
